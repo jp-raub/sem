@@ -25,7 +25,7 @@ jobs:
       - name: Stage mock browser assets and sample import
         run: |
           mkdir -p _site/ui-mock
-          cp mock/index.html mock/styles.css mock/app.js mock/enhancements.js mock/enhancements.css mock/domain.js mock/domain.css mock/event-rules.js mock/definitions.js _site/ui-mock/
+          cp mock/index.html mock/styles.css mock/app.js mock/enhancements.js mock/enhancements.css mock/domain.js mock/domain.css mock/event-rules.js mock/definitions.js mock/profiles.js mock/profiles.css _site/ui-mock/
           cp mock/sample-import.csv _site/ui-mock/
           touch _site/.nojekyll
       - uses: actions/upload-pages-artifact@v3
