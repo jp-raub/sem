@@ -22,10 +22,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
-      - name: Stage only mock browser assets
+      - name: Stage mock browser assets and sample import
         run: |
           mkdir -p _site/ui-mock
-          cp mock/index.html mock/styles.css mock/app.js _site/ui-mock/
+          cp mock/index.html mock/styles.css mock/app.js mock/enhancements.js mock/enhancements.css _site/ui-mock/
+          cp mock/sample-import.csv _site/ui-mock/
           touch _site/.nojekyll
       - uses: actions/upload-pages-artifact@v3
         with:

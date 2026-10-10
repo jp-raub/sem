@@ -1,0 +1,48 @@
+/* v2 appearance: theme inheritance + light/dark + visible draft editing */
+:root{--surface:#fffefa;--soft:#f1f4ef;--hero:#173e35;--accent-soft:#eaf2e9;--edit:#b26716;--edit-bg:#fff5db;--notice-bg:#f1f4d9;--notice-ink:#394b27;color-scheme:light}
+:root[data-palette=blue]{--green:#285f91;--hero:#1d3e61;--lime:#d3e8fc;--accent-soft:#e7eff8}
+:root[data-palette=purple]{--green:#775087;--hero:#4b315b;--lime:#ebd6f2;--accent-soft:#f0e8f3}
+:root[data-palette=amber]{--green:#906322;--hero:#654319;--lime:#f5e4b7;--accent-soft:#f6edde}
+:root[data-mode=dark]{--ink:#e1ebe5;--muted:#a7b8ae;--line:#3c4c45;--paper:#15201c;--surface:#202d27;--soft:#2a3931;--accent-soft:#304236;--hero:#1a3930;--green:#86bd9c;--lime:#354b29;--edit:#f2c573;--edit-bg:#443921;--notice-bg:#36452b;--notice-ink:#d9e7bf;color-scheme:dark}
+:root[data-mode=dark][data-palette=blue]{--green:#92bfef;--hero:#203b56;--accent-soft:#2b3e53}
+:root[data-mode=dark][data-palette=purple]{--green:#d2abe2;--hero:#41304d;--accent-soft:#423447}
+:root[data-mode=dark][data-palette=amber]{--green:#e8c080;--hero:#483923;--accent-soft:#423b2b}
+header,.panel,.stat,table,button,dialog,.board td:first-child{background:var(--surface)}
+body{background:var(--paper);color:var(--ink)}
+input,select,textarea{background:var(--surface);color:var(--ink);border-color:var(--line)}
+th,.board th:first-child,.transition td,.transition td:first-child{background:var(--soft)}
+.hero{background:var(--hero)}
+.demo-bar,.meter{background:var(--soft);color:var(--muted)}
+.badge,.cell.occupied{background:var(--accent-soft);color:var(--ink)}
+.badge.hidden,.badge.view{background:var(--soft);color:var(--muted)}
+.hero .badge{background:var(--lime);color:var(--ink)}
+.notice{background:var(--notice-bg);color:var(--notice-ink)}
+.result{background:var(--accent-soft)}
+code{background:var(--soft);color:var(--ink)}
+.null-cell{background:repeating-linear-gradient(135deg,var(--paper),var(--paper) 4px,var(--line) 4px,var(--line) 5px)}
+.primary,.cell.selected{background:var(--green);color:var(--surface)}
+button:hover:not(:disabled){background:var(--accent-soft)}
+button.primary:hover:not(:disabled){background:var(--green);color:var(--surface);filter:brightness(.95)}
+.cell.mine{background:var(--lime);color:var(--ink)}
+:root[data-mode=dark] .cell.release{background:#51322e;color:#f1b5ae;border-color:#865148}
+:root[data-mode=dark] .danger,:root[data-mode=dark] .error{color:#f2aca6}
+.is-editing{background:var(--edit-bg)}
+.is-editing header{border-bottom:4px solid var(--edit)}
+.is-editing .hero{outline:3px solid var(--edit)}
+.edit-bar{position:sticky;top:80px;z-index:8;display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px 18px;border:2px solid var(--edit);border-radius:10px;margin-bottom:20px;background:var(--surface);box-shadow:0 4px 15px #0001}
+.edit-bar strong{color:var(--edit);margin-right:12px}
+.edit-bar span{font-size:12px}
+.edit-bar small{display:block;color:var(--muted);font-size:11px;margin-top:6px}
+.header-image{width:100%;height:220px;object-fit:cover;border-radius:10px;margin-bottom:22px}
+.image-preview{max-width:100%;max-height:150px;border-radius:8px;margin-bottom:15px}
+.location-link{color:inherit;text-decoration:underline}
+.rich-preview{border:1px solid var(--line);background:var(--soft);padding:15px;border-radius:8px;min-height:90px;margin-bottom:18px;overflow-wrap:anywhere}
+.rich-description{overflow-wrap:anywhere;line-height:1.8}
+.rich-description h2,.rich-description h3{margin:16px 0 8px}
+.rich-description a{color:inherit;text-decoration:underline}
+.rich-description table,.rich-description td,.rich-description th{color:var(--ink)}
+.dragging{opacity:.4}.drop-target{outline:3px dashed var(--green);outline-offset:-3px}
+.board tr[draggable=true]{cursor:grab}.row-edit{margin-top:6px;white-space:nowrap}
+nav{flex-wrap:wrap;justify-content:flex-end}
+@media(max-width:700px){.edit-bar{top:68px;align-items:start;flex-direction:column}.header-image{height:150px}nav{justify-content:flex-start}.edit-bar .actions{width:100%}.edit-bar .actions button{flex:1}}
+.drag-handle{display:inline-block;padding:5px 8px;cursor:grab;font-size:20px;color:var(--muted)}
