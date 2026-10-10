@@ -1,0 +1,26 @@
+{
+  "passed": 20,
+  "results": [
+    "Participant cannot see hidden event",
+    "Multiple roles assigned",
+    "Multiple roles in same song count once",
+    "Conflict simulation yields partial success",
+    "MaxPicks blocks further songs",
+    "Comment-only submission works",
+    "Event admin blocked from service admin",
+    "Unassign requires a reason",
+    "Admin can unassign with reason",
+    "Phase count independent; unlimited supported",
+    "Global admin sees all events",
+    "Privileged account role cannot be revoked",
+    "Duplicate invitation rejected",
+    "Invitation query auto-fills",
+    "Register form visible without invitation",
+    "Invalid invitation rejected",
+    "Valid invitation auto-login",
+    "Reload preserves mock state",
+    "Mobile viewport no page-level horizontal overflow",
+    "No browser runtime errors"
+  ],
+  "errors": []
+}
