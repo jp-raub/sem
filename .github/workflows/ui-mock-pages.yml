@@ -1,5 +1,10 @@
 name: Deploy UI mock to Pages
 on:
+  push:
+    branches: [ui/session-room-mock, main]
+    paths:
+      - 'mock/**'
+      - '.github/workflows/ui-mock-pages.yml'
   workflow_dispatch:
 permissions:
   contents: read
