@@ -1,0 +1,104 @@
+# DXP 外部テスト配置ガイド
+
+**現時点では検証中です。最終引き渡しの案内までは外部公開しないでください。**
+
+## 対象と範囲
+
+- DXP 4800 Plus / linux amd64 / Docker Compose。
+- 公開URLは `https://sem-test.raub.jp/` 固定。LAN内も同じURLを使います。
+- 既存ネットワーク `br`、NPM → `http://sem:8080`。ホストポートは公開しません。
+- 空のSQLiteから、保護された初期設定→実メール確認→実パスキー登録→ログインを確認する実装です。
+- 招待依頼・許可/拒否・直接発行・期限/人数・緊急失効、簡易イベント参加、通知ボックス・予約通知・SMTP・Web Pushも対象です。
+- モックv33全体のUI/曲管理/当日進行などを丸ごと移植した完成版ではありません。
+
+## 1. ファイルの配置
+
+引き渡したソースをDXPの任意の専用ディレクトリへ展開します。`deploy/` の親に `src/` がある構造を維持してください。
+
+```sh
+cd /path/to/sem/deploy
+cp .env.example .env
+chmod 600 .env
+```
+
+`.env` の秘密情報はチャット・Git・公開画面に出さないでください。`docker compose config` は展開済みの秘密情報を表示するため、その出力を共有しないでください。
+
+## 2. NPMの信頼するIPとSMTP
+
+```sh
+docker network inspect br
+openssl rand -hex 32
+```
+
+最初のコマンドでNPMコンテナのIPv4を確認し、`SEM_TRUSTED_PROXY_IP` に設定します。2番目の出力を `SEM_BOOTSTRAP_SECRET` に設定します。SMTPの接続先・ポート・ユーザー名・パスワードを設定し、送信元 `misc@raub.jp` が許可されることを確認してください。
+
+IPを再割り当てした場合は.envのIPを更新してコンテナを再作成します。ネットワーク全体を無条件に信頼する設定にはしません。
+
+## 3. イメージとPush配信鍵
+
+```sh
+docker compose --env-file .env build
+docker compose --env-file .env run --rm --no-deps sem --generate-vapid
+```
+
+出力される2つの鍵を.envに設定します。秘密鍵は公開しません。一度登録した端末がある状態で鍵を作り直すと端末の再登録が必要です。
+
+```sh
+docker compose --env-file .env up -d
+docker compose --env-file .env logs --tail 50 sem
+```
+
+## 4. NPM
+
+- Domain Names: `sem-test.raub.jp`
+- Scheme: `http`
+- Forward Hostname: `sem`
+- Forward Port: `8080`
+- SSL: 有効な証明書 / Force SSL
+- 元のHostを保ち、`X-Forwarded-Proto: https` と `X-Forwarded-For` を設定してください。通常のNPM proxy host設定を前提にしています。
+- 公開側にキャッシュを追加しないでください。
+
+cloudflaredやLAN内DNSの既存経路は変更しません。アプリは不明なHostやHTTPS転送が確認できないアクセスを拒否します。
+
+## 5. 空状態から初期設定
+
+1. 同じ公開URLをSafariで開く。
+2. サイト名・表示名・管理者メール・初期設定用秘密情報を入力。
+3. `misc@raub.jp` からの確認メールを開く。
+4. 同じURLでパスキーを登録。完了した時点で最初の全体管理者が有効になります。
+5. `.env` の `SEM_BOOTSTRAP_SECRET` を空にして `docker compose up -d --force-recreate sem`。
+
+初期設定完了後は、秘密情報が残っていても2人目の初期管理者を作成できません。確認メールのURLは1時間・1回限りです。パスワードログインや招待なしの一般登録は公開していません。
+
+## 6. 端末テスト
+
+- macOS Safari: 登録→ログアウト→パスキーで再ログイン→追加パスキー。
+- iOS/iPadOS: 同じURLでログイン。PushはSafariの共有メニューから**ホーム画面に追加**し、そのアプリから許可・端末登録・テスト通知。
+- iCloudで同期された同じパスキーと、別のパスキーを追加する操作は異なります。両方を区別して確認してください。
+- メールテスト、30秒後の予約通知、ページを閉じた受信、Pushをタップしたメッセージボックスへの復帰、既読化。
+- 招待1名のリンクを作り、別アドレスで登録。完了後にリンクが人数上限で失効すること。
+- リンクの緊急失効、期限失効、一般/イベント管理者による直接発行の拒否。
+- コンテナ再起動後、ユーザー・招待・通知・パスキーが残り、再ログインできること。
+
+Push配信の外部事業者側や実SMTPアカウントの到達性は、実機で最終確認が必要です。送信待ち・失敗回数は配信状況で確認できます。配信は再試行するため、障害時に外部送信だけ成功して記録が失敗した場合、重複配信の可能性があります。複数コンテナ同時稼働はこのテスト版の対象外です。
+
+## 7. バックアップ / 復元
+
+SQLiteとData Protection鍵を必ずセットで保存します。停止中にボリューム全体をバックアップするのが簡単です。
+
+```sh
+docker compose stop sem
+mkdir -p backups
+docker compose run --rm --no-deps --user root -v "$PWD/backups:/backup" --entrypoint sh sem -c 'tar czf /backup/sem-data.tgz -C /data .'
+docker compose up -d sem
+```
+
+バックアップには個人情報・認証関連情報・鍵が含まれます。権限を制限し、公開ディレクトリには置かないでください。実際の復元テストは停止→別の空ボリュームへ復元→所有者をappユーザーへ戻す→同じホスト名で起動、の順で行います。復元前に現在のデータを別バックアップへ退避してください。
+
+## 8. 終了
+
+```sh
+docker compose stop sem
+```
+
+NPM側の公開設定も停止してください。`docker compose down -v` はテストDBと鍵を削除するので、保存が必要なときは実行しないでください。

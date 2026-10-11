@@ -8,20 +8,27 @@ services:
     restart: unless-stopped
     environment:
       ASPNETCORE_ENVIRONMENT: Production
-      ASPNETCORE_HTTP_PORTS: '8080'
+      ASPNETCORE_HTTP_PORTS: 8080
       Sem__PublicUrl: https://sem-test.raub.jp/
       Sem__DataDirectory: /data
       Sem__TrustedProxies__0: ${SEM_TRUSTED_PROXY_IP:?Set the NPM container IP on br}
       Sem__BootstrapSecret: ${SEM_BOOTSTRAP_SECRET:-}
+      Smtp__Host: ${SMTP_HOST:-}
+      Smtp__Port: ${SMTP_PORT:-587}
+      Smtp__Tls: ${SMTP_TLS:-StartTls}
+      Smtp__Username: ${SMTP_USERNAME:-}
+      Smtp__Password: ${SMTP_PASSWORD:-}
+      Smtp__From: misc@raub.jp
+      Push__PublicKey: ${PUSH_PUBLIC_KEY:-}
+      Push__PrivateKey: ${PUSH_PRIVATE_KEY:-}
+      Push__Subject: mailto:misc@raub.jp
     volumes:
       - sem-data:/data
     networks:
       br:
         aliases: [sem]
-    security_opt:
-      - no-new-privileges:true
+    security_opt: [no-new-privileges:true]
     cap_drop: [ALL]
-    # No host port publication. NPM connects to http://sem:8080 on br.
 volumes:
   sem-data:
 networks:
