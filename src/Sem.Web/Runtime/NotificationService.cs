@@ -26,8 +26,8 @@ public class NotificationService(IConfiguration cfg, IDataProtectionProvider dp)
         using var client = new SmtpClient(); client.Timeout = 15000;
         var tls = cfg["Smtp:Tls"] ?? "StartTls";
         var security = tls switch { "SslOnConnect" => SecureSocketOptions.SslOnConnect, "None" when cfg.GetValue<bool>("Smtp:AllowInsecureLocalTest") => SecureSocketOptions.None, _ => SecureSocketOptions.StartTls };
-        await client.ConnectAsync(cfg["Smtp:Host"], cfg.GetValue<int?>("Smtp:Port") ?? 587, security, ct);
-        if (!string.IsNullOrEmpty(cfg["Smtp:Username"])) await client.AuthenticateAsync(cfg["Smtp:Username"], cfg["Smtp:Password"], ct);
+        await client.ConnectAsync(cfg["Smtp:Host"]!, cfg.GetValue<int?>("Smtp:Port") ?? 587, security, ct);
+        if (!string.IsNullOrEmpty(cfg["Smtp:Username"])) await client.AuthenticateAsync(cfg["Smtp:Username"]!, cfg["Smtp:Password"] ?? "", ct);
         await client.SendAsync(message, ct); await client.DisconnectAsync(true, ct);
     }
     public async Task SendPush(Delivery delivery, ApplicationDbContext db, CancellationToken ct)

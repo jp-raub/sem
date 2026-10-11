@@ -86,7 +86,8 @@ public static class SemEndpoints
                 var supplied = Text("secret", 512);
                 if (cfg.BootstrapSecret.Length < 32 || !CryptographicOperations.FixedTimeEquals(SHA256.HashData(Encoding.UTF8.GetBytes(supplied)), SHA256.HashData(Encoding.UTF8.GetBytes(cfg.BootstrapSecret)))) throw new UnauthorizedAccessException();
                 site = await db.SiteStates.FindAsync(1);
-                if (site?.Initialized == true || site is not null && site.PendingUntil > Now) throw new ValidationException("初期設定は完了済み、または登録確認待ちです。");
+                if (site?.Initialized == true) throw new ValidationException("初期設定は完了済みです。");
+                if (site is not null && site.PendingUntil > Now) { var reserved = await users.FindByIdAsync(site.PendingAdminId!); if (reserved?.Email != email) throw new ValidationException("別のメールアドレスで初期登録確認待ちです。"); }
             }
             else
             {
@@ -96,10 +97,15 @@ public static class SemEndpoints
                 if (invite is null) throw new ValidationException("招待リンクが失効しています。");
                 inviteId = invite.Id;
             }
-            if (await users.FindByEmailAsync(email) is not null) throw new ValidationException("そのアドレスでは登録処理を開始できません。");
-            var pendingUser = new ApplicationUser { Email = email, UserName = email, DisplayName = display, Enabled = false, IsAdmin = false, Bootstrap = bootstrap, InvitationId = inviteId };
-            var result = await users.CreateAsync(pendingUser);
-            if (!result.Succeeded) throw new ValidationException("登録情報を確認してください。");
+            var pendingUser = await users.FindByEmailAsync(email);
+            if (pendingUser is not null && (pendingUser.Enabled || pendingUser.Bootstrap != bootstrap || !bootstrap && pendingUser.InvitationId != inviteId)) throw new ValidationException("そのアドレスでは登録処理を開始できません。");
+            if (pendingUser is null)
+            {
+                pendingUser = new ApplicationUser { Email = email, UserName = email, DisplayName = display, Enabled = false, IsAdmin = false, Bootstrap = bootstrap, InvitationId = inviteId };
+                var result = await users.CreateAsync(pendingUser);
+                if (!result.Succeeded) throw new ValidationException("登録情報を確認してください。");
+            }
+            else await db.EmailTickets.Where(t => t.UserId == pendingUser.Id && !t.Used).ExecuteUpdateAsync(s => s.SetProperty(t => t.Used, true));
             if (bootstrap)
             {
                 if (site is null) { site = new SiteState(); db.SiteStates.Add(site); }
