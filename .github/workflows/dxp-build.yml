@@ -21,8 +21,10 @@ jobs:
           dotnet-version: '10.0.x'
       - name: Prepare source
         run: |
+          rm -f verification/e2e-error.txt verification/e2e-result.json
           python3 scripts/prepare-source.py
           python3 scripts/icons.py
+          python3 scripts/delivery-notes.py
       - name: Restore and build
         id: compile
         run: |
@@ -87,11 +89,32 @@ jobs:
           done
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src verification
+          git add src deploy verification
+          git add -u scripts
           if ! git diff --cached --quiet; then
-            git commit -m 'ci: record adjusted source and integration result'
+            git commit -m 'ci: record verified source and integration result'
             git push origin HEAD:test/dxp-external
           fi
+      - name: Package verified delivery
+        id: package
+        if: steps.e2e.outcome == 'success'
+        run: |
+          set -euo pipefail
+          mkdir -p delivery
+          git archive --format=zip -o delivery/sem-dxp-source.zip HEAD
+          docker tag sem-dxp:ci sem-dxp:external-test
+          docker save sem-dxp:external-test | gzip -1 > delivery/sem-dxp-image.tar.gz
+          cp deploy/README.ja.md delivery/README.ja.md
+          printf 'Verified source: %s\nImage: %s\n' "$(git rev-parse HEAD)" "$(docker image inspect sem-dxp:external-test --format '{{.Id}}')" > delivery/VERSION.txt
+          cd delivery
+          sha256sum sem-dxp-source.zip sem-dxp-image.tar.gz > SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        if: steps.package.outcome == 'success'
+        with:
+          name: sem-dxp-delivery
+          path: delivery/
+          compression-level: 0
+          retention-days: 7
       - uses: actions/upload-artifact@v4
         if: always()
         with:

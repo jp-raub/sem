@@ -1,0 +1,3 @@
+from pathlib import Path
+p=Path('deploy/README.ja.md');s=p.read_text().replace('**現時点では検証中です。最終引き渡しの案内までは外部公開しないでください。**','**初期設定・実認証・通知経路の外部テスト版です。Apple実機と実SMTP/Push配信の最終確認は配置後に行います。**');s=s.replace('docker compose --env-file .env build\ndocker compose --env-file .env run', '# 同梱イメージを使う場合（ファイル位置に合わせて変更）\ngunzip -c ../sem-dxp-image.tar.gz | docker load\n# ソースから作る場合はこちらを使用\n# docker compose --env-file .env build\ndocker compose --env-file .env run');s=s.replace('確認メールのURLは1時間・1回限りです。','確認メールのURLは1時間・1回限りです。到達しない場合、同じメール・初期設定用秘密情報（一般登録は同じ招待リンク）で再送できます。再送時は旧メールの確認URLを無効にします。');p.write_text(s)
+p=Path('deploy/compose.yaml');s=p.read_text();p.write_text(s if s.startswith('name:') else 'name: sem-external-test\n'+s)
