@@ -34,9 +34,9 @@ public static class DeploymentConfiguration
         {
             o.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
             o.ForwardLimit = 1;
-            o.KnownIPProxies.Clear();
+            o.KnownProxies.Clear();
             o.KnownIPNetworks.Clear();
-            foreach (var address in settings.TrustedProxies) o.KnownIPProxies.Add(IPAddress.Parse(address));
+            foreach (var address in settings.TrustedProxies) o.KnownProxies.Add(IPAddress.Parse(address));
         });
         builder.Services.Configure<IdentityPasskeyOptions>(o =>
         {

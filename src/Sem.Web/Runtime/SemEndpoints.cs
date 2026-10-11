@@ -76,7 +76,7 @@ public static class SemEndpoints
         {
             if (!notify.EmailConfigured) throw new ValidationException("SMTPを設定してから登録してください。");
             var email = Text("email", 254).ToLowerInvariant();
-            if (!new EmailAddressAttribute().IsValid(email)) throw new ValidationException("メールアドレスを確認してください。");
+            if (email.Any(char.IsControl) || !new EmailAddressAttribute().IsValid(email)) throw new ValidationException("メールアドレスを確認してください。");
             var display = Text("name", 60);
             await using var tx = await db.Database.BeginTransactionAsync();
             string? inviteId = null;
@@ -204,7 +204,7 @@ public static class SemEndpoints
             Admin(); var i = await db.Invitations.FindAsync(Text("id", 64)); if (i is null) throw new ValidationException("リンクがありません。");
             i.Disabled = true; i.RevokedBy = user.Id; i.RevokedAt = Now; i.RevocationReason = Text("reason"); Audit("InvitationRevoked", i.Id); await db.SaveChangesAsync(); await Reply(new { message = "即時失効しました。" }); return;
         }
-        if (action == "read-message" && post) { var m = await db.Messages.FirstOrDefaultAsync(m => m.Id == Text("id", 64) && m.UserId == user.Id); if (m is not null) { m.ReadAt = Now; await db.SaveChangesAsync(); } await Reply(new { message = "既読にしました。" }); return; }
+        if (action == "read-message" && post) { var messageId = Text("id", 64); var m = await db.Messages.FirstOrDefaultAsync(m => m.Id == messageId && m.UserId == user.Id); if (m is not null) { m.ReadAt = Now; await db.SaveChangesAsync(); } await Reply(new { message = "既読にしました。" }); return; }
         if (action == "test-email" && post) { Admin(); if (!notify.EmailConfigured) throw new ValidationException("SMTP未設定です。"); notify.Email(db, user.Id, "SEM テストメール", "実際のSMTP配信テストです。"); await db.SaveChangesAsync(); await Reply(new { message = "テストメールを送信待ちに登録しました。" }); return; }
         if (action == "subscribe" && post)
         {
