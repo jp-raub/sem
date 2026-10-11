@@ -1,3 +1,4 @@
+name: sem-external-test
 services:
   sem:
     image: sem-dxp:external-test

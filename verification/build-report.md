@@ -1,7 +1,7 @@
 # DXP build report
 
-Commit: d500e4a98d195178b5eb2534f69f0d3be25dc587
-Run: https://github.com/jp-raub/sem/actions/runs/38169405959
+Commit: 9d9aee732a88cd59366780fbd8d601776aa85517
+Run: https://github.com/jp-raub/sem/actions/runs/38169700995
 .NET build: success
 Docker build: success
 Smoke test: success
@@ -9,27 +9,27 @@ Virtual passkey / SMTP integration: success
 
 Real Apple-device and actual SMTP / Push-provider testing remains manual.
   Determining projects to restore...
-  Restored /home/runner/work/sem/sem/src/Sem.Web/Sem.Web.csproj (in 2.79 sec).
+  Restored /home/runner/work/sem/sem/src/Sem.Web/Sem.Web.csproj (in 2.52 sec).
   Sem.Web -> /home/runner/work/sem/sem/src/Sem.Web/bin/Release/net10.0/Sem.Web.dll
 
 Build succeeded.
     0 Warning(s)
     0 Error(s)
 
-Time Elapsed 00:00:12.33
-#8 sha256:eae92bbb09aea95984502ab6604c31ed5247c847c4cf3c3e6fd5934e7c6a3f5b 20.57MB / 20.57MB 2.4s done
-#8 sha256:2c6f72fec6544b6bf7da120d6e4128b4c10856e803c8d998f72f8da51a1cdedd 499B / 499B 1.9s done
-#8 extracting sha256:32bc8786185914d38a44bc89ffeff78e3d7fdfec4fc046bf135b1128e4a5ff70 0.1s
-#8 extracting sha256:32bc8786185914d38a44bc89ffeff78e3d7fdfec4fc046bf135b1128e4a5ff70 0.7s done
-#8 extracting sha256:ab9e7b356e2d0263a6bb7d624e94a5827efb77c109f345dfb95e7e20c3c7ba2c
-#8 extracting sha256:ab9e7b356e2d0263a6bb7d624e94a5827efb77c109f345dfb95e7e20c3c7ba2c 2.6s done
-#8 extracting sha256:dab9b05c2cad4729c801647671db67a7f332348208adfd74691be1de6e4396e3
-#8 extracting sha256:dab9b05c2cad4729c801647671db67a7f332348208adfd74691be1de6e4396e3 0.1s done
-#8 extracting sha256:2c6f72fec6544b6bf7da120d6e4128b4c10856e803c8d998f72f8da51a1cdedd
-#8 extracting sha256:2c6f72fec6544b6bf7da120d6e4128b4c10856e803c8d998f72f8da51a1cdedd done
-#8 extracting sha256:eae92bbb09aea95984502ab6604c31ed5247c847c4cf3c3e6fd5934e7c6a3f5b 0.1s
-#8 extracting sha256:eae92bbb09aea95984502ab6604c31ed5247c847c4cf3c3e6fd5934e7c6a3f5b 0.3s done
-#8 DONE 13.4s
+Time Elapsed 00:00:08.20
+#7 extracting sha256:ac6f29623db71ff92d8da6791126e0f01e6b58ed621a56fc46bcec31a487f9b9 done
+#7 extracting sha256:e3ea09d212970668f1a1699e25c84a1f256d7d0d2544f1bf9ee234c17b70f851 0.1s done
+#7 extracting sha256:32bc8786185914d38a44bc89ffeff78e3d7fdfec4fc046bf135b1128e4a5ff70 0.1s
+#7 extracting sha256:32bc8786185914d38a44bc89ffeff78e3d7fdfec4fc046bf135b1128e4a5ff70 0.5s done
+#7 extracting sha256:ab9e7b356e2d0263a6bb7d624e94a5827efb77c109f345dfb95e7e20c3c7ba2c
+#7 extracting sha256:ab9e7b356e2d0263a6bb7d624e94a5827efb77c109f345dfb95e7e20c3c7ba2c 2.1s done
+#7 extracting sha256:dab9b05c2cad4729c801647671db67a7f332348208adfd74691be1de6e4396e3
+#7 extracting sha256:dab9b05c2cad4729c801647671db67a7f332348208adfd74691be1de6e4396e3 0.0s done
+#7 extracting sha256:2c6f72fec6544b6bf7da120d6e4128b4c10856e803c8d998f72f8da51a1cdedd
+#7 extracting sha256:2c6f72fec6544b6bf7da120d6e4128b4c10856e803c8d998f72f8da51a1cdedd done
+#7 extracting sha256:eae92bbb09aea95984502ab6604c31ed5247c847c4cf3c3e6fd5934e7c6a3f5b 0.1s
+#7 extracting sha256:eae92bbb09aea95984502ab6604c31ed5247c847c4cf3c3e6fd5934e7c6a3f5b 0.2s done
+#7 DONE 17.2s
 
 #9 [build 2/6] WORKDIR /source
 #9 DONE 0.0s
@@ -38,17 +38,17 @@ Time Elapsed 00:00:12.33
 #10 DONE 0.0s
 
 #11 [build 4/6] RUN dotnet restore src/Sem.Web/Sem.Web.csproj
-#11 0.623   Determining projects to restore...
-#11 2.938   Restored /source/src/Sem.Web/Sem.Web.csproj (in 2.04 sec).
-#11 DONE 4.4s
+#11 0.497   Determining projects to restore...
+#11 2.857   Restored /source/src/Sem.Web/Sem.Web.csproj (in 2.15 sec).
+#11 DONE 4.2s
 
 #12 [build 5/6] COPY src/Sem.Web/ src/Sem.Web/
 #12 DONE 0.1s
 
 #13 [build 6/6] RUN dotnet publish src/Sem.Web/Sem.Web.csproj -c Release --no-restore -o /out
-#13 5.762   Sem.Web -> /source/src/Sem.Web/bin/Release/net10.0/Sem.Web.dll
-#13 12.45   Sem.Web -> /out/
-#13 DONE 12.6s
+#13 4.389   Sem.Web -> /source/src/Sem.Web/bin/Release/net10.0/Sem.Web.dll
+#13 9.638   Sem.Web -> /out/
+#13 DONE 9.7s
 
 #14 [stage-1 3/4] COPY --from=build /out/ ./
 #14 DONE 0.4s
@@ -59,14 +59,14 @@ Time Elapsed 00:00:12.33
 #16 exporting to image
 #16 exporting layers
 #16 exporting layers 0.5s done
-#16 writing image sha256:66deb03e8a3ab5a58165b913d65ceb6e682d8b50167d857bf4f6ee21d1099ccc done
+#16 writing image sha256:55fc3d7085945047891f1db88ac5f48364b29284dab236d3ee92613b77cbec96 done
 #16 naming to docker.io/library/sem-dxp:ci done
 #16 DONE 0.5s
 Empty DB creation, untrusted host rejection, restart storage readiness: passed
 warn: Microsoft.AspNetCore.DataProtection.KeyManagement.XmlKeyManager[35]
-      No XML encryptor configured. Key {224f3c29-2351-4fab-8c83-5b5dc932f981} may be persisted to storage in unencrypted form.
+      No XML encryptor configured. Key {ba72c473-fc87-4429-a879-09567ebef211} may be persisted to storage in unencrypted form.
 warn: Microsoft.AspNetCore.DataProtection.KeyManagement.XmlKeyManager[35]
-      No XML encryptor configured. Key {10d8a581-fa91-40a7-8715-185a3ae1633e} may be persisted to storage in unencrypted form.
+      No XML encryptor configured. Key {24f2e71b-1af6-4a86-acc8-42f97cd26614} may be persisted to storage in unencrypted form.
 warn: Microsoft.AspNetCore.Antiforgery.DefaultAntiforgery[8]
       The 'Cache-Control' and 'Pragma' headers have been overridden and set to 'no-cache, no-store' and 'no-cache' respectively to prevent caching of this response. Any response that uses antiforgery should not be cached.
 warn: Microsoft.AspNetCore.Antiforgery.DefaultAntiforgery[8]
@@ -130,8 +130,4 @@ warn: Microsoft.AspNetCore.Antiforgery.DefaultAntiforgery[8]
     "No client runtime errors"
   ],
   "errors": []
-}page.waitForSelector: Timeout 30000ms exceeded.
-Call log:
-  - waiting for locator('[data-action=decide-invitation]') to be visible
-
-    at /home/runner/work/sem/sem/scripts/e2e.cjs:2:5848
+}
