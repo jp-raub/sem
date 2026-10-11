@@ -20,7 +20,9 @@ jobs:
         with:
           dotnet-version: '10.0.x'
       - name: Prepare source
-        run: python3 scripts/prepare-source.py
+        run: |
+          python3 scripts/prepare-source.py
+          python3 scripts/icons.py
       - name: Restore and build
         id: compile
         run: |
@@ -51,23 +53,43 @@ jobs:
           sleep 4
           curl -fsS http://127.0.0.1:18080/health/ready
           echo 'Empty DB creation, untrusted host rejection, restart storage readiness: passed' > smoke-summary.log
+      - name: Virtual passkey and SMTP integration
+        id: e2e
+        if: steps.smoke.outcome == 'success'
+        run: |
+          set -euo pipefail
+          npm install --prefix scripts --no-save playwright@1.56.0
+          scripts/node_modules/.bin/playwright install --with-deps chromium
+          openssl req -x509 -newkey rsa:2048 -nodes -keyout /tmp/sem-key.pem -out /tmp/sem-cert.pem -days 1 -subj '/CN=localhost' >/dev/null 2>&1
+          python3 scripts/smtp-fixture.py >/tmp/sem-smtp.log 2>&1 &
+          SMTP_PID=$!
+          docker volume create sem-e2e-data
+          GATEWAY=$(docker network inspect bridge --format '{{(index .IPAM.Config 0).Gateway}}')
+          docker run -d --name sem-e2e --add-host host.docker.internal:host-gateway -p 127.0.0.1:18080:8080 -v sem-e2e-data:/data -e Sem__PublicUrl=https://localhost:18443/ -e Sem__TrustedProxies__0="$GATEWAY" -e Sem__BootstrapSecret=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA -e Smtp__Host=host.docker.internal -e Smtp__Port=2525 -e Smtp__Tls=None -e Smtp__AllowInsecureLocalTest=true sem-dxp:ci
+          trap 'docker logs sem-e2e > integration.log 2>&1 || true; docker rm -f sem-e2e || true; docker volume rm sem-e2e-data || true; kill "$SMTP_PID" || true' EXIT
+          for n in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:18080/health/ready >/dev/null; then break; fi
+            sleep 1
+          done
+          node scripts/e2e.cjs
       - name: Record report and adjusted source
         if: always()
         env:
           COMPILE: ${{ steps.compile.outcome }}
           IMAGE: ${{ steps.image.outcome }}
           SMOKE: ${{ steps.smoke.outcome }}
+          E2E: ${{ steps.e2e.outcome }}
         run: |
           mkdir -p verification
-          printf '# DXP build report\n\nCommit: %s\nRun: https://github.com/%s/actions/runs/%s\n.NET build: %s\nDocker build: %s\nSmoke test: %s\n\nAuthentication and notification end-to-end validation pending.\n' "$GITHUB_SHA" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" "$COMPILE" "$IMAGE" "$SMOKE" > verification/build-report.md
-          for f in restore.log build.log docker.log smoke-summary.log smoke.log; do
+          printf '# DXP build report\n\nCommit: %s\nRun: https://github.com/%s/actions/runs/%s\n.NET build: %s\nDocker build: %s\nSmoke test: %s\nVirtual passkey / SMTP integration: %s\n\nReal Apple-device and actual SMTP / Push-provider testing remains manual.\n' "$GITHUB_SHA" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" "$COMPILE" "$IMAGE" "$SMOKE" "$E2E" > verification/build-report.md
+          for f in restore.log build.log docker.log smoke-summary.log smoke.log integration.log verification/e2e-result.json verification/e2e-error.txt; do
             if [ -f "$f" ]; then tail -n 45 "$f" >> verification/build-report.md; fi
           done
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add src verification
           if ! git diff --cached --quiet; then
-            git commit -m 'ci: record adjusted source and build result'
+            git commit -m 'ci: record adjusted source and integration result'
             git push origin HEAD:test/dxp-external
           fi
       - uses: actions/upload-artifact@v4
