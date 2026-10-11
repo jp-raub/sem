@@ -1,0 +1,27 @@
+{
+  "passed": 21,
+  "checks": [
+    "Existing unique performers seed person count",
+    "Participant without parts can register as spectator",
+    "Spectator consumes one event-capacity place",
+    "Duplicate spectator registration blocked",
+    "Successful part registration converts spectator to performer",
+    "Conversion keeps unique person count unchanged at capacity",
+    "Conversion is audited",
+    "Registered performer cannot switch to spectator directly",
+    "Multiple songs by same person still count once",
+    "Full event blocks new spectator",
+    "Full event rejects new performer with modal",
+    "Admin proxy registration does not bypass capacity",
+    "Capacity increase admits next spectator",
+    "Admin spectator removal requires reason",
+    "Removal remains staged before save",
+    "Admin removal commits after save",
+    "Removal audit records target, actor and reason",
+    "Spectators can join Custom phase even with zero song quota",
+    "View phase does not accept spectators",
+    "Capacity cannot be set below current participant count",
+    "No browser runtime errors"
+  ],
+  "errors": []
+}

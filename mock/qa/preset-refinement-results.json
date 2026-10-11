@@ -1,0 +1,20 @@
+{
+  "passed": 14,
+  "checks": [
+    "All timetable clock cells right-aligned",
+    "Clock digits use tabular numerals",
+    "Preset edit/delete buttons absent from table",
+    "Preset names are edit links",
+    "Drag grips preserved",
+    "Name click opens preset editor",
+    "Preset delete control lives in editor modal",
+    "Preset rename applies to draft",
+    "Preset rename does not modify existing event",
+    "Modal deletion retains confirmation",
+    "Confirmed deletion updates draft",
+    "Discard restores presets",
+    "Preset edit links fit mobile layout",
+    "No browser runtime errors"
+  ],
+  "errors": []
+}
