@@ -1,0 +1,1 @@
+{"release":"UI MOCK v16","totalPassed":72,"suites":[{"script":"test-account-management.cjs","passed":21},{"script":"test-event-features.cjs","passed":30},{"script":"test-attendance-v15.cjs","passed":21}],"excluded":"Real authentication, mail/Push delivery, backend authorization and real-device acceptance"}
