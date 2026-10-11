@@ -1,0 +1,30 @@
+services:
+  sem:
+    image: sem-dxp:external-test
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    platform: linux/amd64
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_HTTP_PORTS: '8080'
+      Sem__PublicUrl: https://sem-test.raub.jp/
+      Sem__DataDirectory: /data
+      Sem__TrustedProxies__0: ${SEM_TRUSTED_PROXY_IP:?Set the NPM container IP on br}
+      Sem__BootstrapSecret: ${SEM_BOOTSTRAP_SECRET:-}
+    volumes:
+      - sem-data:/data
+    networks:
+      br:
+        aliases: [sem]
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    # No host port publication. NPM connects to http://sem:8080 on br.
+volumes:
+  sem-data:
+networks:
+  br:
+    external: true
+    name: br

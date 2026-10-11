@@ -4,63 +4,48 @@ using Microsoft.EntityFrameworkCore;
 using Sem.Web.Components;
 using Sem.Web.Components.Account;
 using Sem.Web.Data;
+using Sem.Web.Runtime;
 
 var builder = WebApplication.CreateBuilder(args);
-
-// Add services to the container.
-builder.Services.AddRazorComponents()
-    .AddInteractiveServerComponents();
-
+var deployment = builder.AddSemDeployment();
+builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddScoped<IdentityRedirectManager>();
 builder.Services.AddScoped<AuthenticationStateProvider, IdentityRevalidatingAuthenticationStateProvider>();
-
-builder.Services.AddAuthentication(options =>
-    {
-        options.DefaultScheme = IdentityConstants.ApplicationScheme;
-        options.DefaultSignInScheme = IdentityConstants.ExternalScheme;
-    })
-    .AddIdentityCookies();
-
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
-builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlite(connectionString));
-builder.Services.AddDatabaseDeveloperPageExceptionFilter();
-
-builder.Services.AddIdentityCore<ApplicationUser>(options =>
-    {
-        options.SignIn.RequireConfirmedAccount = true;
-        options.Stores.SchemaVersion = IdentitySchemaVersions.Version3;
-    })
-    .AddEntityFrameworkStores<ApplicationDbContext>()
-    .AddSignInManager()
-    .AddDefaultTokenProviders();
-
+builder.Services.AddAuthentication(o =>
+{
+    o.DefaultScheme = IdentityConstants.ApplicationScheme;
+    o.DefaultSignInScheme = IdentityConstants.ExternalScheme;
+}).AddIdentityCookies();
+builder.Services.AddDbContext<ApplicationDbContext>(o => o.UseSqlite($"Data Source={Path.Combine(deployment.DataDirectory, "sem.db")}"));
+builder.Services.AddIdentityCore<ApplicationUser>(o =>
+{
+    o.SignIn.RequireConfirmedAccount = true;
+    o.Stores.SchemaVersion = IdentitySchemaVersions.Version3;
+}).AddEntityFrameworkStores<ApplicationDbContext>().AddSignInManager().AddDefaultTokenProviders();
 builder.Services.AddSingleton<IEmailSender<ApplicationUser>, IdentityNoOpEmailSender>();
-
 var app = builder.Build();
+app.UseForwardedHeaders();
+await app.InitializeSemStorageAsync();
 
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
+// Fail closed until initialization, passkey-only enrollment and notifications are implemented.
+// The official template's open registration/password pages MUST NOT be externally reachable.
+app.Use(async (context, next) =>
 {
-    app.UseMigrationsEndPoint();
-}
-else
+    if (context.Request.Path == "/health/live" || context.Request.Path == "/health/ready")
+    {
+        await next();
+        return;
+    }
+    context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+    context.Response.Headers.CacheControl = "no-store";
+    await context.Response.WriteAsync("SEM implementation in progress. External test is not available yet.");
+});
+app.MapGet("/health/live", () => Results.Ok(new { status = "alive", externalTestReady = false }));
+app.MapGet("/health/ready", async (ApplicationDbContext db) =>
 {
-    app.UseExceptionHandler("/Error", createScopeForErrors: true);
-    // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
-    app.UseHsts();
-}
-app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
-app.UseHttpsRedirection();
-
-app.UseAntiforgery();
-
-app.MapStaticAssets();
-app.MapRazorComponents<App>()
-    .AddInteractiveServerRenderMode();
-
-// Add additional endpoints required by the Identity /Account Razor components.
-app.MapAdditionalIdentityEndpoints();
-
+    return await db.Database.CanConnectAsync()
+        ? Results.Ok(new { status = "storage-ready", externalTestReady = false })
+        : Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+});
 app.Run();
