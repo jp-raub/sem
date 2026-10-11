@@ -1,0 +1,61 @@
+name: DXP application build
+on:
+  push:
+    branches: [test/dxp-external]
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: dxp-application-build
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: test/dxp-external
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Generate official authentication foundation if absent
+        run: |
+          if [ ! -f src/Sem.Web/Sem.Web.csproj ]; then
+            dotnet new blazor -n Sem.Web -o src/Sem.Web --framework net10.0 --auth Individual --interactivity Server --no-restore
+          fi
+      - name: Restore and build
+        id: compile
+        run: |
+          set -o pipefail
+          dotnet restore src/Sem.Web/Sem.Web.csproj 2>&1 | tee restore.log
+          dotnet build src/Sem.Web/Sem.Web.csproj --no-restore -c Release 2>&1 | tee build.log
+      - name: Docker build (linux amd64)
+        id: image
+        if: steps.compile.outcome == 'success'
+        run: |
+          set -o pipefail
+          docker build --platform linux/amd64 -t sem-dxp:ci -f deploy/Dockerfile . 2>&1 | tee docker.log
+      - name: Record report and generated source
+        if: always()
+        env:
+          COMPILE: ${{ steps.compile.outcome }}
+          IMAGE: ${{ steps.image.outcome }}
+        run: |
+          mkdir -p verification
+          printf '# DXP build report\n\nCommit: %s\nRun: https://github.com/%s/actions/runs/%s\n.NET build: %s\nDocker build: %s\n\nFoundation only; not ready for external deployment.\n' "$GITHUB_SHA" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" "$COMPILE" "$IMAGE" > verification/build-report.md
+          for f in restore.log build.log docker.log; do
+            if [ -f "$f" ]; then tail -n 100 "$f" >> verification/build-report.md; fi
+          done
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src verification
+          if ! git diff --cached --quiet; then
+            git commit -m 'ci: record generated authentication source and build result'
+            git push origin HEAD:test/dxp-external
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dxp-build-report
+          path: verification/
