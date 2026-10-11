@@ -1,1 +1,1 @@
-{"name":"SEM 外部テスト","short_name":"SEM","start_url":"/","scope":"/","display":"standalone","background_color":"#ffffff","theme_color":"#166534","icons":[{"src":"/favicon.png","sizes":"32x32","type":"image/png"}]}
+{"name":"SEM 外部テスト","short_name":"SEM","start_url":"/","scope":"/","display":"standalone","background_color":"#ffffff","theme_color":"#166534","icons":[{"src":"/sem-icon-192.png","sizes":"192x192","type":"image/png"},{"src":"/sem-icon-512.png","sizes":"512x512","type":"image/png"}]}
