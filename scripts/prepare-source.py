@@ -1,0 +1,11 @@
+from pathlib import Path
+p=Path('src/Sem.Web/Runtime/DeploymentSettings.cs')
+s=p.read_text().replace('KnownIPProxies', 'KnownProxies')
+p.write_text(s)
+p=Path('src/Sem.Web/Runtime/SemEndpoints.cs')
+s=p.read_text().replace('if (action == "read-message" && post) { var m = await db.Messages.FirstOrDefaultAsync(m => m.Id == Text("id", 64) && m.UserId == user.Id);', 'if (action == "read-message" && post) { var messageId = Text("id", 64); var m = await db.Messages.FirstOrDefaultAsync(m => m.Id == messageId && m.UserId == user.Id);')
+s=s.replace('if (!new EmailAddressAttribute().IsValid(email))', 'if (email.Any(char.IsControl) || !new EmailAddressAttribute().IsValid(email))')
+p.write_text(s)
+p=Path('src/Sem.Web/Sem.Web.csproj')
+s=p.read_text().replace('Include="MailKit" Version="4.9.0"', 'Include="MailKit" Version="4.16.0"')
+p.write_text(s)

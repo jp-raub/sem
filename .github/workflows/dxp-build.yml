@@ -19,11 +19,8 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
-      - name: Generate official authentication foundation if absent
-        run: |
-          if [ ! -f src/Sem.Web/Sem.Web.csproj ]; then
-            dotnet new blazor -n Sem.Web -o src/Sem.Web --framework net10.0 --auth Individual --interactivity Server --no-restore
-          fi
+      - name: Prepare source
+        run: python3 scripts/prepare-source.py
       - name: Restore and build
         id: compile
         run: |
@@ -36,22 +33,41 @@ jobs:
         run: |
           set -o pipefail
           docker build --platform linux/amd64 -t sem-dxp:ci -f deploy/Dockerfile . 2>&1 | tee docker.log
-      - name: Record report and generated source
+      - name: Empty database and restart smoke test
+        id: smoke
+        if: steps.image.outcome == 'success'
+        run: |
+          set -euo pipefail
+          docker volume create sem-ci-data
+          docker run -d --name sem-ci -p 127.0.0.1:18080:8080 -v sem-ci-data:/data -e Sem__TrustedProxies__0=127.0.0.1 sem-dxp:ci
+          trap 'docker logs sem-ci > smoke.log 2>&1 || true; docker rm -f sem-ci || true; docker volume rm sem-ci-data || true' EXIT
+          for n in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:18080/health/ready > health.json; then break; fi
+            sleep 1
+          done
+          grep -q storage-ready health.json
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18080/Account/Register)" = 400
+          docker restart sem-ci
+          sleep 4
+          curl -fsS http://127.0.0.1:18080/health/ready
+          echo 'Empty DB creation, untrusted host rejection, restart storage readiness: passed' > smoke-summary.log
+      - name: Record report and adjusted source
         if: always()
         env:
           COMPILE: ${{ steps.compile.outcome }}
           IMAGE: ${{ steps.image.outcome }}
+          SMOKE: ${{ steps.smoke.outcome }}
         run: |
           mkdir -p verification
-          printf '# DXP build report\n\nCommit: %s\nRun: https://github.com/%s/actions/runs/%s\n.NET build: %s\nDocker build: %s\n\nFoundation only; not ready for external deployment.\n' "$GITHUB_SHA" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" "$COMPILE" "$IMAGE" > verification/build-report.md
-          for f in restore.log build.log docker.log; do
-            if [ -f "$f" ]; then tail -n 100 "$f" >> verification/build-report.md; fi
+          printf '# DXP build report\n\nCommit: %s\nRun: https://github.com/%s/actions/runs/%s\n.NET build: %s\nDocker build: %s\nSmoke test: %s\n\nAuthentication and notification end-to-end validation pending.\n' "$GITHUB_SHA" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" "$COMPILE" "$IMAGE" "$SMOKE" > verification/build-report.md
+          for f in restore.log build.log docker.log smoke-summary.log smoke.log; do
+            if [ -f "$f" ]; then tail -n 45 "$f" >> verification/build-report.md; fi
           done
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add src verification
           if ! git diff --cached --quiet; then
-            git commit -m 'ci: record generated authentication source and build result'
+            git commit -m 'ci: record adjusted source and build result'
             git push origin HEAD:test/dxp-external
           fi
       - uses: actions/upload-artifact@v4
