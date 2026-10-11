@@ -1,7 +1,10 @@
-﻿@page "/"
-
-<PageTitle>Home</PageTitle>
-
-<h1>Hello, world!</h1>
-
-Welcome to your new app.
+@page "/"
+<PageTitle>SEM 外部テスト</PageTitle>
+<h1 id="sem-title">SEM</h1>
+<p id="sem-status">初期状態を読み込み中です。</p>
+<p>実認証・実DB・通知経路を確認するためのテスト画面です。モックv33の全UI・全業務機能の移植版ではありません。</p>
+<button id="sem-refresh">最新状態を取得</button>
+<p id="sem-error" role="alert" style="color:#b91c1c"></p>
+<p id="sem-message" role="status"></p>
+<div id="sem-root"></div>
+<script src="sem.js"></script>

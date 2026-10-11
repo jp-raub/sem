@@ -1,0 +1,3 @@
+'use strict';
+self.addEventListener('push',event=>{let data={title:'SEM',body:'新しいメッセージがあります',url:'/?messages=1'};try{Object.assign(data,event.data.json());}catch{}event.waitUntil(self.registration.showNotification(data.title,{body:data.body,data:{url:'/?messages=1'}}));});
+self.addEventListener('notificationclick',event=>{event.notification.close();event.waitUntil((async()=>{const windows=await self.clients.matchAll({type:'window',includeUncontrolled:true});for(const window of windows)if(new URL(window.url).origin===self.location.origin){await window.navigate('/?messages=1');return window.focus();}return self.clients.openWindow('/?messages=1');})());});
