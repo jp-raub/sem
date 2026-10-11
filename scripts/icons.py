@@ -1,5 +1,6 @@
-import struct,zlib
+import struct,zlib,runpy
 from pathlib import Path
+runpy.run_path('scripts/adjust-e2e.py')
 p=Path('src/Sem.Web/wwwroot')
 def chunk(t,d):return struct.pack('>I',len(d))+t+d+struct.pack('>I',zlib.crc32(t+d)&0xffffffff)
 for size in (192,512):
