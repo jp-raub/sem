@@ -34,3 +34,7 @@
 APIと画面／アセットのレート制限枠は分離し、既存のIP単位・毎分60 API／180画面の上限を維持する。最初のリクエストで両方の制限値が決まる状態を解消。基盤のブラウザ受入試験は全コンテキストのAPI通信を間隔制御し、制限を緩めない。
 
 HTTPS・Origin・レート制限等のガード後に標準のwwwroot静的ファイル配信を置き、MapStaticAssetsの指紋付きエンドポイントを補完する。SDK／ランタイム差で指紋なしのBlazor framework URLが出る場合も実ファイルを配信する。
+
+### Dockerのrestore順序の回帰
+
+実際のframework欠落はDockerなしでも再現した。csprojだけでrestoreし、その後Razorソースを配置して`--no-restore`でpublishすると、blazor.web.jsと対応静的エンドポイントが生成されない。SDKがrestore時に存在するRazorソースから暗黙のframework静的資産を決めるため、Dockerは全src/Sem.Webソースをコピーしてからrestoreする順序へ修正。クリーンな全ソースrestoreではファイルとルートが存在し、CIでもHTTP／画面試験の前に両方を必須検査する。未生成ファイルは静的配信のfallbackだけでは補えない。SDK版固定による回避やセキュリティ制限の緩和はしていない。

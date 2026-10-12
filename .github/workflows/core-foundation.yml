@@ -56,6 +56,7 @@ jobs:
           files=[str(p.relative_to(root))+' ('+str(p.stat().st_size)+')' for p in root.rglob('*') if p.is_file() and 'blazor.web' in p.name]
           j=json.loads(pathlib.Path('/tmp/sem-assets/endpoints.json').read_text())
           routes=[str(x.get('Route'))+' => '+str(x.get('AssetFile')) for x in j.get('Endpoints',[]) if 'blazor.web' in str(x.get('Route'))]
+          assert (root/'_framework/blazor.web.js').is_file() and routes, 'Publish must include Blazor web JS and mapped endpoints'
           text='Files: '+str(files)+'; routes: '+str(routes[:15])
           print('::notice title=Published Blazor asset inventory::'+text.replace('%','%25').replace('\n','%0A'))
           PYASSETS
