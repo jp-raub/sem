@@ -44,6 +44,7 @@ builder.Services.AddSingleton<NotificationService>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<PasskeyAdditionService>();
 builder.Services.AddHostedService<NotificationWorker>();
+builder.Services.AddHostedService<PhaseWorker>();
 builder.Services.AddRateLimiter(o =>
 {
     o.RejectionStatusCode = 429;

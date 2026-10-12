@@ -24,8 +24,10 @@ public sealed class SessionEvent
     public string ScheduledDate { get; set; } = "";
     public string? OpensAt { get; set; }
     public string AnnouncementMessage { get; set; } = "";
-    // Foundation supports Hidden/View only. Custom phases/enrollment are the next unit.
+    // Compatibility visibility cache; the active Phases row is authoritative for phase kind.
     public string PhaseKind { get; set; } = "Hidden";
+    public bool ManualPhaseOverride { get; set; }
+    public List<EventPhase> Phases { get; set; } = [];
     public string CreatedAt { get; set; } = "";
     public long RowVersion { get; set; }
     public List<EventAdmin> Admins { get; set; } = [];

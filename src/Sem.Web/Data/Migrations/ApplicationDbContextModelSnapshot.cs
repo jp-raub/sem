@@ -185,6 +185,63 @@ namespace Sem.Web.Data.Migrations
                     b.ToTable("EventAdmins");
                 });
 
+            modelBuilder.Entity("Sem.Web.Core.EventPhase", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ActivateAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DeactivateAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DeletedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EventId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("MaxPicks")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EventId")
+                        .IsUnique()
+                        .HasFilter("\"IsActive\"=1");
+
+                    b.HasIndex("EventId", "Kind")
+                        .IsUnique()
+                        .HasFilter("\"Kind\" IN ('Hidden','View')");
+
+                    b.ToTable("Phases", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Phases_Active", "\"IsActive\" IN (0,1) AND (\"IsActive\"=0 OR \"DeletedAt\" IS NULL)");
+
+                            t.HasCheckConstraint("CK_Phases_Default", "\"Kind\"='Custom' OR (\"MaxPicks\"=0 AND \"ActivateAt\" IS NULL AND \"DeactivateAt\" IS NULL AND \"DeletedAt\" IS NULL)");
+
+                            t.HasCheckConstraint("CK_Phases_Kind", "\"Kind\" IN ('Hidden','View','Custom')");
+
+                            t.HasCheckConstraint("CK_Phases_MaxPicks", "\"MaxPicks\" >= -1");
+                        });
+                });
+
             modelBuilder.Entity("Sem.Web.Core.RevokedAuthSession", b =>
                 {
                     b.Property<string>("TokenHash")
@@ -251,6 +308,9 @@ namespace Sem.Web.Data.Migrations
                     b.Property<string>("Location")
                         .IsRequired()
                         .HasColumnType("TEXT");
+
+                    b.Property<bool>("ManualPhaseOverride")
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("OpensAt")
                         .HasColumnType("TEXT");
@@ -885,6 +945,15 @@ namespace Sem.Web.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Sem.Web.Core.EventPhase", b =>
+                {
+                    b.HasOne("Sem.Web.Core.SessionEvent", null)
+                        .WithMany("Phases")
+                        .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Sem.Web.Core.RevokedAuthSession", b =>
                 {
                     b.HasOne("Sem.Web.Data.ApplicationUser", null)
@@ -906,6 +975,8 @@ namespace Sem.Web.Data.Migrations
             modelBuilder.Entity("Sem.Web.Core.SessionEvent", b =>
                 {
                     b.Navigation("Admins");
+
+                    b.Navigation("Phases");
                 });
 #pragma warning restore 612, 618
         }

@@ -26,6 +26,25 @@ public static class CoreEndpoints
                 }
                 if (!post && action == "workspace") { await ctx.Response.WriteAsJsonAsync(await service.ReadAsync(ctx.User, ctx.RequestAborted)); return; }
                 if (!post && action == "profile") { await ctx.Response.WriteAsJsonAsync(await service.ReadProfileAsync(ctx.User, ctx.Request.Query["id"].ToString(), ctx.RequestAborted)); return; }
+                if (!post && action == "phases") { await ctx.Response.WriteAsJsonAsync(await service.ReadPhasePlanAsync(ctx.User, ctx.Request.Query["id"].ToString(), ctx.RequestAborted)); return; }
+                if (post && action == "phases")
+                {
+                    var json = await ctx.Request.ReadFromJsonAsync<JsonElement>();
+                    if (json.ValueKind != JsonValueKind.Object) throw new ValidationException("入力形式を確認してください。");
+                    foreach (var prop in json.EnumerateObject().Where(p => p.Name.Equals("customPhases", StringComparison.OrdinalIgnoreCase)))
+                    {
+                        if (prop.Value.ValueKind != JsonValueKind.Array) throw new ValidationException("フェーズ配列を確認してください。");
+                        foreach (var phase in prop.Value.EnumerateArray())
+                        {
+                            if (phase.ValueKind != JsonValueKind.Object) throw new ValidationException("フェーズ入力を確認してください。");
+                            foreach (var date in phase.EnumerateObject().Where(p => p.Name.Equals("activateAt", StringComparison.OrdinalIgnoreCase) || p.Name.Equals("deactivateAt", StringComparison.OrdinalIgnoreCase)))
+                                if (date.Value.ValueKind != JsonValueKind.Null && (date.Value.ValueKind != JsonValueKind.String || !Regex.IsMatch(date.Value.GetString() ?? "", "(?:Z|[+-][0-9]{2}:[0-9]{2})$")))
+                                    throw new ValidationException("フェーズ日時はタイムゾーンを含むISO-8601で指定してください。");
+                        }
+                    }
+                    var edit = json.Deserialize<PhasePlanEdit>(new JsonSerializerOptions(JsonSerializerDefaults.Web)) ?? throw new ValidationException("入力が必要です。");
+                    await ctx.Response.WriteAsJsonAsync(await service.SavePhasePlanAsync(ctx.User, ctx.Request.Query["id"].ToString(), edit, ctx.RequestAborted)); return;
+                }
                 if (post && action == "service")
                     await service.SaveServiceAsync(ctx.User, await ctx.Request.ReadFromJsonAsync<ServiceEdit>() ?? throw new ValidationException("入力が必要です。"), ctx.RequestAborted);
                 else if (post && action == "profile")
