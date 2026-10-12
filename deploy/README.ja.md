@@ -87,16 +87,66 @@ Push配信の外部事業者側や実SMTPアカウントの到達性は、実機
 
 ## 7. バックアップ / 復元
 
-SQLiteとData Protection鍵を必ずセットで保存します。停止中にボリューム全体をバックアップするのが簡単です。
+英語の正本は [BACKUP.md](BACKUP.md)。この文書修正だけでは配布イメージ・DXP環境は更新されず、復元成功を意味しません。
+
+SQLiteとData Protection鍵を必ずセットで保存します。停止中に `/data` 全体をバックアップします。`cap_drop: ALL` のためroot指定でもapp所有ファイルを読めるとは限りません。通常のアプリユーザーで読み取り、圧縮stdoutをDXP側ユーザーで保存します。`--user root` やバックアップ先のバインドマウント、chmod 777、アプリの権限制限撤廃は使いません。バイナリ出力には `-T` が必要です。
+
+既存の `deploy` ディレクトリで実行します。サブシェル内の終了処理で、成功・失敗時とも停止後のサービス起動を試みます。失敗したアーカイブは `.partial` のまま残り、復元には使いません。起動を試みたことと正常稼働は別なので、終了後に状態を確認してください。
 
 ```sh
-docker compose stop sem
-mkdir -p backups
-docker compose run --rm --no-deps --user root -v "$PWD/backups:/backup" --entrypoint sh sem -c 'tar czf /backup/sem-data.tgz -C /data .'
-docker compose up -d sem
+(
+  set -eu
+  mkdir -p backups
+  umask 077
+  backup="backups/sem-data-$(date +%Y%m%d-%H%M%S).tgz"
+  test ! -e "$backup"
+  test ! -e "$backup.partial"
+  docker compose --env-file .env stop sem
+  trap 'docker compose --env-file .env up -d sem' EXIT
+  docker compose --env-file .env run \
+    --rm --no-deps -T --entrypoint sh sem \
+    -c 'tar czf - -C /data .' > "$backup.partial"
+  gzip -t "$backup.partial"
+  tar -tzf "$backup.partial"
+  mv "$backup.partial" "$backup"
+  sha256sum "$backup" > "$backup.sha256"
+  printf 'バックアップ作成完了: %s\n' "$backup"
+)
+docker compose --env-file .env ps sem
 ```
 
-バックアップには個人情報・認証関連情報・鍵が含まれます。権限を制限し、公開ディレクトリには置かないでください。実際の復元テストは停止→別の空ボリュームへ復元→所有者をappユーザーへ戻す→同じホスト名で起動、の順で行います。復元前に現在のデータを別バックアップへ退避してください。
+一覧に `./sem.db` と `./keys/` 内の実際の鍵ファイルが含まれることを確認します。ディレクトリだけでは不十分です。読み取り・チェックサムの確認は、DB整合性や復元成功の証明ではありません。チェックサムはアーカイブと一緒に保管しますが、同じ場所のチェックサムだけでは独立した真正性の保証になりません。
+
+バックアップには個人情報・認証関連情報・鍵が含まれます。アクセスを制限し、公開ディレクトリには置かず、別の保護された保管先にも保存してください。最初に失敗した `sem-data.tgz` や `.partial` は復元に使用しません。鍵の中身・SMTP資格情報・Push秘密鍵・完全な購読URLを共有しないでください。
+
+### 復元前の読み取り専用確認
+
+成功した日時付きアーカイブを明示的に選び、`gzip -t`、`tar -tzf`、`sha256sum` で確認します。最新ファイルが成功したものとは限りません。既存チェックサムを上書きして検証を通してはいけません。
+
+秘密情報を含む環境変数は表示せず、実コンテナを確認します。
+
+```sh
+docker compose --env-file .env ps sem
+cid=$(docker compose --env-file .env ps -q sem)
+if [ -n "$cid" ]; then
+  docker inspect --format '{{index .Config.Labels "com.docker.compose.project"}}' "$cid"
+  docker inspect --format '{{range .Mounts}}{{if eq .Destination "/data"}}{{.Type}} {{.Name}} {{.Destination}}{{end}}{{end}}' "$cid"
+  docker compose --env-file .env exec -T sem sh -c 'id; ls -ldn /data /data/keys; ls -ln /data/sem.db'
+else
+  printf '稼働中のサービスがありません。対象プロジェクトを確認してから進めてください。\n' >&2
+fi
+```
+
+実プロジェクト名・実ボリューム名・イメージ・UID/GIDとアーカイブ内容が確定するまでは、具体的な展開・切替コマンドは実行しません。Composeの宣言だけから実ボリューム名を決めつけないでください。
+
+### 復元テストの合格条件（DXPでは未検証）
+
+1. 切替前に新たな停止中バックアップを取り、元ボリュームと戻し方を確保する。
+2. 別の空ボリュームへDBと鍵をセットで復元し、確認した実行UID/GIDに所有権を合わせる。元ボリュームへ上書きしない。
+3. 起動前に保存領域を検証する。アプリ起動はDB書込み・移行・予約通知送信や外部サービスへの接続を伴う可能性がある。
+4. 元アプリを停止してから復元版を既存公開経路／ネットワーク別名 `sem` へ接続する。2台同時接続しない。NPM・DNS・公開ホスト名・VAPID鍵は変更しない。
+5. 同じHTTPSホスト名でユーザー・招待・通知履歴、ログアウト→既存パスキー再ログインを確認する。端末再登録なしのPush、新しい予約通知も確認する。サーバー送信済みと実機受信を区別する。
+6. 元環境へ戻す場合は先に復元版を停止する。切替後の変更は復元側だけにあるため、元側へ自動反映されるとは考えない。採用した稼働ボリュームと結果を記録し、完了まで元ボリュームを残す。
 
 ## 8. 終了
 
