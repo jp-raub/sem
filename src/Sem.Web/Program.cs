@@ -47,7 +47,15 @@ builder.Services.AddHostedService<NotificationWorker>();
 builder.Services.AddRateLimiter(o =>
 {
     o.RejectionStatusCode = 429;
-    o.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(c => RateLimitPartition.GetFixedWindowLimiter(c.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions { PermitLimit = c.Request.Path.StartsWithSegments("/api") ? 60 : 180, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+    o.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(c =>
+    {
+        // Category must be part of the partition key: otherwise the first request
+        // chooses a shared API/assets limit and an API burst can block Blazor scripts.
+        var api = c.Request.Path.StartsWithSegments("/api");
+        var key = (api ? "api:" : "web:") + (c.Connection.RemoteIpAddress?.ToString() ?? "unknown");
+        return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
+            { PermitLimit = api ? 60 : 180, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 });
+    });
 });
 var app = builder.Build();
 app.UseForwardedHeaders();

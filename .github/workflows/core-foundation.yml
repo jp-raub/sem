@@ -49,6 +49,8 @@ jobs:
           docker run -d --name sem-migration-smoke \
             -p 127.0.0.1:18080:8080 -v sem-migration-smoke:/data \
             --cap-drop ALL --security-opt no-new-privileges:true \
+            -e Sem__PublicUrl=https://localhost:18443/ \
+            -e Sem__TrustedProxies__0="$(docker network inspect bridge --format '{{(index .IPAM.Config 0).Gateway}}')" \
             sem-dxp:migration-ci
           trap 'docker logs sem-migration-smoke > verification/migration-smoke.log 2>&1 || true; docker rm -f sem-migration-smoke || true; docker volume rm sem-migration-smoke || true' EXIT
           ready() {
@@ -59,6 +61,7 @@ jobs:
             return 1
           }
           ready
+          SEM_RATE_TEST_URL=http://localhost:18080 node scripts/rate-limit-checks.cjs
           docker restart sem-migration-smoke
           sleep 2
           ready
@@ -125,5 +128,6 @@ jobs:
             verification/legacy-event-reset-checks.log
             verification/offline-copy-checks.log
             verification/e2e-result.json
+            verification/rate-limit-result.json
             verification/e2e-error.txt
           retention-days: 7

@@ -1,6 +1,5 @@
 module.exports = async ({p,g,ok}) => {
- // Previous native-auth checks share the same IP rate-limit window. Do not weaken production limits.
- await new Promise(r=>setTimeout(r,61000));
+ // Core-enabled E2E paces all API requests across browser contexts below the unchanged 60/min limit.
  const api = (page, action, data, query='') => page.evaluate(async ({action,data,query}) => {
   const token = (await (await fetch('/api/csrf')).json()).token;
   const response = await fetch('/api/core/'+action+query, { method:data===undefined?'GET':'POST',
@@ -35,11 +34,11 @@ module.exports = async ({p,g,ok}) => {
  ok((await api(p,'event',{...event,rowVersion:1},'?id='+created.body.id)).status===409,'Event and manager draft share optimistic conflict detection');
  const csrfMissing = await g.evaluate(async()=> (await fetch('/api/core/profile',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({displayName:'No CSRF',reading:'',callName:'',social:[],rowVersion:1})})).status);
  ok(csrfMissing===400,'Core HTTP mutation requires antiforgery token');
- const w = await p.context().newPage();const browserErrors=[];w.on('pageerror',e=>browserErrors.push(e.message)); w.on('console',m=>{if(m.type()==='error')console.error('Blazor browser:',m.text().replace(/\?[^\s]+/g,'?REDACTED').slice(0,300))});
+ const w = await p.context().newPage();const browserErrors=[],transportErrors=[];w.on('pageerror',e=>browserErrors.push(e.message)); w.on('response',r=>{if(r.status()>=400)transportErrors.push(r.status()+' '+new URL(r.url()).pathname)}); w.on('requestfailed',r=>transportErrors.push(new URL(r.url()).pathname+' '+r.failure()?.errorText)); w.on('console',m=>{if(m.type()==='error')console.error('Blazor browser:',m.text().replace(/\?[^\s]+/g,'?REDACTED').slice(0,300))});
  try {
   const response = await w.goto('https://localhost:18443/workspace');ok(response.headers()['cache-control']?.includes('no-store'),'Private workspace HTML is not cached');await w.waitForSelector('#service-edit');await w.waitForTimeout(4000);
   for(let n=0;n<8 && !await w.locator('#service-save').count();n++){await w.locator('#service-edit').click();await w.waitForTimeout(350)}
-  await w.waitForSelector('#service-save');await w.locator('#service-name').fill('Unsaved preview');
+  try { await w.waitForSelector('#service-save'); } catch(e) { throw Error(e.message+'; transport='+JSON.stringify(transportErrors)+'; runtime='+JSON.stringify(browserErrors)); } await w.locator('#service-name').fill('Unsaved preview');
   await w.waitForFunction(()=>document.querySelector('#core-title').textContent==='Unsaved preview');
   ok((await api(g,'workspace')).body.service.name===svc.name,'Blazor service preview is a local draft, not a shared write');
   await w.locator('#core-service button[type=button]').click();
@@ -53,8 +52,6 @@ module.exports = async ({p,g,ok}) => {
   await w.waitForSelector('#event-core-form',{state:'detached'});
   ok((await api(p,'workspace')).body.events.some(e=>e.title==='Blazor native event'),'Interactive Blazor creates and persists a formal event');
   await w.locator('#profile-edit').click();await w.waitForSelector('#profile-save');await w.locator('#profile-name').fill('After logout must not save');
-  // Allow the UI asset/navigation burst to leave the shared IP rate-limit window.
-  await w.waitForTimeout(61000);
   const logoutResponse = p.waitForResponse(r=>new URL(r.url()).pathname==='/api/logout');
   await p.locator('[data-action=logout]').click();
   const logout = await logoutResponse;ok(logout.status()===200,'Native logout succeeds with a still-connected Blazor circuit');
