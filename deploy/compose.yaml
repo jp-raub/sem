@@ -19,7 +19,7 @@ services:
       Smtp__Tls: ${SMTP_TLS:-StartTls}
       Smtp__Username: ${SMTP_USERNAME:-}
       Smtp__Password: ${SMTP_PASSWORD:-}
-      Smtp__From: misc@raub.jp
+      Smtp__From: ${SMTP_FROM:-misc@raub.jp}
       Push__PublicKey: ${PUSH_PUBLIC_KEY:-}
       Push__PrivateKey: ${PUSH_PRIVATE_KEY:-}
       Push__Subject: mailto:misc@raub.jp
