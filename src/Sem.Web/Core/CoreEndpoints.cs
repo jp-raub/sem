@@ -26,6 +26,11 @@ public static class CoreEndpoints
                 }
                 if (!post && action == "workspace") { await ctx.Response.WriteAsJsonAsync(await service.ReadAsync(ctx.User, ctx.RequestAborted)); return; }
                 if (!post && action == "profile") { await ctx.Response.WriteAsJsonAsync(await service.ReadProfileAsync(ctx.User, ctx.Request.Query["id"].ToString(), ctx.RequestAborted)); return; }
+                if (action == "questions") {
+                    var id=ctx.Request.Query["id"].ToString();
+                    if(post) await ctx.Response.WriteAsJsonAsync(await service.SaveQuestionsAsync(ctx.User,id,await ctx.Request.ReadFromJsonAsync<EventQuestionPlanEdit>()??throw new ValidationException("入力が必要です。"),ctx.RequestAborted));
+                    else await ctx.Response.WriteAsJsonAsync(await service.ReadQuestionsAsync(ctx.User,id,ctx.RequestAborted)); return;
+                }
                 if (action == "definitions") {
                     var id=ctx.Request.Query["id"].ToString(); var eventId=id.Length==0?null:id;
                     if(post) await ctx.Response.WriteAsJsonAsync(await service.SaveDefinitionsAsync(ctx.User,eventId,await ctx.Request.ReadFromJsonAsync<PartDefinitionPlanEdit>()??throw new ValidationException("入力が必要です。"),ctx.RequestAborted));

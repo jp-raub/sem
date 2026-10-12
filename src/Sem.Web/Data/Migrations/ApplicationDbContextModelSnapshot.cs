@@ -286,6 +286,80 @@ namespace Sem.Web.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Sem.Web.Core.EventQuestion", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DeletedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Disabled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("EventId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Public")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("PublicText")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("Required")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EventId", "SortOrder");
+
+                    b.ToTable("EventQuestions", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_EventQuestions_PublicText", "\"PublicText\"=0 OR (\"Type\"='Text' AND \"Public\"=1)");
+
+                            t.HasCheckConstraint("CK_EventQuestions_Text", "length(\"Text\") BETWEEN 1 AND 200");
+
+                            t.HasCheckConstraint("CK_EventQuestions_Type", "\"Type\" IN ('YesNo','Text')");
+                        });
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.EventQuestionAnswer", b =>
+                {
+                    b.Property<string>("QuestionId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UpdatedAt")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Value")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("QuestionId", "UserId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("EventQuestionAnswers", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_EventQuestionAnswers_Value", "\"Value\" IS NULL OR length(\"Value\") <= 2000");
+                        });
+                });
+
             modelBuilder.Entity("Sem.Web.Core.PartPreset", b =>
                 {
                     b.Property<string>("Id")
@@ -1059,6 +1133,30 @@ namespace Sem.Web.Data.Migrations
                         .WithMany("Phases")
                         .HasForeignKey("EventId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.EventQuestion", b =>
+                {
+                    b.HasOne("Sem.Web.Core.SessionEvent", null)
+                        .WithMany()
+                        .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.EventQuestionAnswer", b =>
+                {
+                    b.HasOne("Sem.Web.Core.EventQuestion", null)
+                        .WithMany()
+                        .HasForeignKey("QuestionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Sem.Web.Data.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 
