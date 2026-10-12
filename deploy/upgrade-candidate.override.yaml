@@ -1,0 +1,9 @@
+# Pair ONLY with the existing deployment's compose.yaml and .env.
+# Stop the original sem before starting the candidate on the same br alias.
+services:
+  sem:
+    image: ${SEM_CANDIDATE_IMAGE:?Use the immutable image tag from VERSION.json}
+volumes:
+  sem-data:
+    external: true
+    name: ${SEM_CANDIDATE_VOLUME:?Use a distinct restored volume, never the original}
