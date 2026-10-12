@@ -100,6 +100,19 @@ jobs:
           curl -fsS http://127.0.0.1:18080/health/ready
           export SEM_STORAGE_UPGRADE_COMMAND='docker stop sem-e2e && docker rm sem-e2e && bash /tmp/sem-test-start.sh sem-dxp:migration-ci'
           SEM_PASSKEY_ADDITION_CHECKS=1 SEM_CORE_FOUNDATION_CHECKS=1 node scripts/e2e.cjs
+      - name: Surface sanitized synthetic-test failure
+        if: failure()
+        run: |
+          python3 - <<'PYDIAG'
+          import pathlib,json
+          p=pathlib.Path('verification/e2e-error.txt')
+          text=p.read_text()[:1600] if p.exists() else 'No E2E error file; failure preceded the browser test.'
+          result=pathlib.Path('verification/e2e-result.json')
+          if result.exists():
+              j=json.loads(result.read_text());text+='\nPassed: '+str(j.get('passed'))+'; last: '+str(j.get('checks',[])[-1:])
+          text=text.replace('%','%25').replace('\r','%0D').replace('\n','%0A')
+          print('::error title=Synthetic core acceptance diagnosis::'+text)
+          PYDIAG
       - uses: actions/upload-artifact@v4
         if: always()
         with:
