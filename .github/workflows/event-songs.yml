@@ -3,7 +3,7 @@ on:
   push:
     branches: [feat/event-songs]
   pull_request:
-    branches: [feat/event-songs]
+    branches: [feat/event-questions]
     paths:
       - src/**
       - tests/**
