@@ -68,7 +68,7 @@ else
                 <p>開場：@(item.OpensAt is null ? "未指定" : Japan(item.OpensAt)) ／ @item.ActivePhaseName ／ @(item.ManualPhaseOverride ? "手動優先" : "自動")</p>
                 <p>@item.AnnouncementMessage</p>
                 <p>担当管理者：@string.Join("、", item.ManagerIds.Select(id => View.Members.FirstOrDefault(m => m.UserId == id)?.DisplayName ?? "不明"))</p>
-                @if (item.CanManage) { <button disabled="@(Busy || Editing is not null)" @onclick="() => EditEvent(item)">概要・管理者を編集</button> <a href="@($"/events/{item.Id}/phases")">フェーズ管理</a> <a href="@($"/events/{item.Id}/definitions")">演奏パート定義</a> <a href="@($"/events/{item.Id}/questions")">設問管理</a> }
+                @if (item.CanManage) { <button disabled="@(Busy || Editing is not null)" @onclick="() => EditEvent(item)">概要・管理者を編集</button> <a href="@($"/events/{item.Id}/phases")">フェーズ管理</a> <a href="@($"/events/{item.Id}/definitions")">演奏パート定義</a> <a href="@($"/events/{item.Id}/questions")">設問管理</a> <a href="@($"/events/{item.Id}/songs")">曲・枠管理</a> }
             </article>
         }
         @if (View.Events.Length == 0) { <p>閲覧できるイベントはありません。</p> }
