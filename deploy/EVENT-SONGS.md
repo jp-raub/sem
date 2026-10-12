@@ -27,3 +27,5 @@ Set `SEM_SONG_CHECKS=1` in the native-key/isolated-SMTP/actual-Blazor test. The 
 ## Still separate
 
 TimeParts/transitions, start/end computation and rounding, icons, drag ordering, live shared updates, actual participant signup/release and phase-song MaxPicks, spectator and required answers, capacities, partial success, business notifications, reception and on-day progress. Management song order is a song-only sequence, not a complete mixed timetable. No image delivery, PR merge or DXP changes are included.
+
+Local checkpoint: SongChecks passed 42 checks, including an explicit post-upgrade foreign-key check (zero violations). Native integration and container CI must be recorded separately when completed.
