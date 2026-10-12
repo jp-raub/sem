@@ -1,0 +1,38 @@
+@page "/service/part-presets"
+@page "/events/{EventId}/definitions"
+@rendermode InteractiveServer
+@using Sem.Web.Core
+@inject AuthenticationStateProvider Authentication
+@inject CoreFoundationService Core
+<PageTitle>演奏パート定義</PageTitle>
+<h1>演奏パート定義：@Plan?.Title</h1>
+<p><a href="/workspace">業務基盤へ戻る</a></p>
+<p>サービスプリセットは新規イベントへコピーされ、既存イベントへは自動反映されません。曲／参加受付は後続実装です。</p>
+<p id="definition-error" role="alert">@Error</p><p id="definition-message" role="status">@Message</p>
+@if(Plan is not null){
+ @if(!Editing){<button id="definition-edit" @onclick="()=>{Editing=true;Message=string.Empty;}">編集</button><button id="definition-refresh" @onclick="Load">最新状態を取得</button>}
+ else{<p>変更は下書きです。最後の保存まで共有されません。</p><button id="definition-add" @onclick="New">パートを追加</button>}
+ <table><thead><tr><th>名前</th><th>分類</th><th>順序</th></tr></thead><tbody>
+ @foreach(var row in Rows){<tr data-definition="@row.Id"><td>@if(Editing){<button data-definition-name="@row.Id" @onclick="()=>Open(row)">@row.Name</button>}else{@row.Name}</td><td>@(row.Category=="Sing"?"Sing（声）":"Play（楽器）")</td><td>@if(Editing){<button data-definition-up="@row.Id" disabled="@(Rows.IndexOf(row)==0)" @onclick="()=>Move(row,-1)">↑</button><button data-definition-down="@row.Id" disabled="@(Rows.IndexOf(row)==Rows.Count-1)" @onclick="()=>Move(row,1)">↓</button>}</td></tr>}
+ </tbody></table>
+ @if(Editing){<button id="definition-save" disabled="@(Busy||Modal)" @onclick="Save">保存</button><button id="definition-cancel" disabled="@Busy" @onclick="Cancel">取消</button>}
+ @if(Modal){<section role="dialog" aria-modal="true" aria-label="パート定義編集" class="panel"><h2>パート定義編集</h2>
+ <label>パート名<input id="definition-name" @bind="Name" maxlength="40" /></label><label>分類<select id="definition-category" @bind="Category"><option value="Sing">Sing（声）</option><option value="Play">Play（楽器）</option></select></label>
+ <button id="definition-apply" @onclick="Apply">下書きに反映</button><button id="definition-close" @onclick="()=>Modal=false">閉じる</button>
+ @if(Selected is not null){<button id="definition-delete" @onclick="Delete">下書きから削除</button>}
+ </section>}
+}
+@code{
+ [Parameter]public string? EventId{get;set;}
+ PartDefinitionPlan? Plan;List<PartDefinitionView>Rows=[];PartDefinitionView?Selected;bool Editing,Busy,Modal;string Name="",Category="Play",Error="",Message="";
+ public override Task SetParametersAsync(ParameterView parameters){if(!parameters.TryGetValue<string?>(nameof(EventId),out _))EventId=null;return base.SetParametersAsync(parameters);}
+ protected override async Task OnParametersSetAsync(){Editing=Modal=false;await Load();}
+ async Task Load(){try{Plan=await Core.ReadDefinitionsAsync((await Authentication.GetAuthenticationStateAsync()).User,EventId);Rows=Plan.Definitions.ToList();Error="";}catch{Plan=null;Rows=[];Editing=Modal=false;Error="ログイン状態と管理権限を確認してください。";}}
+ void Cancel(){Rows=Plan!.Definitions.ToList();Editing=Modal=false;Error="";Message="下書きを取り消しました。";}
+ void New(){Selected=null;Name="";Category="Play";Modal=true;}
+ void Open(PartDefinitionView row){Selected=row;Name=row.Name;Category=row.Category;Modal=true;}
+ void Move(PartDefinitionView row,int change){var index=Rows.IndexOf(row);var next=index+change;if(next>=0&&next<Rows.Count)(Rows[index],Rows[next])=(Rows[next],Rows[index]);}
+ void Apply(){var name=Name.Trim();if(name.Length is <1 or >40||name.Any(c=>"<>&\"'|".Contains(c)||char.IsControl(c))||Rows.Any(x=>x.Id!=Selected?.Id&&x.Name.Equals(name,StringComparison.OrdinalIgnoreCase))){Error="安全な1〜40文字の重複しない名前を指定してください。";return;}var row=new PartDefinitionView(Selected?.Id??Guid.NewGuid().ToString(),name,Category,Selected?.SourcePresetId);if(Selected is not null)Rows[Rows.IndexOf(Selected)]=row;else Rows.Add(row);Modal=false;Error="";}
+ void Delete(){if(Selected is not null){Rows.Remove(Selected);Modal=false;}}
+ async Task Save(){Busy=true;Error="";try{await Core.SaveDefinitionsAsync((await Authentication.GetAuthenticationStateAsync()).User,EventId,new(Plan!.RowVersion,Rows.Select(x=>new PartDefinitionEdit(x.Id,x.Name,x.Category)).ToArray()));Editing=Modal=false;Message="保存しました。";await Load();}catch(UnauthorizedAccessException){Plan=null;Rows=[];Editing=Modal=false;Error="再ログインと管理権限を確認してください。";}catch(Exception e)when(e is CoreConflictException or System.ComponentModel.DataAnnotations.ValidationException){Error=e.Message;}catch{Error="保存できませんでした。下書きを保持しています。最新状態を確認してください。";}finally{Busy=false;}}
+}

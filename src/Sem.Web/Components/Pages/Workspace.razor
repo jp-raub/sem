@@ -47,7 +47,7 @@ else
     <p>基本プロフィールはログイン済みメンバーに公開されます。メールは公開しません。アイコン・追加設問・登録履歴は後続実装です。</p></section>
     @if (View.IsAdmin)
     {
-        <section class="panel" id="core-service"><h2>サービス管理</h2>
+        <section class="panel" id="core-service"><h2>サービス管理</h2><p><a href="/service/part-presets">新規イベント用パートプリセット</a></p>
         @if (Editing == "service")
         {
             <form @onsubmit="SaveService" @onsubmit:preventDefault>
@@ -68,7 +68,7 @@ else
                 <p>開場：@(item.OpensAt is null ? "未指定" : Japan(item.OpensAt)) ／ @item.ActivePhaseName ／ @(item.ManualPhaseOverride ? "手動優先" : "自動")</p>
                 <p>@item.AnnouncementMessage</p>
                 <p>担当管理者：@string.Join("、", item.ManagerIds.Select(id => View.Members.FirstOrDefault(m => m.UserId == id)?.DisplayName ?? "不明"))</p>
-                @if (item.CanManage) { <button disabled="@(Busy || Editing is not null)" @onclick="() => EditEvent(item)">概要・管理者を編集</button> <a href="@($"/events/{item.Id}/phases")">フェーズ管理</a> }
+                @if (item.CanManage) { <button disabled="@(Busy || Editing is not null)" @onclick="() => EditEvent(item)">概要・管理者を編集</button> <a href="@($"/events/{item.Id}/phases")">フェーズ管理</a> <a href="@($"/events/{item.Id}/definitions")">演奏パート定義</a> }
             </article>
         }
         @if (View.Events.Length == 0) { <p>閲覧できるイベントはありません。</p> }
