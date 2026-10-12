@@ -97,6 +97,9 @@ app.Use(async (context, next) =>
 });
 app.UseAuthorization();
 app.UseAntiforgery();
+// Standard wwwroot fallback for SDK/runtime variants whose resource collection
+// emits an unhashed framework URL. Keep it after all origin/HTTPS/rate guards.
+app.UseStaticFiles();
 app.MapGet("/health/live", () => Results.Ok(new { status = "alive" }));
 app.MapGet("/health/ready", async (ApplicationDbContext db) => await db.Database.CanConnectAsync() ? Results.Ok(new { status = "storage-ready" }) : Results.StatusCode(503));
 app.MapSem();
