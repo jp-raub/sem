@@ -12,6 +12,24 @@ public class PushDevice { public string Id { get; set; } = Guid.NewGuid().ToStri
 public class TestEvent { public string Id { get; set; } = Guid.NewGuid().ToString(); public string Title { get; set; } = ""; public string ManagerId { get; set; } = ""; public long Starts { get; set; } public long? Opens { get; set; } public int Capacity { get; set; } = 20; public string Phase { get; set; } = "Hidden"; }
 public class Participation { public string Id { get; set; } = Guid.NewGuid().ToString(); public string EventId { get; set; } = ""; public string UserId { get; set; } = ""; }
 public class Audit { public string Id { get; set; } = Guid.NewGuid().ToString(); public string ActorId { get; set; } = ""; public string Action { get; set; } = ""; public string EntityId { get; set; } = ""; public long At { get; set; } }
+public class PasskeyAddition
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString();
+    public string UserId { get; set; } = "";
+    public string SessionHash { get; set; } = "";
+    public string Email { get; set; } = "";
+    public string SecurityStamp { get; set; } = "";
+    public string? ReauthenticationChallengeHash { get; set; }
+    public string? CreationChallengeHash { get; set; }
+    public string? EmailTokenHash { get; set; }
+    public long Created { get; set; }
+    public long Expires { get; set; }
+    public long? ReauthenticatedAt { get; set; }
+    public long? EmailVerifiedAt { get; set; }
+    public long? RegistrationUntil { get; set; }
+    public long? CompletedAt { get; set; }
+    public bool Cancelled { get; set; }
+}
 public class SemUserConfirmation : IUserConfirmation<ApplicationUser>
 {
     public Task<bool> IsConfirmedAsync(UserManager<ApplicationUser> manager, ApplicationUser user) => Task.FromResult(user.EmailConfirmed && user.Enabled);

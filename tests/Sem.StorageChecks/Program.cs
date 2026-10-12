@@ -3,6 +3,8 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.DependencyInjection;
 using Sem.Web.Data;
 using Sem.Web.Runtime;
@@ -16,16 +18,29 @@ try
     using (var fixture = new Fixture(fresh))
     {
         await SqliteStorageInitializer.InitializeAsync(fixture.Db);
-        Check((await fixture.Db.Database.GetAppliedMigrationsAsync()).SequenceEqual([SqliteStorageInitializer.BaselineId]),
+        Check((await fixture.Db.Database.GetAppliedMigrationsAsync()).SequenceEqual(fixture.Db.Database.GetMigrations()),
             "Empty DB is created by the baseline migration");
         await SqliteStorageInitializer.InitializeAsync(fixture.Db);
         Check(await fixture.Db.Users.CountAsync() == 0, "Repeated startup is idempotent");
     }
 
+    var baseline = Path.Combine(root, "baseline.db");
+    using (var fixture = new Fixture(baseline))
+    {
+        await CreateLegacyAsync(fixture.Db, retainHistory: true);
+        fixture.Db.Users.Add(new ApplicationUser { Id = "baseline-user", UserName = "baseline@example.test",
+            Email = "baseline@example.test", EmailConfirmed = true, Enabled = true, SecurityStamp = "baseline-stamp" });
+        await fixture.Db.SaveChangesAsync();
+        await SqliteStorageInitializer.InitializeAsync(fixture.Db);
+        Check(await fixture.Db.Users.AnyAsync(u => u.Id == "baseline-user" && u.SecurityStamp == "baseline-stamp") &&
+            (await fixture.Db.Database.GetAppliedMigrationsAsync()).SequenceEqual(fixture.Db.Database.GetMigrations()),
+            "Managed baseline DB receives the pending proof migration without losing its user");
+    }
+
     var legacy = Path.Combine(root, "legacy.db");
     using (var fixture = new Fixture(legacy))
     {
-        await fixture.Db.Database.EnsureCreatedAsync(); // Test fixture only: old deployment behavior.
+        await CreateLegacyAsync(fixture.Db); // Test fixture only: fixed pre-migration schema.
         fixture.Db.Users.Add(new ApplicationUser
         {
             Id = "fixture-user", UserName = "fixture@example.test", Email = "fixture@example.test",
@@ -59,8 +74,8 @@ try
     {
         await SqliteStorageInitializer.InitializeAsync(fixture.Db);
         Check(before == await DumpAsync(legacy), "Legacy adoption preserves every business row including passkey bytes");
-        Check((await fixture.Db.Database.GetAppliedMigrationsAsync()).Count() == 1,
-            "Legacy schema receives baseline history only after validation");
+        Check((await fixture.Db.Database.GetAppliedMigrationsAsync()).SequenceEqual(fixture.Db.Database.GetMigrations()),
+            "Legacy schema receives baseline history and pending migration after validation");
         await SqliteStorageInitializer.InitializeAsync(fixture.Db);
         Check(before == await DumpAsync(legacy), "Migrated DB survives another startup without data changes");
     }
@@ -108,7 +123,7 @@ try
     })
     {
         var file = Path.Combine(root, Guid.NewGuid() + ".db");
-        using (var fixture = new Fixture(file)) await fixture.Db.Database.EnsureCreatedAsync();
+        using (var fixture = new Fixture(file)) await CreateLegacyAsync(fixture.Db);
         using (var connection = new SqliteConnection("Data Source=" + file))
         {
             await connection.OpenAsync();
@@ -169,6 +184,20 @@ static async Task<string> DumpAsync(string path)
         }
     }
     return JsonSerializer.Serialize(rows);
+}
+
+static async Task CreateLegacyAsync(ApplicationDbContext db, bool retainHistory = false)
+{
+    var script = db.GetService<IMigrator>().GenerateScript(Migration.InitialDatabase,
+        SqliteStorageInitializer.BaselineId, MigrationsSqlGenerationOptions.NoTransactions);
+    await db.Database.OpenConnectionAsync();
+    try
+    {
+        using var command = db.Database.GetDbConnection().CreateCommand();
+        command.CommandText = script + (retainHistory ? "" : "\nDROP TABLE \"__EFMigrationsHistory\";");
+        await command.ExecuteNonQueryAsync();
+    }
+    finally { await db.Database.CloseConnectionAsync(); }
 }
 
 sealed class Fixture : IDisposable
