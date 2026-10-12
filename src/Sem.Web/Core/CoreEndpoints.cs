@@ -1,0 +1,58 @@
+using System.ComponentModel.DataAnnotations;
+using System.Text.Json;
+using System.Text.RegularExpressions;
+using Microsoft.AspNetCore.Antiforgery;
+using Microsoft.AspNetCore.Http.Features;
+using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
+using Sem.Web.Runtime;
+namespace Sem.Web.Core;
+public static class CoreEndpoints
+{
+    public static void MapCoreFoundation(this WebApplication app) => app.MapMethods("/api/core/{action}", ["GET", "POST"],
+        async (HttpContext ctx, CoreFoundationService service, IAntiforgery csrf, DeploymentSettings deployment) =>
+        {
+            ctx.Response.Headers.CacheControl = "no-store";
+            try
+            {
+                var action = ctx.Request.RouteValues["action"]?.ToString();
+                var post = HttpMethods.IsPost(ctx.Request.Method);
+                if (post)
+                {
+                    if (ctx.Request.Headers.Origin.ToString() != deployment.PublicUrl.TrimEnd('/')) throw new UnauthorizedAccessException();
+                    var size = ctx.Features.Get<IHttpMaxRequestBodySizeFeature>();
+                    if (size is { IsReadOnly: false }) size.MaxRequestBodySize = 65536;
+                    await csrf.ValidateRequestAsync(ctx);
+                }
+                if (!post && action == "workspace") { await ctx.Response.WriteAsJsonAsync(await service.ReadAsync(ctx.User, ctx.RequestAborted)); return; }
+                if (!post && action == "profile") { await ctx.Response.WriteAsJsonAsync(await service.ReadProfileAsync(ctx.User, ctx.Request.Query["id"].ToString(), ctx.RequestAborted)); return; }
+                if (post && action == "service")
+                    await service.SaveServiceAsync(ctx.User, await ctx.Request.ReadFromJsonAsync<ServiceEdit>() ?? throw new ValidationException("入力が必要です。"), ctx.RequestAborted);
+                else if (post && action == "profile")
+                    await service.SaveProfileAsync(ctx.User, await ctx.Request.ReadFromJsonAsync<ProfileEdit>() ?? throw new ValidationException("入力が必要です。"), ctx.RequestAborted);
+                else if (post && action == "event")
+                {
+                    var json = await ctx.Request.ReadFromJsonAsync<JsonElement>();
+                    if (json.ValueKind != JsonValueKind.Object) throw new ValidationException("入力形式を確認してください。");
+                    foreach (var property in json.EnumerateObject())
+                        if ((property.Name.Equals("scheduledDate", StringComparison.OrdinalIgnoreCase) || property.Name.Equals("opensAt", StringComparison.OrdinalIgnoreCase)) &&
+                            property.Value.ValueKind != JsonValueKind.Null && (property.Value.ValueKind != JsonValueKind.String ||
+                            !Regex.IsMatch(property.Value.GetString() ?? "", "(?:Z|[+-][0-9]{2}:[0-9]{2})$")))
+                            throw new ValidationException("日時はタイムゾーンを含むISO-8601で指定してください。");
+                    var edit = json.Deserialize<EventEdit>(new JsonSerializerOptions(JsonSerializerDefaults.Web)) ?? throw new ValidationException("入力が必要です。");
+                    var id = ctx.Request.Query["id"].ToString();
+                    var saved = await service.SaveEventAsync(ctx.User, id.Length == 0 ? null : id, edit, ctx.RequestAborted);
+                    await ctx.Response.WriteAsJsonAsync(new { id = saved }); return;
+                }
+                else { ctx.Response.StatusCode = 404; return; }
+                await ctx.Response.WriteAsJsonAsync(new { message = "保存しました。" });
+            }
+            catch (UnauthorizedAccessException) { ctx.Response.StatusCode = 403; await ctx.Response.WriteAsJsonAsync(new { error = "ログイン状態と操作権限を確認してください。" }); }
+            catch (CoreConflictException e) { ctx.Response.StatusCode = 409; await ctx.Response.WriteAsJsonAsync(new { error = e.Message }); }
+            catch (DbUpdateConcurrencyException) { ctx.Response.StatusCode = 409; await ctx.Response.WriteAsJsonAsync(new { error = "更新が競合しました。最新状態を確認してください。" }); }
+            catch (SqliteException e) when (e.SqliteErrorCode is 5 or 6) { ctx.Response.StatusCode = 409; await ctx.Response.WriteAsJsonAsync(new { error = "ほかの処理が更新中です。最新状態を確認してください。" }); }
+            catch (ValidationException e) { ctx.Response.StatusCode = 400; await ctx.Response.WriteAsJsonAsync(new { error = e.Message }); }
+            catch (AntiforgeryValidationException) { ctx.Response.StatusCode = 400; await ctx.Response.WriteAsJsonAsync(new { error = "ページを再読み込みしてください。" }); }
+            catch (JsonException) { ctx.Response.StatusCode = 400; await ctx.Response.WriteAsJsonAsync(new { error = "入力形式を確認してください。" }); }
+        });
+}

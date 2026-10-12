@@ -8,6 +8,9 @@ using Sem.Web.Components.Account;
 using Sem.Web.Data;
 using Sem.Web.Runtime;
 using WebPush;
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authentication;
+using Sem.Web.Core;
 
 // Maintenance exits before deployment configuration, migrations, HTTP or notification workers.
 if (args.Length > 0 && args[0] == "--legacy-event-reset")
@@ -34,7 +37,8 @@ builder.Services.AddAuthentication().AddCookie("SEM.Enrollment", o =>
     o.Cookie.Name = "__Host-SEM-Enrollment"; o.Cookie.SecurePolicy = CookieSecurePolicy.Always; o.Cookie.HttpOnly = true; o.Cookie.Path = "/"; o.Cookie.SameSite = SameSiteMode.Lax; o.ExpireTimeSpan = TimeSpan.FromMinutes(20); o.SlidingExpiration = false;
 });
 builder.Services.AddAntiforgery(o => { o.HeaderName = "X-CSRF-TOKEN"; o.Cookie.Name = "__Host-SEM-CSRF"; o.Cookie.SecurePolicy = CookieSecurePolicy.Always; o.Cookie.Path = "/"; o.Cookie.HttpOnly = true; });
-builder.Services.AddDbContext<ApplicationDbContext>(o => o.UseSqlite($"Data Source={Path.Combine(deployment.DataDirectory, "sem.db")}"));
+builder.Services.AddDbContextFactory<ApplicationDbContext>(o => o.UseSqlite($"Data Source={Path.Combine(deployment.DataDirectory, "sem.db")}"), ServiceLifetime.Scoped);
+builder.Services.AddScoped<CoreFoundationService>();
 builder.Services.AddIdentityCore<ApplicationUser>(o => { o.SignIn.RequireConfirmedAccount = true; o.User.RequireUniqueEmail = true; o.Stores.SchemaVersion = IdentitySchemaVersions.Version3; }).AddEntityFrameworkStores<ApplicationDbContext>().AddSignInManager().AddDefaultTokenProviders().AddUserConfirmation<SemUserConfirmation>();
 builder.Services.AddSingleton<NotificationService>();
 builder.Services.AddSingleton(TimeProvider.System);
@@ -51,6 +55,7 @@ await app.InitializeSemStorageAsync();
 app.Use(async (context, next) =>
 {
     context.Response.Headers["Referrer-Policy"] = "no-referrer";
+    if (context.Request.Path.Equals("/workspace", StringComparison.OrdinalIgnoreCase)) context.Response.Headers.CacheControl = "no-store";
     context.Response.Headers["X-Content-Type-Options"] = "nosniff";
     context.Response.Headers["X-Frame-Options"] = "DENY";
     if (!context.Request.Path.StartsWithSegments("/health"))
@@ -64,11 +69,30 @@ app.Use(async (context, next) =>
 });
 app.UseRateLimiter();
 app.UseAuthentication();
+app.Use(async (context, next) =>
+{
+    if (context.Request.Path.StartsWithSegments("/_blazor") &&
+        context.Request.Headers.Origin.Count > 0 && context.Request.Headers.Origin.ToString() != deployment.PublicUrl.TrimEnd('/'))
+    { context.Response.StatusCode = 403; return; }
+    var session = context.User.FindFirstValue(PasskeyAdditionService.SessionClaim);
+    if (session is not null)
+    {
+        var db = context.RequestServices.GetRequiredService<ApplicationDbContext>();
+        var hash = SemEndpoints.Hash(session);
+        if (await db.RevokedAuthSessions.AnyAsync(s => s.TokenHash == hash))
+        {
+            await context.SignOutAsync(IdentityConstants.ApplicationScheme);
+            context.User = new ClaimsPrincipal(new ClaimsIdentity());
+        }
+    }
+    await next();
+});
 app.UseAuthorization();
 app.UseAntiforgery();
 app.MapGet("/health/live", () => Results.Ok(new { status = "alive" }));
 app.MapGet("/health/ready", async (ApplicationDbContext db) => await db.Database.CanConnectAsync() ? Results.Ok(new { status = "storage-ready" }) : Results.StatusCode(503));
 app.MapSem();
+app.MapCoreFoundation();
 app.MapStaticAssets();
 app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
 app.Run();
