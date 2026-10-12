@@ -26,6 +26,7 @@ if(process.env.SEM_STORAGE_UPGRADE_COMMAND){
  await g.waitForFunction(()=>document.getElementById('sem-root').textContent.includes('バックグラウンド'));
  const final=await g.evaluate(async()=>await(await fetch('/api/snapshot')).json());
  ok(final.messages.filter(m=>m.title==='予約通知テスト').length>guestAfter.messages.filter(m=>m.title==='予約通知テスト').length,'Scheduled worker operates after migration');
+ if(process.env.SEM_LEGACY_RESET_COMMAND)await require('./legacy-event-reset-e2e.cjs')({p,g,ok});
  if(process.env.SEM_PASSKEY_ADDITION_CHECKS)await require('./passkey-addition-checks.cjs')({p,g,cdp,adminAuth,ok});
 }
 fs.writeFileSync('verification/e2e-result.json',JSON.stringify({passed:checks.length,checks,errors},null,2));}finally{await b.close();await new Promise(r=>proxy.close(r))}})().catch(e=>{fs.mkdirSync('verification',{recursive:true});fs.writeFileSync('verification/e2e-error.txt',e.stack);console.error(e);process.exit(1)});
