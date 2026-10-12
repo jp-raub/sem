@@ -42,6 +42,23 @@ jobs:
           docker build --platform linux/amd64 -t sem-dxp:migration-ci -f deploy/Dockerfile .
           git worktree add --detach /tmp/sem-legacy 78b9a6cb6d25911b5c9c7a030efb71ab785d962d
           docker build --platform linux/amd64 -t sem-dxp:legacy-ci -f /tmp/sem-legacy/deploy/Dockerfile /tmp/sem-legacy
+      - name: Published Blazor asset inventory
+        run: |
+          set -euo pipefail
+          docker create --name sem-asset-inventory sem-dxp:migration-ci
+          trap 'docker rm -f sem-asset-inventory >/dev/null 2>&1 || true' EXIT
+          mkdir -p /tmp/sem-assets
+          docker cp sem-asset-inventory:/app/wwwroot /tmp/sem-assets/wwwroot
+          docker cp sem-asset-inventory:/app/Sem.Web.staticwebassets.endpoints.json /tmp/sem-assets/endpoints.json
+          python3 - <<'PYASSETS'
+          import pathlib,json
+          root=pathlib.Path('/tmp/sem-assets/wwwroot')
+          files=[str(p.relative_to(root))+' ('+str(p.stat().st_size)+')' for p in root.rglob('*') if p.is_file() and 'blazor.web' in p.name]
+          j=json.loads(pathlib.Path('/tmp/sem-assets/endpoints.json').read_text())
+          routes=[str(x.get('Route'))+' => '+str(x.get('AssetFile')) for x in j.get('Endpoints',[]) if 'blazor.web' in str(x.get('Route'))]
+          text='Files: '+str(files)+'; routes: '+str(routes[:15])
+          print('::notice title=Published Blazor asset inventory::'+text.replace('%','%25').replace('\n','%0A'))
+          PYASSETS
       - name: Empty database and restart smoke
         run: |
           set -euo pipefail
