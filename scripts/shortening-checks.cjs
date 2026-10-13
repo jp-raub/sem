@@ -35,6 +35,7 @@ module.exports=async({p,g,ok})=>{
   await a.goto('https://localhost:18443/events/'+id+'/progress');
   await a.locator('#shortening-panel').waitFor();
   ok(await a.locator('#shortening-approve').isDisabled(),'Actual manager panel shows protected empty state');
+  await a.locator('#shortening-panel details > summary').click();
   await a.locator('[data-shortening-edit="'+part+'"]').click();
   await a.locator('#shortening-allow').check();await a.locator('#shortening-minimum').fill('5:00');
   ok(await a.locator('#progress-record').isDisabled(),'Policy draft disables adjacent live-record action');
