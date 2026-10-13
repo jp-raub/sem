@@ -9,10 +9,21 @@ using Sem.Web.Runtime;
 namespace Sem.Web.Core;
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record ShorteningPolicyEdit(string RequestId, long RowVersion, long ProgressVersion,
-    string PartId, bool AllowPrep, int MinPrepSeconds, bool AllowDuration, int MinDurationSeconds);
+public sealed record ShorteningPolicyEdit(
+    [property: JsonRequired] string RequestId,
+    [property: JsonRequired] long RowVersion,
+    [property: JsonRequired] long ProgressVersion,
+    [property: JsonRequired] string PartId,
+    [property: JsonRequired] bool AllowPrep,
+    [property: JsonRequired] int MinPrepSeconds,
+    [property: JsonRequired] bool AllowDuration,
+    [property: JsonRequired] int MinDurationSeconds);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record ShorteningApproveEdit(string RequestId, long RowVersion, long ProgressVersion, string Token);
+public sealed record ShorteningApproveEdit(
+    [property: JsonRequired] string RequestId,
+    [property: JsonRequired] long RowVersion,
+    [property: JsonRequired] long ProgressVersion,
+    [property: JsonRequired] string Token);
 public sealed record ShorteningPolicyView(ShorteningPolicy Policy, string Title, string Kind,
     int CurrentSeconds, bool CanEdit);
 public sealed record ShorteningPlan(string EventId, long RowVersion, long ProgressVersion,

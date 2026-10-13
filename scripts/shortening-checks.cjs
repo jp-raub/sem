@@ -26,6 +26,9 @@ module.exports=async({p,g,ok})=>{
  ok((await api(g,'shortening-policy',edit(),q)).status===403,'Native member cannot forge shortening conditions');
  ok((await api(g,'shortening-approve',{requestId:random(),rowVersion:plan.rowVersion,
   progressVersion:plan.progressVersion,token:plan.proposal.token},q)).status===403,'Native member cannot forge approval');
+ const missingFloor=edit();delete missingFloor.minDurationSeconds;
+ ok((await api(p,'shortening-policy',missingFloor,q)).status===400,'Native policy requires explicit minimum rather than implicit zero');
+ ok((await api(p,'shortening-approve',{requestId:random(),rowVersion:plan.rowVersion,token:plan.proposal.token},q)).status===400,'Native approval requires explicit live version');
  const a=await p.context().newPage(),m=await g.context().newPage(),errors=[];
  a.on('pageerror',e=>errors.push(e.message));
  try{

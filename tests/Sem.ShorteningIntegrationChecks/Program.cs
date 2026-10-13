@@ -220,6 +220,10 @@ try {
     catch (JsonException) { Check(true, "Strict approval DTO rejects client-submitted cuts"); }
     try { JsonSerializer.Deserialize<ShorteningPolicyEdit>("{\"RequestId\":\"x\",\"RowVersion\":1,\"ProgressVersion\":1,\"PartId\":\"x\",\"At\":\"2026-11-01\"}"); throw new Exception("Unexpected client clock"); }
     catch (JsonException) { Check(true, "Strict policy DTO rejects client timestamp"); }
+    try { JsonSerializer.Deserialize<ShorteningPolicyEdit>("{\"RequestId\":\"x\",\"RowVersion\":1,\"ProgressVersion\":1,\"PartId\":\"x\",\"AllowPrep\":true,\"AllowDuration\":false,\"MinDurationSeconds\":0}"); throw new Exception("Unexpected implicit floor"); }
+    catch (JsonException) { Check(true, "Missing prep floor is rejected rather than silently defaulting to zero"); }
+    try { JsonSerializer.Deserialize<ShorteningApproveEdit>("{\"RequestId\":\"x\",\"RowVersion\":1,\"Token\":\"x\"}"); throw new Exception("Unexpected implicit version"); }
+    catch (JsonException) { Check(true, "Approval requires explicit live version"); }
     await using (var db = await factory.CreateDbContextAsync()) {
         await SqliteStorageInitializer.InitializeAsync(db);
         Check((await db.EventProgressStates.SingleAsync(s => s.EventId == "main")).PlanJson == captured &&
