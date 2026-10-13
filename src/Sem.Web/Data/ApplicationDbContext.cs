@@ -27,6 +27,9 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<EventPartDefinition> EventPartDefinitions => Set<EventPartDefinition>();
     public DbSet<EventQuestion> EventQuestions => Set<EventQuestion>();
     public DbSet<EventQuestionAnswer> EventQuestionAnswers => Set<EventQuestionAnswer>();
+    public DbSet<EventParticipantState> EventParticipantStates => Set<EventParticipantState>();
+    public DbSet<EventSpectator> EventSpectators => Set<EventSpectator>();
+    public DbSet<RegistrationOperation> RegistrationOperations => Set<RegistrationOperation>();
     public DbSet<Song> Songs => Set<Song>();
     public DbSet<SongPart> SongParts => Set<SongPart>();
     protected override void OnModelCreating(ModelBuilder b)
@@ -77,6 +80,26 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         b.Entity<EventQuestionAnswer>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x=>x.UserId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<EventQuestionAnswer>().ToTable("EventQuestionAnswers",t=>t.HasCheckConstraint("CK_EventQuestionAnswers_Value","\"Value\" IS NULL OR length(\"Value\") <= 2000"));
         b.Entity<SessionEvent>().ToTable("SessionEvents", t => t.HasCheckConstraint("CK_SessionEvents_DefaultPrep", "\"DefaultPrepSeconds\" >= 0"));
+        b.Entity<SessionEvent>().ToTable("SessionEvents",t=>t.HasCheckConstraint("CK_SessionEvents_Capacity","\"Capacity\" IS NULL OR \"Capacity\" >= 0"));
+        b.Entity<SongPart>().Property(x=>x.RowVersion).IsConcurrencyToken();
+        b.Entity<SongPart>().ToTable("SongParts",t=>t.HasCheckConstraint("CK_SongParts_Version","\"RowVersion\" >= 0"));
+        b.Entity<EventParticipantState>().HasKey(x=>new{x.EventId,x.UserId});
+        b.Entity<EventParticipantState>().Property(x=>x.RowVersion).IsConcurrencyToken();
+        b.Entity<EventParticipantState>().HasOne<SessionEvent>().WithMany().HasForeignKey(x=>x.EventId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<EventParticipantState>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x=>x.UserId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<EventSpectator>().HasKey(x=>new{x.EventId,x.UserId});
+        b.Entity<EventSpectator>().HasOne<SessionEvent>().WithMany().HasForeignKey(x=>x.EventId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<EventSpectator>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x=>x.UserId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<EventSpectator>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x=>x.RegisteredBy).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<RegistrationOperation>().HasOne<SessionEvent>().WithMany().HasForeignKey(x=>x.EventId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<RegistrationOperation>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x=>x.ActorId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<RegistrationOperation>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x=>x.SubjectId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<RegistrationOperation>().HasOne<EventPhase>().WithMany().HasForeignKey(x=>new{x.EventId,x.PhaseId}).HasPrincipalKey(x=>new{x.EventId,x.Id}).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<RegistrationOperation>().ToTable("RegistrationOperations",t=> {
+            t.HasCheckConstraint("CK_RegistrationOperations_Kind","\"Kind\" IN ('Register','Spectate','Answers','Release','RemoveSpectator')");
+            t.HasCheckConstraint("CK_RegistrationOperations_Result","json_valid(\"ResultJson\")");
+            t.HasCheckConstraint("CK_RegistrationOperations_Reason","length(\"Reason\") <= 500");
+        });
         b.Entity<Song>().HasAlternateKey(x=>new{x.EventId,x.Id});
         b.Entity<EventPartDefinition>().HasAlternateKey(x=>new{x.EventId,x.Id});
         b.Entity<EventPhase>().HasAlternateKey(x=>new{x.EventId,x.Id});

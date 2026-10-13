@@ -229,6 +229,25 @@ namespace Sem.Web.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Sem.Web.Core.EventParticipantState", b =>
+                {
+                    b.Property<string>("EventId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("RowVersion")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("EventId", "UserId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("EventParticipantStates");
+                });
+
             modelBuilder.Entity("Sem.Web.Core.EventPhase", b =>
                 {
                     b.Property<string>("Id")
@@ -360,6 +379,31 @@ namespace Sem.Web.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Sem.Web.Core.EventSpectator", b =>
+                {
+                    b.Property<string>("EventId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RegisteredAt")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RegisteredBy")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("EventId", "UserId");
+
+                    b.HasIndex("RegisteredBy");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("EventSpectators");
+                });
+
             modelBuilder.Entity("Sem.Web.Core.PartPreset", b =>
                 {
                     b.Property<string>("Id")
@@ -412,6 +456,65 @@ namespace Sem.Web.Data.Migrations
                     b.ToTable("PartPresetStates", null, t =>
                         {
                             t.HasCheckConstraint("CK_PartPresetStates_Id", "\"Id\" = 1");
+                        });
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.RegistrationOperation", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ActorId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("At")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EventId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PhaseId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RequestHash")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ResultJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SubjectId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActorId");
+
+                    b.HasIndex("SubjectId");
+
+                    b.HasIndex("EventId", "PhaseId");
+
+                    b.ToTable("RegistrationOperations", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_RegistrationOperations_Kind", "\"Kind\" IN ('Register','Spectate','Answers','Release','RemoveSpectator')");
+
+                            t.HasCheckConstraint("CK_RegistrationOperations_Reason", "length(\"Reason\") <= 500");
+
+                            t.HasCheckConstraint("CK_RegistrationOperations_Result", "json_valid(\"ResultJson\")");
                         });
                 });
 
@@ -470,6 +573,9 @@ namespace Sem.Web.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<int?>("Capacity")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("CreatedAt")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -513,6 +619,8 @@ namespace Sem.Web.Data.Migrations
 
                     b.ToTable("SessionEvents", null, t =>
                         {
+                            t.HasCheckConstraint("CK_SessionEvents_Capacity", "\"Capacity\" IS NULL OR \"Capacity\" >= 0");
+
                             t.HasCheckConstraint("CK_SessionEvents_DefaultPrep", "\"DefaultPrepSeconds\" >= 0");
 
                             t.HasCheckConstraint("CK_SessionEvents_PhaseKind", "\"PhaseKind\" IN ('Hidden','View')");
@@ -581,6 +689,10 @@ namespace Sem.Web.Data.Migrations
                     b.Property<string>("PhaseId")
                         .HasColumnType("TEXT");
 
+                    b.Property<long>("RowVersion")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("SongId")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -598,6 +710,8 @@ namespace Sem.Web.Data.Migrations
                     b.ToTable("SongParts", null, t =>
                         {
                             t.HasCheckConstraint("CK_SongParts_Assignment", "(\"AssignedUserId\" IS NULL AND \"PhaseId\" IS NULL) OR (\"AssignedUserId\" IS NOT NULL AND \"PhaseId\" IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_SongParts_Version", "\"RowVersion\" >= 0");
                         });
                 });
 
@@ -1216,6 +1330,21 @@ namespace Sem.Web.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Sem.Web.Core.EventParticipantState", b =>
+                {
+                    b.HasOne("Sem.Web.Core.SessionEvent", null)
+                        .WithMany()
+                        .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Sem.Web.Data.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Sem.Web.Core.EventPhase", b =>
                 {
                     b.HasOne("Sem.Web.Core.SessionEvent", null)
@@ -1245,6 +1374,55 @@ namespace Sem.Web.Data.Migrations
                     b.HasOne("Sem.Web.Data.ApplicationUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.EventSpectator", b =>
+                {
+                    b.HasOne("Sem.Web.Core.SessionEvent", null)
+                        .WithMany()
+                        .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Sem.Web.Data.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("RegisteredBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Sem.Web.Data.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.RegistrationOperation", b =>
+                {
+                    b.HasOne("Sem.Web.Data.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("ActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Sem.Web.Core.SessionEvent", null)
+                        .WithMany()
+                        .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Sem.Web.Data.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("SubjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Sem.Web.Core.EventPhase", null)
+                        .WithMany()
+                        .HasForeignKey("EventId", "PhaseId")
+                        .HasPrincipalKey("EventId", "Id")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

@@ -5,7 +5,7 @@ public sealed class EventQuestion {
  public bool Required {get;set;}public bool Disabled {get;set;}public bool Public {get;set;}public bool PublicText {get;set;}
  public int SortOrder {get;set;}public string? DeletedAt {get;set;}
 }
-// Storage/reference protection only in this unit. No participant-answer API or signup is enabled.
+// Answers are written only through validated participation operations; management plans never expose values.
 public sealed class EventQuestionAnswer {
  public string QuestionId {get;set;}="";public string UserId {get;set;}="";
  public string? Value {get;set;}public string UpdatedAt {get;set;}="";
