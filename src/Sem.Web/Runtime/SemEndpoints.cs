@@ -218,6 +218,7 @@ public static class SemEndpoints
             if (!string.IsNullOrEmpty(session))
             {
                 var hash = Hash(session);
+                await Sem.Web.Core.PushBinding.RevokeSession(db,user.Id,hash);
                 await db.Database.ExecuteSqlRawAsync("INSERT OR IGNORE INTO RevokedAuthSessions(TokenHash,UserId,RevokedAt) VALUES ({0},{1},{2})",
                     hash, user.Id, DateTimeOffset.UtcNow.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", System.Globalization.CultureInfo.InvariantCulture));
                 await db.PasskeyAdditions.Where(p => p.UserId == user.Id && p.SessionHash == hash &&
@@ -270,10 +271,11 @@ public static class SemEndpoints
         if (action == "subscribe" && post)
         {
             if (!notify.PushConfigured) throw new ValidationException("Push配信鍵が未設定です。");
-            var endpoint = Text("endpoint", 2048); if (!Uri.TryCreate(endpoint, UriKind.Absolute, out var uri) || uri.Scheme != "https" || !new[] { "web.push.apple.com", "fcm.googleapis.com", "updates.push.services.mozilla.com" }.Contains(uri.Host) || uri.Port != 443 || uri.UserInfo.Length != 0) throw new ValidationException("許可されていないPush接続先です。");
+            var endpoint = Text("endpoint", 2048); if (!Sem.Web.Core.PushBinding.AllowedEndpoint(endpoint)) throw new ValidationException("許可されていないPush接続先です。");
             var existing = await db.PushDevices.FirstOrDefaultAsync(d => d.Endpoint == endpoint);
             if (existing is not null && existing.UserId != user.Id) db.PushDevices.Remove(existing);
             if (existing is null || existing.UserId != user.Id) { existing = new PushDevice { UserId = user.Id, Endpoint = endpoint }; db.PushDevices.Add(existing); }
+            existing.SecurityStamp=user.SecurityStamp; existing.SessionHash=Hash(c.User.FindFirstValue(PasskeyAdditionService.SessionClaim)??throw new UnauthorizedAccessException());
             existing.P256dh = Text("p256dh", 512); existing.Auth = Text("auth", 512); await db.SaveChangesAsync(); await Reply(new { message = "端末を登録しました。" }); return;
         }
         if (action == "unsubscribe" && post) { var endpoint = Text("endpoint", 2048); await db.PushDevices.Where(d => d.UserId == user.Id && d.Endpoint == endpoint).ExecuteDeleteAsync(); await Reply(new { message = "端末の通知を解除しました。" }); return; }

@@ -54,7 +54,7 @@ try{
  }
  var id=await core.SaveEventAsync(Who("admin"),null,new("Arming target","","",start,null,"","Hidden",["manager"],0));
  var audit=await AuditCount();var view=await core.ReadEventPushRulesAsync(Who("manager"),id);
- Check(view.Rules.Length==2&&view.Rules.All(x=>!x.Enabled&&x.Version==0)&&!view.DeliveryConnected,"Manager sees exactly approved two rules OFF and transport disconnected");
+ Check(view.Rules.Length==2&&view.Rules.All(x=>!x.Enabled&&x.Version==0)&&view.DeliveryConnected&&!view.PushConfigured,"Manager sees exactly approved two rules OFF; delivery connected but keys unset");
  Check(await AuditCount()==audit,"Reading default rule decisions never writes audit");
  await core.SaveEventPushRuleAsync(Who("manager"),id,new("OpeningReminder",false,0,view.EventVersion));Check(await AuditCount()==audit,"Absent OFF save is no-op");
  await core.SaveEventPushRuleAsync(Who("manager"),id,new("OpeningReminder",true,0,view.EventVersion));view=await core.ReadEventPushRulesAsync(Who("manager"),id);var enabled=view.Rules.Single(x=>x.Kind=="OpeningReminder");

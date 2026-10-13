@@ -31,6 +31,7 @@ try
         fixture.Db.Users.Add(new ApplicationUser { Id = "baseline-user", UserName = "baseline@example.test",
             Email = "baseline@example.test", EmailConfirmed = true, Enabled = true, SecurityStamp = "baseline-stamp" });
         await fixture.Db.SaveChangesAsync();
+        await fixture.Db.Database.ExecuteSqlRawAsync("INSERT INTO PushDevices(Id,UserId,Endpoint,P256dh,Auth) VALUES ('fixture-device','fixture-user','https://web.push.apple.com/synthetic','fixture-key','fixture-auth')");
         await SqliteStorageInitializer.InitializeAsync(fixture.Db);
         Check(await fixture.Db.Users.AnyAsync(u => u.Id == "baseline-user" && u.SecurityStamp == "baseline-stamp") &&
             (await fixture.Db.Database.GetAppliedMigrationsAsync()).SequenceEqual(fixture.Db.Database.GetMigrations()),
@@ -58,8 +59,7 @@ try
         fixture.Db.Messages.Add(new Message { UserId = "fixture-user", Title = "synthetic", Body = "retained" });
         fixture.Db.Deliveries.Add(new Delivery { UserId = "fixture-user", Due = 9999999999,
             ProtectedBody = "synthetic-protected-body", Attempts = 2 });
-        fixture.Db.PushDevices.Add(new PushDevice { UserId = "fixture-user",
-            Endpoint = "https://web.push.apple.com/synthetic", P256dh = "fixture-key", Auth = "fixture-auth" });
+
         fixture.Db.Audits.Add(new Audit { ActorId = "fixture-user", Action = "Synthetic" });
         await fixture.Db.SaveChangesAsync();
         await fixture.Db.Database.ExecuteSqlRawAsync("""
@@ -194,6 +194,8 @@ static async Task<string> DumpAsync(string path)
     {
         using var command = connection.CreateCommand();
         command.CommandText = "SELECT * FROM \"" + table.Replace("\"", "\"\"") + "\" ORDER BY rowid";
+        // Compare every original subscription value; new nullable security bindings are tested separately.
+        if (table == "PushDevices") command.CommandText = "SELECT Id,UserId,Endpoint,P256dh,Auth FROM PushDevices ORDER BY rowid";
         using var reader = await command.ExecuteReaderAsync();
         while (await reader.ReadAsync())
         {

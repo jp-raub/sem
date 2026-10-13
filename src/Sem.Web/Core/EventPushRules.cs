@@ -3,7 +3,7 @@ using System.Security.Claims;
 using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
 namespace Sem.Web.Core;
-// Explicit arming does not connect a transport or make historical dormant entries sendable.
+// Explicit arming alone does not send or make historical dormant entries sendable.
 public sealed class EventPushRule {
  public string EventId {get;set;}=""; public string Kind {get;set;}="";
  public bool Enabled {get;set;} public long Version {get;set;}
@@ -11,7 +11,7 @@ public sealed class EventPushRule {
 }
 public sealed record EventPushRuleView(string Kind,bool Enabled,long Version,DateTimeOffset? ArmedAt,long? ArmedProgressVersion);
 public sealed record RuleEligibility(string Id,string Kind,string? PartId,string Title,string State,DateTimeOffset? DueAt,DateTimeOffset? ExpiresAt);
-public sealed record EventPushRulesView(string EventId,string Title,long EventVersion,bool DeliveryConnected,EventPushRuleView[] Rules,RuleEligibility[] Entries);
+public sealed record EventPushRulesView(string EventId,string Title,long EventVersion,bool DeliveryConnected,EventPushRuleView[] Rules,RuleEligibility[] Entries,bool PushConfigured=false);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record EventPushRuleEdit([property:JsonRequired]string Kind,[property:JsonRequired]bool Enabled,[property:JsonRequired]long Version,[property:JsonRequired]long EventVersion);
 public static class EventPushRulePolicy {
@@ -41,7 +41,7 @@ public sealed partial class CoreFoundationService {
  public async Task<EventPushRulesView> ReadEventPushRulesAsync(ClaimsPrincipal principal,string id,CancellationToken ct=default){
   await using var db=await factory.CreateDbContextAsync(ct);await using var tx=await db.Database.BeginTransactionAsync(ct);var e=await Managed(db,principal,id,ct);var now=clock.GetUtcNow();
   var source=await BuildNotificationSource(db,e,now,ct);var rules=await db.Set<EventPushRule>().AsNoTracking().Where(x=>x.EventId==id).ToArrayAsync(ct);
-  var view=new EventPushRulesView(id,e.Title,e.RowVersion,false,EventPushRulePolicy.Kinds.Select(kind=>{var rule=rules.SingleOrDefault(x=>x.Kind==kind);return new EventPushRuleView(kind,rule?.Enabled??false,rule?.Version??0,rule?.ArmedAt is long at?DateTimeOffset.FromUnixTimeMilliseconds(at):null,rule?.ArmedProgressVersion);}).ToArray(),source.Plan.Entries.Select(entry=>EventPushRulePolicy.Evaluate(entry,rules.SingleOrDefault(x=>x.Kind==entry.Kind),source.Plan.ProgressVersion,source.Rows,now)).ToArray());
+  var view=new EventPushRulesView(id,e.Title,e.RowVersion,true,EventPushRulePolicy.Kinds.Select(kind=>{var rule=rules.SingleOrDefault(x=>x.Kind==kind);return new EventPushRuleView(kind,rule?.Enabled??false,rule?.Version??0,rule?.ArmedAt is long at?DateTimeOffset.FromUnixTimeMilliseconds(at):null,rule?.ArmedProgressVersion);}).ToArray(),source.Plan.Entries.Select(entry=>EventPushRulePolicy.Evaluate(entry,rules.SingleOrDefault(x=>x.Kind==entry.Kind),source.Plan.ProgressVersion,source.Rows,now)).ToArray(),!string.IsNullOrWhiteSpace(notificationConfiguration?["Push:PublicKey"])&&!string.IsNullOrWhiteSpace(notificationConfiguration?["Push:PrivateKey"]));
   await tx.CommitAsync(ct);return view;
  }
  public async Task SaveEventPushRuleAsync(ClaimsPrincipal principal,string id,EventPushRuleEdit edit,CancellationToken ct=default){

@@ -194,8 +194,7 @@ async Task SeedAsync(string path, string version)
     db.EmailTickets.Add(new EmailTicket { UserId = "user", Hash = "ticket-hash", Used = true });
     db.Messages.Add(new Message { UserId = "user", Body = "Old event reference must not cause unrelated deletion." });
     db.Deliveries.Add(new Delivery { UserId = "user", ProtectedBody = "encrypted-body", Due = 9999999999 });
-    db.PushDevices.Add(new PushDevice { UserId = "user", Endpoint = "https://example.test/fixture",
-        P256dh = "fixture-public", Auth = "fixture-auth" });
+
     db.Events.AddRange(new TestEvent { Id = "event-1", ManagerId = "user", Phase = "Custom" },
         new TestEvent { Id = "event-2", ManagerId = "user", Phase = "Hidden" });
     db.Participations.AddRange(new Participation { EventId = "event-1", UserId = "user" },
@@ -205,6 +204,7 @@ async Task SeedAsync(string path, string version)
         db.PasskeyAdditions.Add(new PasskeyAddition { UserId = "user", SessionHash = "retained-session",
             Email = "fixture@example.test", SecurityStamp = "retained-stamp", Cancelled = true });
     await db.SaveChangesAsync();
+    await db.Database.ExecuteSqlRawAsync("INSERT INTO PushDevices(Id,UserId,Endpoint,P256dh,Auth) VALUES ('fixture-device','user','https://example.test/fixture','fixture-public','fixture-auth')");
     await db.Database.ExecuteSqlRawAsync("""
         INSERT INTO "AspNetUserPasskeys" ("CredentialId","UserId","Data")
         VALUES (X'01020304','user',{0});
