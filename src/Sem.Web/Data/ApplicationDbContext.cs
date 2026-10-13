@@ -5,6 +5,8 @@ using Sem.Web.Core;
 namespace Sem.Web.Data;
 public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : IdentityDbContext<ApplicationUser>(options)
 {
+    public DbSet<NotificationScheduleState> NotificationScheduleStates => Set<NotificationScheduleState>();
+    public DbSet<NotificationReservation> NotificationReservations => Set<NotificationReservation>();
     public DbSet<SiteState> SiteStates => Set<SiteState>();
     public DbSet<Invitation> Invitations => Set<Invitation>();
     public DbSet<InvitationRequest> InvitationRequests => Set<InvitationRequest>();
@@ -45,6 +47,20 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     protected override void OnModelCreating(ModelBuilder b)
     {
         base.OnModelCreating(b);
+        b.Entity<NotificationScheduleState>().HasKey(x=>x.EventId);
+        b.Entity<NotificationScheduleState>().Property(x=>x.Version).IsConcurrencyToken();
+        b.Entity<NotificationScheduleState>().HasOne<SessionEvent>().WithOne().HasForeignKey<NotificationScheduleState>(x=>x.EventId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<NotificationScheduleState>().ToTable("NotificationScheduleStates",t=>t.HasCheckConstraint("CK_NotificationSchedule_Versions","\"Version\">0 AND \"EventVersion\">=0 AND \"ProgressVersion\">=0"));
+        b.Entity<NotificationReservation>().HasKey(x=>new{x.EventId,x.Id});
+        b.Entity<NotificationReservation>().HasOne<NotificationScheduleState>().WithMany().HasForeignKey(x=>x.EventId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<NotificationReservation>().HasIndex(x=>new{x.State,x.DueAt});
+        b.Entity<NotificationReservation>().ToTable("NotificationReservations",t=>{
+            t.HasCheckConstraint("CK_Reservation_State","\"State\" IN ('Planned','Due','WaitingActual','Cancelled')");
+            t.HasCheckConstraint("CK_Reservation_Reason","(\"State\"='Cancelled' AND \"CancelReason\" IS NOT NULL AND \"CancelReason\" IN ('PartRemoved','TargetStarted')) OR (\"State\"<>'Cancelled' AND \"CancelReason\" IS NULL)");
+            t.HasCheckConstraint("CK_Reservation_Time","(\"State\"='WaitingActual' AND \"DueAt\" IS NULL AND \"ReferenceAt\" IS NULL) OR (\"State\" IN ('Planned','Due') AND \"DueAt\" IS NOT NULL AND \"ReferenceAt\" IS NOT NULL) OR \"State\"='Cancelled'");
+            t.HasCheckConstraint("CK_Reservation_Kind","\"Kind\" IN ('OpeningReminder','SongPreparation')");
+            t.HasCheckConstraint("CK_Reservation_Version","\"Version\">0");
+        });
         b.Entity<DailyDigestRun>().HasKey(x=>x.Day);
         b.Entity<DailyDigestRun>().ToTable("DailyDigestRuns",t=>t.HasCheckConstraint("CK_DailyDigestRun_Day","length(\"Day\")=10 AND date(\"Day\") IS NOT NULL AND date(\"Day\")=\"Day\""));
         b.Entity<DailyDigestMail>().HasIndex(x=>new{x.Day,x.UserId}).IsUnique();

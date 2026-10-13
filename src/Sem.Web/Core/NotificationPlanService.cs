@@ -38,14 +38,17 @@ public sealed partial class CoreFoundationService {
  public async Task<EventNotificationPlan> ReadNotificationPlanAsync(ClaimsPrincipal principal,string id,CancellationToken ct=default){
   await using var db=await factory.CreateDbContextAsync(ct);await using var tx=await db.Database.BeginTransactionAsync(ct);
   var e=await Managed(db,principal,id,ct);
-  var state=await db.EventProgressStates.AsNoTracking().SingleOrDefaultAsync(x=>x.EventId==id,ct);
+  var plan=await BuildNotificationPlan(db,e,clock.GetUtcNow(),ct);await tx.CommitAsync(ct);return plan;
+ }
+ internal static async Task<EventNotificationPlan> BuildNotificationPlan(Sem.Web.Data.ApplicationDbContext db,SessionEvent e,DateTimeOffset now,CancellationToken ct){
+  var id=e.Id;var state=await db.EventProgressStates.AsNoTracking().SingleOrDefaultAsync(x=>x.EventId==id,ct);
   ProgressBaseline baseline;
   try{baseline=state is null?await BaselineWithPolicies(db,e,true,ct):JsonSerializer.Deserialize<ProgressBaseline>(state.PlanJson)??throw new ValidationException("進行計画を確認してください。");}
   catch(JsonException){throw new ValidationException("進行計画を確認してください。");}
   var marks=await db.ProgressMarks.AsNoTracking().Where(x=>x.EventId==id).ToArrayAsync(ct);
   var estimates=await db.ProgressEstimates.AsNoTracking().Where(x=>x.EventId==id).ToArrayAsync(ct);
-  var rows=ProgressCalculator.Calculate(baseline,marks,estimates);var now=clock.GetUtcNow();var entries=NotificationPlanCalculator.Calculate(e,rows,now);
+  var rows=ProgressCalculator.Calculate(baseline,marks,estimates);var entries=NotificationPlanCalculator.Calculate(e,rows,now);
   var fingerprint=SemEndpoints.Hash(JsonSerializer.Serialize(new{e.Id,e.RowVersion,ProgressVersion=state?.RowVersion??0,Entries=entries.Select(x=>new{x.Id,x.Kind,x.PartId,x.Basis,x.PreviousPartId,x.ReferenceAt,x.DueAt,Obsolete=x.State=="Obsolete"})}));
-  await tx.CommitAsync(ct);return new(e.Id,e.Title,e.RowVersion,state?.RowVersion??0,"Asia/Tokyo",now,fingerprint,true,entries);
+  return new(e.Id,e.Title,e.RowVersion,state?.RowVersion??0,"Asia/Tokyo",now,fingerprint,true,entries);
  }
 }

@@ -1,0 +1,36 @@
+@page "/events/{EventId}/notification-reservations"
+@rendermode InteractiveServer
+@using Sem.Web.Core
+@inject AuthenticationStateProvider Authentication
+@inject CoreFoundationService Core
+<PageTitle>通知予定台帳</PageTitle>
+<h1>通知予定台帳：@View?.Title</h1>
+<p><a href="/workspace">イベント一覧</a> ／ <a href="@($"/events/{EventId}/notification-plan")">最新予定の読取プレビュー</a> ／ <a href="@($"/events/{EventId}/timetable")">タイムテーブル</a></p>
+<p id="reservation-policy">未配信接続の予定台帳です。宛先・Pushルール・TTL・送信権限・実送信はまだ追加していません。予定時刻到達は送信成功ではありません。内部ワーカーがイベントを順に照合し、予定を保存・更新・取消します。この画面の取得は読取専用です。</p>
+<p id="reservation-error" role="alert">@Error</p>
+@if(View is not null){
+ <section id="reservation-ledger" class="panel" data-interactive="@Ready.ToString().ToLowerInvariant()" data-current="@View.IsCurrent.ToString().ToLowerInvariant()" data-version="@View.Version">
+ <button id="reservation-refresh" disabled="@Busy" @onclick="Load">台帳を再取得</button>
+ @if(View.Version is null){<p id="reservation-uninitialized">台帳未生成。ワーカーの照合後に再取得してください。</p>}
+ else{<p>台帳版 @View.Version ／ 元イベント版 @View.EventVersion ／ 元進行版 @View.ProgressVersion ／ 最終変更 @(View.ChangedAt is DateTimeOffset at?TimetableCalculator.Clock(at,"seconds")+" +09:00":"—")</p>}
+ <p id="reservation-freshness">@(View.IsCurrent?"取得時点の最新予定と一致":"最新予定との差分が未反映です。旧予定を送信指示として使わないでください。ワーカー照合後に再取得してください。")</p>
+ <p>取消行の日時は旧基準の記録で、今後の送信予定ではありません。</p>
+ <p>最終変更は定期ハートビートではありません。同一予定の再照合では版と監査を増やしません。表示の再取得も予約を変更しません。</p>
+ @foreach(var row in View.Reservations){
+ <article class="panel" data-reservation-id="@row.Id" data-state="@row.State" data-reason="@row.CancelReason" data-version="@row.Version">
+ <h2>@(row.Kind=="OpeningReminder"?"開催前通知":"曲準備通知")</h2>
+ <p>予定ID：@row.Id ／ 状態：@Label(row.State) ／ 取消理由：@Reason(row.CancelReason)</p>
+ <p>基準：@row.Basis ／ 直前パート：@(row.PreviousPartId??"なし")</p>
+ <p>送信基準日時：<span data-reservation-due="@row.Id">@(row.DueAt is long due?TimetableCalculator.Clock(DateTimeOffset.FromUnixTimeMilliseconds(due),"seconds")+" +09:00":"未確定")</span></p>
+ </article>
+ }
+ </section>
+}
+@code{
+ [Parameter]public string EventId{get;set;}="";NotificationReservationLedger?View;bool Busy,Ready;string Error="";
+ protected override async Task OnParametersSetAsync()=>await Load();
+ protected override void OnAfterRender(bool firstRender){if(firstRender){Ready=true;StateHasChanged();}}
+ async Task Load(){if(Busy)return;Busy=true;Error="";try{View=await Core.ReadNotificationReservationsAsync((await Authentication.GetAuthenticationStateAsync()).User,EventId);}catch(UnauthorizedAccessException){View=null;Error="通常ログインと現在のイベント管理権限が必要です。";}catch(System.ComponentModel.DataAnnotations.ValidationException e){View=null;Error=e.Message;}catch{View=null;Error="台帳を取得できませんでした。ログイン状態・管理権限・元計画を確認してください。";}finally{Busy=false;}}
+ static string Label(string s)=>s switch{"Planned"=>"予定前（未送信）","Due"=>"予定時刻到達（未送信）","WaitingActual"=>"直前開始実績待ち",_=>"取消済み（送信なし）"};
+ static string Reason(string?r)=>r switch{"PartRemoved"=>"パート削除／予定対象から除外","TargetStarted"=>"対象開始済み",_=>"—"};
+}
