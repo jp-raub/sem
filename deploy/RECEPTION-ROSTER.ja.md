@@ -40,3 +40,5 @@ SEM_MEMBER_PROFILE_CHECKS=1 SEM_RECEPTION_ROSTER_CHECKS=1 node scripts/e2e.cjs
 公開範囲・正規化・書込みなし・一般ユーザー拒否・スマホを追加。合成ローカルDB／SMTP／
 隔離ブラウザーのみ。実宛先・事業者・QR資格情報・カメラ・DXPの.env／鍵／ボリューム／
 ホスト名／イメージ・新配布・マージを変更しません。
+
+後続の手動受付確定／取消しは [MANUAL-RECEPTION.ja.md](MANUAL-RECEPTION.ja.md) を参照。一覧GET自体は読取専用。QR発行／読取は別の残工程。
