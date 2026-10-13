@@ -3,7 +3,7 @@ on:
   push:
     branches: [feat/part-start-preferences]
   pull_request:
-    branches: [feat/part-start-preferences]
+    branches: [feat/notification-reservations]
     paths:
       - src/**
       - tests/**
