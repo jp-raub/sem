@@ -17,7 +17,7 @@
   @if(q.Type=="Text"&&!q.PublicText){<p>回答本文は非公開です。回答数と回答者だけを公開しています。</p>}
   @if(q.AnsweredCount==0){<p>回答はまだありません。</p>}
   <table><caption>@q.Text の公開回答一覧</caption><thead><tr><th scope="col">@(q.Type=="Text"&&!q.PublicText?"集計対象":"回答")</th><th scope="col">件数</th><th scope="col">回答者</th></tr></thead><tbody>
-  @foreach(var g in q.Groups){<tr><td>@(g.Value??"回答済み")</td><td>@g.Count</td><td>@foreach(var u in g.Respondents){<span class="public-respondent">@u.DisplayName </span>}</td></tr>}
+  @foreach(var g in q.Groups){<tr><td>@(g.Value??"回答済み")</td><td>@g.Count</td><td>@foreach(var u in g.Respondents){<a class="public-respondent" href="@($"/profiles/{Uri.EscapeDataString(u.UserId)}")">@u.DisplayName</a> <span> </span>}</td></tr>}
   </tbody></table></section>
  }
 }

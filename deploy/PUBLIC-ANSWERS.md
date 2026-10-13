@@ -81,3 +81,5 @@ must preserve the mock's partial-success behavior and safe idempotent replay.
 These are recorded prerequisites, **not implemented by this PR**.
 
 The follow-on event-comments increment implements the comment prerequisites; see EVENT-COMMENTS.md for its scope and validation.
+
+The follow-on MEMBER-PROFILE.md increment connects author/respondent names to authenticated basic profiles; anonymous QR/history remain separate.

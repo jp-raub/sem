@@ -106,3 +106,5 @@ separate UI work. QR reception and imports are not implemented by this increment
 This does not deploy/merge/create a delivery bundle or touch the DXP .env, keys,
 volume, hostname or running image. Do not run a destructive Down migration on
 state to be retained; restore a validated compatible copy/backup instead.
+
+The follow-on MEMBER-PROFILE.md increment connects author/respondent names to authenticated basic profiles; anonymous QR/history remain separate.

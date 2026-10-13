@@ -18,7 +18,7 @@
  <label>コメント（前後の空白を除いて3文字以上）<textarea id="comment-body" @bind="Body" @bind:event="oninput" disabled="@(Busy||Pending is not null||!Plan.CanPost)"></textarea></label>
  <button id="comment-post" disabled="@(Busy||PendingDelete is not null||Pending is null&&(!Plan.CanPost||Body.Trim().EnumerateRunes().Count()<3))" @onclick="Post">@(Pending is null?"コメントのみ投稿":"同じ操作IDで結果を確認／再試行")</button>
  @if(Pending is not null||PendingDelete is not null){<p>結果が未確認です。入力は変更せず、同じ操作IDで再試行してください。新しいIDで送信すると別の投稿として扱われます。</p>}
- @foreach(var c in Rows){<article data-comment="@c.Id"><p><strong>@c.DisplayName</strong> ／ <time datetime="@c.CreatedAt">@JapaneseTime(c.CreatedAt)</time></p><p class="comment-text" style="white-space:pre-wrap;overflow-wrap:anywhere">@c.Body</p>
+ @foreach(var c in Rows){<article data-comment="@c.Id"><p><a href="@($"/profiles/{Uri.EscapeDataString(c.UserId)}")"><strong>@c.DisplayName</strong></a> ／ <time datetime="@c.CreatedAt">@JapaneseTime(c.CreatedAt)</time></p><p class="comment-text" style="white-space:pre-wrap;overflow-wrap:anywhere">@c.Body</p>
  @if(Plan.CanManage){<button data-comment-delete="@c.Id" disabled="@(Busy||Pending is not null||PendingDelete is not null)" @onclick="()=>Confirm=c.Id">このコメントを削除</button>}
  </article>}
  @if(Rows.Count==0){<p>コメントはありません。</p>}
