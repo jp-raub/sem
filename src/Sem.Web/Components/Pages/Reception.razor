@@ -1,0 +1,22 @@
+@page "/events/{EventId}/reception"
+@rendermode InteractiveServer
+@using Sem.Web.Core
+@inject AuthenticationStateProvider Authentication
+@inject CoreFoundationService Core
+<PageTitle>受付対象の検索</PageTitle>
+<h1>受付対象の検索：@Plan?.Title</h1><p><a href="/workspace">業務基盤へ戻る</a></p>
+<p>管理者向けの現在の参加登録者一覧です。この段階ではQR読取り・受付完了・取消しの記録はまだ保存しません。</p>
+<p id="reception-error" role="alert">@Error</p>
+<label>表示名・読みで検索<input id="reception-search" @bind="Query" maxlength="200" disabled="@Busy" /></label><button id="reception-search-submit" disabled="@Busy" @onclick="Load">最新情報で検索</button>
+@if(Plan is not null){<section id="reception-roster"><p>参加登録者 @Plan.ParticipantCount 人 ／ 一致 @Plan.MatchCount 人</p>
+@if(Plan.MoreMatches){<p>先頭100人を表示しています。検索条件を絞ってください。</p>}
+<table><caption>現在の受付対象者</caption><thead><tr><th scope="col">表示名</th><th scope="col">読み</th><th scope="col">申込み</th><th scope="col">曲</th></tr></thead><tbody>
+@foreach(var u in Plan.People){<tr data-reception-person="@u.UserId"><td><a href="@($"/profiles/{Uri.EscapeDataString(u.UserId)}")">@u.DisplayName</a></td><td>@u.Reading</td><td>@(u.Spectator?"観覧のみ":"演奏参加")</td><td>@string.Join(" ／ ",u.Songs)</td></tr>}
+</tbody></table>@if(Plan.People.Length==0){<p>一致する参加登録者はいません。</p>}</section>}
+@code{
+ [Parameter]public string EventId{get;set;}="";
+ ReceptionRoster?Plan;string Query="",Error="";bool Busy,Ready;long Epoch;
+ protected override void OnParametersSet(){Epoch++;Plan=null;Query=Error="";Busy=Ready=false;}
+ protected override async Task OnAfterRenderAsync(bool first){if(!Ready){Ready=true;await Load();StateHasChanged();}}
+ async Task Load(){if(Busy)return;var epoch=Epoch;var id=EventId;var query=Query;Busy=true;Plan=null;Error="";try{var p=await Core.ReadReceptionRosterAsync((await Authentication.GetAuthenticationStateAsync()).User,id,query);if(epoch==Epoch)Plan=p;}catch{if(epoch==Epoch)Error="ログイン状態と現在のイベント管理権限を確認してください。";}finally{if(epoch==Epoch)Busy=false;}}
+}
