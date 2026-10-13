@@ -34,6 +34,7 @@ module.exports=async({p,g,ok})=>{
  try{
   await a.goto('https://localhost:18443/events/'+id+'/progress');
   await a.locator('#shortening-panel').waitFor();
+  await a.waitForFunction(()=>document.getElementById('progress-refresh')?.dataset.interactive==='true');
   ok(await a.locator('#shortening-approve').isDisabled(),'Actual manager panel shows protected empty state');
   await a.locator('#shortening-panel details > summary').click();
   await a.locator('[data-shortening-edit="'+part+'"]').click();
@@ -96,5 +97,5 @@ module.exports=async({p,g,ok})=>{
     'Restart retains policy original/latest/actual and authenticated management access');
   }
   ok(errors.length===0,'Actual shortening Blazor UI has no browser runtime errors');
- }finally{await a.close();await m.close();}
+ }catch(error){await a.screenshot({path:'verification/shortening-error.png'});throw error;}finally{await a.close();await m.close();}
 };
