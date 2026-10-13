@@ -10,17 +10,18 @@
 <p>端末ごとの通知許可・登録も必要です。この設定は端末の通知許可を変更しません。</p>
 <p id="part-start-error" role="alert">@Error</p><p id="part-start-message" role="status">@Message</p>
 @if(View is not null){
- <section id="part-start-settings" data-connected="@View.DeliveryConnected.ToString().ToLowerInvariant()">
+ <section id="part-start-settings" data-interactive="@Ready.ToString().ToLowerInvariant()" data-connected="@View.DeliveryConnected.ToString().ToLowerInvariant()">
  @if(!View.DeliveryConnected){<p role="status">現在は設定の保存のみ対応しています。ONにしても、まだ開始通知は送信されません。</p>}
- <button id="part-start-refresh" disabled="@Busy" @onclick="Load">最新状態を取得</button>
+ <button id="part-start-refresh" disabled="@(Busy||!Ready)" @onclick="Load">最新状態を取得</button>
  @if(View.Parts.Length==0){<p>選択できるタイムパートはありません。</p>}
- @foreach(var part in View.Parts){<p><button role="switch" aria-checked="@part.Enabled.ToString().ToLowerInvariant()" aria-label="@(part.Title+"の開始通知")" data-part-start="@part.PartId" disabled="@Busy" @onclick="()=>Toggle(part)">@part.Title：@(part.Enabled?"ON":"OFF")</button></p>}
+ @foreach(var part in View.Parts){<p><button role="switch" aria-checked="@part.Enabled.ToString().ToLowerInvariant()" aria-label="@(part.Title+"の開始通知")" data-part-start="@part.PartId" disabled="@(Busy||!Ready)" @onclick="()=>Toggle(part)">@part.Title：@(part.Enabled?"ON":"OFF")</button></p>}
  </section>
 }
 @code{
  [Parameter]public string EventId{get;set;}="";
- Sem.Web.Core.PartStartPreferences?View;bool Busy;string Error="",Message="";
+ Sem.Web.Core.PartStartPreferences?View;bool Busy,Ready;string Error="",Message="";
+ protected override void OnAfterRender(bool firstRender){if(firstRender){Ready=true;StateHasChanged();}}
  protected override async Task OnParametersSetAsync(){View=null;Message="";await Load();}
  async Task Load(){try{View=await Core.ReadPartStartPreferencesAsync((await Authentication.GetAuthenticationStateAsync()).User,EventId);Error="";}catch{View=null;Error="ログイン状態とイベント閲覧権限を確認してください。";}}
- async Task Toggle(PartStartOption part){if(Busy||View is null)return;Busy=true;Error=Message="";try{await Core.SavePartStartPreferenceAsync((await Authentication.GetAuthenticationStateAsync()).User,EventId,new(part.PartId,!part.Enabled,part.Version,View.EventVersion));await Load();if(View is not null)Message="設定を保存しました。";}catch(CoreConflictException e){await Load();Error=e.Message;}catch(UnauthorizedAccessException){View=null;Error="再ログインとイベント閲覧権限を確認してください。";}catch(System.ComponentModel.DataAnnotations.ValidationException e){await Load();Error=e.Message;}catch{View=null;Error="保存結果を確認できません。再読込して確認してください。";}finally{Busy=false;}}
+ async Task Toggle(PartStartOption part){if(Busy||!Ready||View is null)return;Busy=true;Error=Message="";try{await Core.SavePartStartPreferenceAsync((await Authentication.GetAuthenticationStateAsync()).User,EventId,new(part.PartId,!part.Enabled,part.Version,View.EventVersion));await Load();if(View is not null)Message="設定を保存しました。";}catch(CoreConflictException e){await Load();Error=e.Message;}catch(UnauthorizedAccessException){View=null;Error="再ログインとイベント閲覧権限を確認してください。";}catch(System.ComponentModel.DataAnnotations.ValidationException e){await Load();Error=e.Message;}catch{View=null;Error="保存結果を確認できません。再読込して確認してください。";}finally{Busy=false;}}
 }
