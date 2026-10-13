@@ -122,7 +122,7 @@ jobs:
             -e Sem__PublicUrl=https://localhost:18443/ \
             -e Sem__TrustedProxies__0="$SEM_E2E_GATEWAY" \
             -e Sem__BootstrapSecret=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA \
-            -e Smtp__Host=host.docker.internal -e Smtp__Port=2525 \
+            -e Smtp__Host=host.docker.internal -e Smtp__Port=2525 -e Smtp__From=fixture@example.test \
             -e Smtp__Tls=None -e Smtp__AllowInsecureLocalTest=true "$image"
           SCRIPT
           bash /tmp/sem-test-start.sh sem-dxp:legacy-ci
