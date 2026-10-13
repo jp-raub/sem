@@ -24,5 +24,5 @@ public static class ProgressCalculator {
   return new(r.State,r.Original.Title,action.Label,target,i+1<rows.Length?rows[i+1].Latest:null,(long)delta,now);
  }
  public static bool IsEventDay(string date,DateTimeOffset now)=>TimetableCalculator.Instant(date).ToOffset(TimeSpan.FromHours(9)).Date==now.ToOffset(TimeSpan.FromHours(9)).Date;
- public static string Remaining(DateTimeOffset target,DateTimeOffset now){var ms=(target-now).TotalMilliseconds;var sec=(long)Math.Ceiling(Math.Abs(ms)/1000);if(ms==0)return "切替予定時刻です";if(ms>0)return sec<60?$"あと{sec}秒":$"あと{(sec+59)/60}分";return sec<60?$"{sec}秒遅れ中":$"{sec/60}分{sec%60:00}秒遅れ中";}
+ public static string Remaining(DateTimeOffset target,DateTimeOffset now){var ms=(target-now).TotalMilliseconds;var sec=(long)Math.Ceiling(Math.Abs(ms)/1000);if(ms==0)return "切替予定時刻です";if(ms>0)return ms<60000?$"あと{sec}秒":$"あと{(sec+59)/60}分";return sec<60?$"{sec}秒遅れ中":$"{sec/60}分{sec%60:00}秒遅れ中";}
 }
