@@ -12,6 +12,7 @@ module.exports=async({p,g,ok})=>{
  const a=await p.context().newPage(),m=await g.context().newPage(),errors=[];a.on('pageerror',e=>errors.push(e.message));
  try{
   await a.goto('https://localhost:18443/service/digest-preview');await a.waitForFunction(()=>document.getElementById('digest-preview')?.dataset.interactive==='true');
+  ok((await a.locator('#digest-policy').innerText()).includes('00:05')&&(await a.locator('#digest-policy').innerText()).includes('1人1通'),'Real preview UI states approved automatic policy without a send control');
   ok((await a.locator('#digest-body').innerText()).includes('送信予約・実送信は行いません')&&await a.locator('#digest-day').inputValue()===today,'Actual Blazor mail preview labels no-send and Japanese date');
   await a.setViewportSize({width:390,height:844});ok(await a.locator('#digest-day').isVisible()&&await a.locator('#digest-body').isVisible(),'Mobile global administrator can select date and read preview');
   await a.locator('#digest-day').fill(yesterday);await a.locator('#digest-refresh').click();await a.waitForFunction(day=>document.getElementById('digest-preview')?.dataset.day===day,yesterday);

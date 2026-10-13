@@ -14,7 +14,7 @@ public static class DigestPreviewBuilder {
   if(day==DateOnly.MinValue||day==DateOnly.MaxValue)throw new ValidationException("対象日を確認してください。");
   var start=new DateTimeOffset(day.ToDateTime(TimeOnly.MinValue),TimeSpan.FromHours(9));return(start.ToUniversalTime(),start.AddDays(1).ToUniversalTime());
  }
- public static DigestPreview Build(DateOnly day,string serviceName,IEnumerable<DigestEntry> source){
+ public static DigestPreview Build(DateOnly day,string serviceName,IEnumerable<DigestEntry> source,bool preview=true){
   var(start,end)=Bounds(day);var entries=source.Where(x=>{
    if(!DateTimeOffset.TryParse(x.At,CultureInfo.InvariantCulture,DateTimeStyles.RoundtripKind,out var at))throw new ValidationException("操作履歴の日時を確認できません。");return at>=start&&at<end;
   }).OrderBy(x=>DateTimeOffset.Parse(x.At,CultureInfo.InvariantCulture)).ThenBy(x=>x.OperationId,StringComparer.Ordinal).ToArray();
@@ -25,7 +25,7 @@ public static class DigestPreviewBuilder {
    .AppendLine($"確定操作：{entries.Length}件 ／ 登録：{registered}枠 ／ 解除：{released}枠")
    .AppendLine("確定済み操作の履歴です。本人メールの配信状況とは別で、登録と解除を相殺しません。")
    .AppendLine("対象者は現在の表示名です。イベント・曲・パート・操作者・理由は操作時の保存内容です。")
-   .AppendLine("これは全体管理者向け文面プレビューです。送信予約・実送信は行いません。");
+   .AppendLine(preview?"これは全体管理者向け文面プレビューです。送信予約・実送信は行いません。":"送信時点で管理権限を確認したイベントの登録・解除ダイジェストです。最新状態はアプリでご確認ください。");
   foreach(var item in entries){
    body.AppendLine().AppendLine($"{DateTimeOffset.Parse(item.At,CultureInfo.InvariantCulture).ToOffset(TimeSpan.FromHours(9)):yyyy-MM-dd HH:mm:ss.fff zzz} ／ {(item.Kind=="Register"?"登録":"解除")}")
     .AppendLine($"イベント：{item.EventTitle}").AppendLine($"対象者（現在の表示名）：{item.CurrentSubjectName}").AppendLine($"操作者：{item.ActorName}");

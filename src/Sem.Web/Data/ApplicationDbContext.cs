@@ -10,6 +10,8 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<InvitationRequest> InvitationRequests => Set<InvitationRequest>();
     public DbSet<EmailTicket> EmailTickets => Set<EmailTicket>();
     public DbSet<Message> Messages => Set<Message>();
+    public DbSet<DailyDigestRun> DailyDigestRuns => Set<DailyDigestRun>();
+    public DbSet<DailyDigestMail> DailyDigestMails => Set<DailyDigestMail>();
     public DbSet<BusinessNotification> BusinessNotifications => Set<BusinessNotification>();
     public DbSet<Delivery> Deliveries => Set<Delivery>();
     public DbSet<PushDevice> PushDevices => Set<PushDevice>();
@@ -43,6 +45,18 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     protected override void OnModelCreating(ModelBuilder b)
     {
         base.OnModelCreating(b);
+        b.Entity<DailyDigestRun>().HasKey(x=>x.Day);
+        b.Entity<DailyDigestRun>().ToTable("DailyDigestRuns",t=>t.HasCheckConstraint("CK_DailyDigestRun_Day","length(\"Day\")=10 AND date(\"Day\") IS NOT NULL AND date(\"Day\")=\"Day\""));
+        b.Entity<DailyDigestMail>().HasIndex(x=>new{x.Day,x.UserId}).IsUnique();
+        b.Entity<DailyDigestMail>().HasIndex(x=>new{x.Status,x.Due});
+        b.Entity<DailyDigestMail>().HasOne<DailyDigestRun>().WithMany().HasForeignKey(x=>x.Day).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<DailyDigestMail>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x=>x.UserId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<DailyDigestMail>().ToTable("DailyDigestMails",t=>{
+            t.HasCheckConstraint("CK_DailyDigestMail_Status","\"Status\" IN ('Pending','Sending','Sent','Failed','Cancelled')");
+            t.HasCheckConstraint("CK_DailyDigestMail_Attempts","\"Attempts\" BETWEEN 0 AND 5");
+            t.HasCheckConstraint("CK_DailyDigestMail_Claim","(\"Status\"='Sending' AND \"Claim\" IS NOT NULL AND \"LeaseUntil\" IS NOT NULL) OR (\"Status\"<>'Sending' AND \"Claim\" IS NULL AND \"LeaseUntil\" IS NULL)");
+            t.HasCheckConstraint("CK_DailyDigestMail_Sent","(\"Status\"='Sent' AND \"SentAt\" IS NOT NULL) OR (\"Status\"<>'Sent' AND \"SentAt\" IS NULL)");
+        });
         b.Entity<BusinessNotification>().HasOne<RegistrationOperation>().WithOne().HasForeignKey<BusinessNotification>(x=>x.Id).OnDelete(DeleteBehavior.Restrict);
         b.Entity<BusinessNotification>().HasOne<SessionEvent>().WithMany().HasForeignKey(x=>x.EventId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<BusinessNotification>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x=>x.UserId).OnDelete(DeleteBehavior.Restrict);

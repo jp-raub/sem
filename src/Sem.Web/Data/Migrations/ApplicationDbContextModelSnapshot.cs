@@ -235,6 +235,78 @@ namespace Sem.Web.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Sem.Web.Core.DailyDigestMail", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Claim")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Day")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Due")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Error")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("LeaseUntil")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("SentAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("Day", "UserId")
+                        .IsUnique();
+
+                    b.HasIndex("Status", "Due");
+
+                    b.ToTable("DailyDigestMails", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_DailyDigestMail_Attempts", "\"Attempts\" BETWEEN 0 AND 5");
+
+                            t.HasCheckConstraint("CK_DailyDigestMail_Claim", "(\"Status\"='Sending' AND \"Claim\" IS NOT NULL AND \"LeaseUntil\" IS NOT NULL) OR (\"Status\"<>'Sending' AND \"Claim\" IS NULL AND \"LeaseUntil\" IS NULL)");
+
+                            t.HasCheckConstraint("CK_DailyDigestMail_Sent", "(\"Status\"='Sent' AND \"SentAt\" IS NOT NULL) OR (\"Status\"<>'Sent' AND \"SentAt\" IS NULL)");
+
+                            t.HasCheckConstraint("CK_DailyDigestMail_Status", "\"Status\" IN ('Pending','Sending','Sent','Failed','Cancelled')");
+                        });
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.DailyDigestRun", b =>
+                {
+                    b.Property<string>("Day")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CreatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Day");
+
+                    b.ToTable("DailyDigestRuns", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_DailyDigestRun_Day", "length(\"Day\")=10 AND date(\"Day\") IS NOT NULL AND date(\"Day\")=\"Day\"");
+                        });
+                });
+
             modelBuilder.Entity("Sem.Web.Core.EventAdmin", b =>
                 {
                     b.Property<string>("EventId")
@@ -1660,6 +1732,21 @@ namespace Sem.Web.Data.Migrations
                     b.HasOne("Sem.Web.Core.RegistrationOperation", null)
                         .WithOne()
                         .HasForeignKey("Sem.Web.Core.BusinessNotification", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Sem.Web.Data.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.DailyDigestMail", b =>
+                {
+                    b.HasOne("Sem.Web.Core.DailyDigestRun", null)
+                        .WithMany()
+                        .HasForeignKey("Day")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 

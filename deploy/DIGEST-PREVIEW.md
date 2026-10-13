@@ -4,7 +4,7 @@ English reference; [Japanese translation](DIGEST-PREVIEW.ja.md).
 
 ## Boundary
 
-This increment implements **daily grouping and global-administrator mail-text preview only**. It does not enqueue, schedule, send or enable a digest. The accepted requirements require daily registration/release mail to administrators, but automatic dispatch time, closed-day selection, recipient packaging, zero-change and outage-catch-up policy are not yet settled. Confirm those before enabling automatic delivery; do not silently choose defaults or treat this preview as completed digest delivery.
+This increment implements **daily grouping and global-administrator mail-text preview only**. It does not enqueue, schedule, send or enable a digest. Automatic delivery policy has since been explicitly approved and is implemented separately in [DAILY-DIGEST.md](DAILY-DIGEST.md). The preview itself remains read-only and does not trigger that worker.
 
 ## Calendar and committed history
 
@@ -18,11 +18,11 @@ Operations sort by instant then ID. Registration and release slot totals are dis
 
 - GET `/api/core/digest-preview`, optional `?day=yyyy-MM-dd`.
 - InteractiveServer page `/service/digest-preview`, linked from the global service menu.
-- Current enabled/email-confirmed ordinary identity, valid security stamp/session and **current global-admin flag** required for every read. An event-scoped administrator cannot open the global mail-text preview, even for an assigned event; this follows v33's preview rule. This does not settle future digest recipients.
+- Current enabled/email-confirmed ordinary identity, valid security stamp/session and **current global-admin flag** required for every read. An event-scoped administrator cannot open the global mail-text preview, even for an assigned event; this follows v33's preview rule. Automatic scoped-email recipients are defined separately by the approved daily policy; receiving that email does not grant global preview access.
 - The UI escapes text, is readable at mobile width, and selects another date without writes. Role/auth failure clears the displayed data. Validation failure removes stale text but leaves date controls for retry after a previously authorized request.
 - GET is a read-only, no-store endpoint. There is no new POST/send/queue API. A read transaction keeps the query coherent; original histories, queue statuses/attempts/leases, participant/event versions, audit, auth mail and keys are unchanged.
 
-The preview is bounded at **1000 operations per selected day**. Larger days fail explicitly instead of silently showing an incomplete digest. This is a preview resource limit, not a new participation limit or an approved automatic-delivery truncation policy. Undecryptable/corrupt/duplicate/invalid snapshots refuse a partial preview. No new tables or migrations are needed.
+The preview is bounded at **1000 operations per selected day**. Larger days fail explicitly instead of silently showing an incomplete digest. This is a preview resource limit, not a new participation limit or an approved automatic-delivery truncation policy. Undecryptable/corrupt/duplicate/invalid snapshots refuse a partial preview. The preview itself needs no new schema; automatic delivery adds separate day/mail tables.
 
 ## Acceptance
 

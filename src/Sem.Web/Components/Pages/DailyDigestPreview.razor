@@ -7,7 +7,8 @@
 <PageTitle>日次ダイジェスト文面プレビュー</PageTitle>
 <h1>日次ダイジェスト文面プレビュー</h1>
 <p><a href="/workspace">業務基盤へ戻る</a></p>
-<p>全体管理者専用。送信時刻・対象日の締め方を確定する前のプレビューです。予約・実送信は行いません。</p>
+<p id="digest-policy">自動配信は日本時間の毎日00:05に前日分。全体管理者は全イベント、担当管理者は担当分を1人1通。変更0件は送らず、停止分は復旧後に日付別で追送します。</p>
+<p>この画面は全体管理者専用の文面プレビューです。画面操作では予約・実送信しません。</p>
 <p id="digest-error" role="alert">@Error</p>
 @if(CanPreview){
  <section id="digest-preview" class="panel" data-day="@(View?.Day??"")" data-interactive="@InteractiveReady.ToString().ToLowerInvariant()">
