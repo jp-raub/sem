@@ -1,0 +1,49 @@
+name: Event shortening proposal core
+on:
+  push:
+    branches: [feat/event-shortening]
+  pull_request:
+    branches: [feat/event-progress]
+    paths:
+      - src/**
+      - tests/**
+      - .github/workflows/event-shortening.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: event-shortening-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify-core:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Build and proposal / existing safety regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p verification
+          dotnet build src/Sem.Web/Sem.Web.csproj -c Release -warnaserror | tee verification/shortening-build.log
+          for suite in Shortening Progress Timetable Participation Song Question Definition Phase Core Storage PasskeyProof LegacyReset; do
+            dotnet run --project "tests/Sem.${suite}Checks" -c Release > "verification/${suite}-checks.log" 2>&1
+            echo "$suite checks passed"
+          done
+          python3 tests/offline-reset-copy-checks.py > verification/shortening-offline-copy.log
+      - name: Publish and verify existing Blazor assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet publish src/Sem.Web/Sem.Web.csproj -c Release -o /tmp/sem-shortening-publish -warnaserror > verification/shortening-publish.log
+          test -s /tmp/sem-shortening-publish/wwwroot/_framework/blazor.web.js
+          test -s /tmp/sem-shortening-publish/Sem.Web.staticwebassets.endpoints.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sem-shortening-core-verification
+          path: verification/
+          retention-days: 7
