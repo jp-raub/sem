@@ -166,6 +166,75 @@ namespace Sem.Web.Data.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("Sem.Web.Core.BusinessNotification", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Claim")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedAt")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Due")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Error")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EventId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("LeaseUntil")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ProtectedPayload")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("SentAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EventId");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("Status", "Due");
+
+                    b.ToTable("BusinessNotifications", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_BusinessNotifications_Attempts", "\"Attempts\" BETWEEN 0 AND 5");
+
+                            t.HasCheckConstraint("CK_BusinessNotifications_Claim", "(\"Status\"='Sending' AND \"Claim\" IS NOT NULL AND \"LeaseUntil\" IS NOT NULL) OR (\"Status\"<>'Sending' AND \"Claim\" IS NULL AND \"LeaseUntil\" IS NULL)");
+
+                            t.HasCheckConstraint("CK_BusinessNotifications_Kind", "\"Kind\" IN ('Register','Release')");
+
+                            t.HasCheckConstraint("CK_BusinessNotifications_Sent", "(\"Status\"='Sent' AND \"SentAt\" IS NOT NULL) OR (\"Status\"<>'Sent' AND \"SentAt\" IS NULL)");
+
+                            t.HasCheckConstraint("CK_BusinessNotifications_Status", "\"Status\" IN ('Pending','Sending','Sent','Failed','Cancelled')");
+                        });
+                });
+
             modelBuilder.Entity("Sem.Web.Core.EventAdmin", b =>
                 {
                     b.Property<string>("EventId")
@@ -1577,6 +1646,27 @@ namespace Sem.Web.Data.Migrations
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.BusinessNotification", b =>
+                {
+                    b.HasOne("Sem.Web.Core.SessionEvent", null)
+                        .WithMany()
+                        .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Sem.Web.Core.RegistrationOperation", null)
+                        .WithOne()
+                        .HasForeignKey("Sem.Web.Core.BusinessNotification", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Sem.Web.Data.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 

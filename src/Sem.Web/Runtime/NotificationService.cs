@@ -19,10 +19,14 @@ public class NotificationService(IConfiguration cfg, IDataProtectionProvider dp)
         db.Messages.Add(new Message { UserId = userId, Title = title, Body = body, Created = SemEndpoints.Now });
         if (PushConfigured) db.Deliveries.Add(new Delivery { UserId = userId, Kind = "Push", Subject = title, Due = SemEndpoints.Now });
     }
-    public async Task SendEmail(Delivery delivery, ApplicationUser user, CancellationToken ct)
+    public Task SendBusinessEmail(string operationId, ApplicationUser user, string title, string body, CancellationToken ct) =>
+        SendEmail(new Delivery { Id=operationId, UserId=user.Id, Subject=title, ProtectedBody=protector.Protect(body) },user,ct,
+            SemEndpoints.Hash("business-email:"+operationId)+"@notifications.sem.invalid");
+    public async Task SendEmail(Delivery delivery, ApplicationUser user, CancellationToken ct, string? messageId = null)
     {
         if (!EmailConfigured) throw new InvalidOperationException("SMTP not configured");
         var message = new MimeMessage(); message.From.Add(MailboxAddress.Parse(cfg["Smtp:From"]!)); message.To.Add(MailboxAddress.Parse(user.Email!)); message.Subject = delivery.Subject; message.Body = new TextPart("plain") { Text = protector.Unprotect(delivery.ProtectedBody) };
+        if(messageId is not null) message.MessageId=messageId;
         using var client = new SmtpClient(); client.Timeout = 15000;
         var tls = cfg["Smtp:Tls"] ?? "StartTls";
         var security = tls switch { "SslOnConnect" => SecureSocketOptions.SslOnConnect, "None" when cfg.GetValue<bool>("Smtp:AllowInsecureLocalTest") => SecureSocketOptions.None, _ => SecureSocketOptions.StartTls };

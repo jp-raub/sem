@@ -13,7 +13,7 @@ var path = Path.Combine(root, "core.db"); var services = new ServiceCollection()
 services.AddLogging();
 services.AddDbContextFactory<ApplicationDbContext>(o => o.UseSqlite("Data Source=" + path), ServiceLifetime.Scoped);
 services.AddIdentityCore<ApplicationUser>(o => o.Stores.SchemaVersion = IdentitySchemaVersions.Version3).AddEntityFrameworkStores<ApplicationDbContext>();
-services.AddSingleton(TimeProvider.System); services.AddScoped<CoreFoundationService>();
+services.AddSingleton(TimeProvider.System); Microsoft.Extensions.DependencyInjection.DataProtectionServiceCollectionExtensions.AddDataProtection(services);services.AddSingleton<BusinessNotificationStore>();services.AddScoped<CoreFoundationService>();
 using var provider = services.BuildServiceProvider(); using var scope = provider.CreateScope();
 var factory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
 var core = scope.ServiceProvider.GetRequiredService<CoreFoundationService>(); var passed = 0;

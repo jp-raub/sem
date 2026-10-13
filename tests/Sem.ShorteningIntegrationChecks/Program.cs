@@ -21,7 +21,7 @@ services.AddDbContextFactory<ApplicationDbContext>(o =>
 services.AddIdentityCore<ApplicationUser>(o => o.Stores.SchemaVersion = IdentitySchemaVersions.Version3)
     .AddEntityFrameworkStores<ApplicationDbContext>();
 services.AddSingleton<TimeProvider>(time);
-services.AddScoped<CoreFoundationService>();
+Microsoft.Extensions.DependencyInjection.DataProtectionServiceCollectionExtensions.AddDataProtection(services);services.AddSingleton<BusinessNotificationStore>();services.AddScoped<CoreFoundationService>();
 using var provider = services.BuildServiceProvider();
 using var scope = provider.CreateScope();
 var factory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();

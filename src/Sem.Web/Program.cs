@@ -41,6 +41,10 @@ builder.Services.AddDbContextFactory<ApplicationDbContext>(o => o.UseSqlite($"Da
 builder.Services.AddScoped<CoreFoundationService>();
 builder.Services.AddIdentityCore<ApplicationUser>(o => { o.SignIn.RequireConfirmedAccount = true; o.User.RequireUniqueEmail = true; o.Stores.SchemaVersion = IdentitySchemaVersions.Version3; }).AddEntityFrameworkStores<ApplicationDbContext>().AddSignInManager().AddDefaultTokenProviders().AddUserConfirmation<SemUserConfirmation>();
 builder.Services.AddSingleton<NotificationService>();
+builder.Services.AddSingleton<BusinessNotificationStore>();
+builder.Services.AddSingleton<IBusinessEmailTransport,BusinessEmailTransport>();
+builder.Services.AddScoped<BusinessEmailDispatcher>();
+builder.Services.AddHostedService<BusinessEmailWorker>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<PasskeyAdditionService>();
 builder.Services.AddHostedService<NotificationWorker>();
