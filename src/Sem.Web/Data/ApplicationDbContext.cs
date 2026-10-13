@@ -30,6 +30,9 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<PartPresetState> PartPresetStates => Set<PartPresetState>();
     public DbSet<PartPreset> PartPresets => Set<PartPreset>();
     public DbSet<EventPartDefinition> EventPartDefinitions => Set<EventPartDefinition>();
+    public DbSet<EventParticipantQr> EventParticipantQrs => Set<EventParticipantQr>();
+    public DbSet<EventQrRead> EventQrReads => Set<EventQrRead>();
+    public DbSet<EventQrOperation> EventQrOperations => Set<EventQrOperation>();
     public DbSet<EventReceptionState> EventReceptionStates => Set<EventReceptionState>();
     public DbSet<EventReception> EventReceptions => Set<EventReception>();
     public DbSet<ReceptionOperation> ReceptionOperations => Set<ReceptionOperation>();
@@ -52,6 +55,20 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     protected override void OnModelCreating(ModelBuilder b)
     {
         base.OnModelCreating(b);
+        b.Entity<EventParticipantQr>().HasKey(x=>new{x.EventId,x.UserId});
+        b.Entity<EventParticipantQr>().Property(x=>x.RowVersion).IsConcurrencyToken();
+        b.Entity<EventParticipantQr>().HasIndex(x=>x.TokenHash).IsUnique();
+        b.Entity<EventParticipantQr>().HasOne<SessionEvent>().WithMany().HasForeignKey(x=>x.EventId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<EventParticipantQr>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x=>x.UserId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<EventParticipantQr>().ToTable("EventParticipantQrs",t=>{t.HasCheckConstraint("CK_ParticipantQr_Hash","length(\"TokenHash\")=64");t.HasCheckConstraint("CK_ParticipantQr_Version","\"RowVersion\">0");});
+        b.Entity<EventQrRead>().HasOne<SessionEvent>().WithMany().HasForeignKey(x=>x.EventId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<EventQrRead>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x=>x.UserId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<EventQrRead>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x=>x.ActorId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<EventQrRead>().HasIndex(x=>new{x.EventId,x.At,x.Id});
+        b.Entity<EventQrRead>().ToTable("EventQrReads",t=>t.HasCheckConstraint("CK_QrRead_Version","\"TokenVersion\">0"));
+        b.Entity<EventQrOperation>().HasOne<SessionEvent>().WithMany().HasForeignKey(x=>x.EventId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<EventQrOperation>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x=>x.ActorId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<EventQrOperation>().ToTable("EventQrOperations",t=>{t.HasCheckConstraint("CK_QrOperation_Kind","\"Kind\" IN ('Issue','Read')");t.HasCheckConstraint("CK_QrOperation_Hash","length(\"RequestHash\")=64");});
         b.Entity<EventReceptionState>().HasKey(x=>new{x.EventId,x.UserId});
         b.Entity<EventReceptionState>().Property(x=>x.RowVersion).IsConcurrencyToken();
         b.Entity<EventReceptionState>().HasOne<SessionEvent>().WithMany().HasForeignKey(x=>x.EventId).OnDelete(DeleteBehavior.Restrict);
