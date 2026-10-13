@@ -22,7 +22,7 @@
  </section>
  @if(Plan.CanManage&&ManagerView){
   <section class="panel"><p id="progress-next-action">次の記録：@(Plan.NextAction?.Label??"全パートの終了を記録済み")</p><button id="progress-record" data-progress-version="@Plan.ProgressVersion" style="min-height:56px;font-size:1.2rem" disabled="@(Busy||Editing||!Plan.CanRecord)" @onclick="Record">時刻を記録</button><p>実績はサーバー時刻で保存します。開始した当初計画を保護し、終了と次開始を同じ時刻で一括保存します。</p></section>
-  <ShorteningPanel EventId="EventId" EventVersion="Plan.RowVersion" ProgressVersion="Plan.ProgressVersion" ExternalBusy="Busy" ExternalEditing="Editing" ActiveChanged="active=>ShorteningActive=active" Saved="Load" />
+  <ShorteningPanel EventId="@EventId" EventVersion="Plan.RowVersion" ProgressVersion="Plan.ProgressVersion" ExternalBusy="Busy" ExternalEditing="Editing" ActiveChanged="active=>ShorteningActive=active" Saved="Load" />
   <button id="progress-show-plan" @onclick="()=>ShowPlan=!ShowPlan">予実・時間管理を表示</button>
   <section class="@(ShowPlan?"progress-comparison show-plan":"progress-comparison")">
    <table id="progress-comparison"><thead><tr><th>曲・進行</th><th>記録点</th><th>当初計画</th><th>最新見積</th><th>実績</th><th>見積</th></tr></thead><tbody>
