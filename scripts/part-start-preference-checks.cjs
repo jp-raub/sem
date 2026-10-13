@@ -1,0 +1,22 @@
+module.exports=async({p,g,ok})=>{
+ const api=(page,action,data,q='')=>page.evaluate(async({action,data,q})=>{const {token}=await(await fetch('/api/csrf')).json();const r=await fetch('/api/core/'+action+q,{method:data===undefined?'GET':'POST',headers:data===undefined?{}:{'Content-Type':'application/json','X-CSRF-TOKEN':token},body:data===undefined?undefined:JSON.stringify(data)});return{status:r.status,body:await r.json()};},{action,data,q});
+ const guid=()=>require('crypto').randomUUID();
+ const created=await api(p,'event',{title:'Native personal start preferences',description:'',location:'',scheduledDate:'2026-11-02T03:00:00Z',opensAt:'2026-11-02T02:00:00Z',announcementMessage:'',phaseKind:'View',managerIds:[],rowVersion:0});ok(created.status===200,'Native personal notification event created');
+ const id=created.body.id,q='?id='+id;let table=(await api(p,'timetable',undefined,q)).body;const part=guid();ok((await api(p,'timetable',{rowVersion:table.rowVersion,roundStarts:false,clockFormat:'seconds',durationFormat:'units',songIcon:'🎵',plannedEndAt:null,parts:[{id:part,kind:'Transition',songId:null,name:'Optional talk',durationSeconds:60}]},q)).status===200,'Native arbitrary transition available without performance assignment');
+ let view=(await api(g,'part-start-preferences',undefined,q)).body;ok(view.parts.length===2&&view.parts.every(x=>!x.enabled)&&!view.deliveryConnected,'Member initial preferences OFF for opening and transition; delivery disconnected');
+ const edit={partId:part,enabled:true,version:0,eventVersion:view.eventVersion};ok((await api(g,'part-start-preferences',{...edit,userId:'someone'},q)).status===400,'Personal setting API rejects injected target user');
+ const csrf=await g.evaluate(async q=>(await fetch('/api/core/part-start-preferences'+q,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})).status,q);ok(csrf===400,'Personal preference POST requires CSRF');
+ const a=await g.context().newPage(),m=await p.context().newPage(),errors=[];a.on('pageerror',e=>errors.push(e.message));
+ try{
+  await a.goto('https://localhost:18443/events/'+id+'/part-start-preferences');await a.locator('[data-part-start="'+part+'"]').waitFor();await a.setViewportSize({width:390,height:844});
+  ok(await a.locator('[data-part-start="'+part+'"]').isVisible()&&(await a.locator('#part-start-settings').innerText()).includes('まだ開始通知は送信されません'),'Member mobile switch rendered with explicit no-send boundary');
+  await a.locator('[data-part-start="'+part+'"]').click();await a.waitForFunction(part=>document.querySelector('[data-part-start="'+part+'"]')?.getAttribute('aria-checked')==='true',part);ok((await api(g,'part-start-preferences',undefined,q)).body.parts.find(x=>x.partId===part).enabled,'Real member Blazor ON switch saves own setting');
+  await m.goto('https://localhost:18443/events/'+id+'/part-start-preferences');await m.locator('[data-part-start="'+part+'"]').waitFor();ok(await m.locator('[data-part-start="'+part+'"]').getAttribute('aria-checked')==='false','Global manager real screen does not inherit or inspect member preference');
+  ok((await api(g,'part-start-preferences',{...edit,enabled:false},q)).status===409,'Stale concurrent preference API returns409');
+  await a.reload();await a.locator('[data-part-start="'+part+'"]').waitFor();ok(await a.locator('[data-part-start="'+part+'"]').getAttribute('aria-checked')==='true','Reload retains ON without resetting default');
+  await a.locator('[data-part-start="'+part+'"]').click();await a.waitForFunction(part=>document.querySelector('[data-part-start="'+part+'"]')?.getAttribute('aria-checked')==='false',part);ok((await api(g,'part-start-preferences',undefined,q)).body.parts.find(x=>x.partId===part).version===2,'Real OFF retains versioned preference');
+  await a.goto('https://localhost:18443/events/'+id+'/timetable');await a.locator('#part-start-preferences-link').waitFor();ok((await a.locator('#part-start-preferences-link').getAttribute('href')).endsWith('/part-start-preferences'),'Member timetable links to own optional notification switches');
+  const json=JSON.stringify((await api(g,'part-start-preferences',undefined,q)).body);ok(!json.includes('endpoint')&&!json.includes('@example.test')&&!json.includes('userId'),'Own read response reveals no subscription/address/other user fields');
+  ok(errors.length===0,'Personal preference real Blazor has no runtime errors');
+ }finally{await a.close();await m.close();}
+};

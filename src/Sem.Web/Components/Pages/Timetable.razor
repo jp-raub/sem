@@ -8,6 +8,7 @@
 <h1>タイムテーブル：@Plan?.Title</h1>
 <p><a href="/workspace">イベント一覧</a> ／ <a href="@($"/events/{EventId}/participation")">参加登録・観覧</a></p>
 <NavigationLock ConfirmExternalNavigation="@Editing" OnBeforeInternalNavigation="PreventUnsaved" />
+<p><a id="part-start-preferences-link" href="@($"/events/{EventId}/part-start-preferences")">タイムパート開始通知のON／OFF</a></p>
 <p id="timetable-error" role="alert">@Error</p><p id="timetable-message" role="status">@Message</p>
 @if(Plan is not null){
  @if(!Editing){<button id="timetable-refresh" @onclick="Load">最新状態を取得</button>@if(Plan.CanManage){<button id="timetable-edit" @onclick="()=>Editing=true">編集</button><a href="@($"/events/{EventId}/songs")">曲・枠の追加／編集</a><a id="notification-plan-link" href="@($"/events/{EventId}/notification-plan")">通知予定プレビュー</a>}}

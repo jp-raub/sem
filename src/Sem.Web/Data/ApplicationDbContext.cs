@@ -47,6 +47,15 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     protected override void OnModelCreating(ModelBuilder b)
     {
         base.OnModelCreating(b);
+        b.Entity<PartStartPreference>().HasKey(x=>new{x.EventId,x.UserId,x.PartId});
+        b.Entity<PartStartPreference>().Property(x=>x.Version).IsConcurrencyToken();
+        b.Entity<PartStartPreference>().HasOne<SessionEvent>().WithMany().HasForeignKey(x=>x.EventId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<PartStartPreference>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x=>x.UserId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<PartStartPreference>().ToTable("PartStartPreferences",t=>{
+            t.HasCheckConstraint("CK_PartStartPreference_Version","\"Version\">0");
+            t.HasCheckConstraint("CK_PartStartPreference_Enabled","\"Enabled\" IN (0,1)");
+            t.HasCheckConstraint("CK_PartStartPreference_Part","length(\"PartId\") BETWEEN 1 AND 100");
+        });
         b.Entity<NotificationScheduleState>().HasKey(x=>x.EventId);
         b.Entity<NotificationScheduleState>().Property(x=>x.Version).IsConcurrencyToken();
         b.Entity<NotificationScheduleState>().HasOne<SessionEvent>().WithOne().HasForeignKey<NotificationScheduleState>(x=>x.EventId).OnDelete(DeleteBehavior.Restrict);

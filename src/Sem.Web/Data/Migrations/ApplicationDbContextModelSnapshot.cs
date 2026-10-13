@@ -748,6 +748,41 @@ namespace Sem.Web.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Sem.Web.Core.PartStartPreference", b =>
+                {
+                    b.Property<string>("EventId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PartId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("ChangedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("EventId", "UserId", "PartId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("PartStartPreferences", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_PartStartPreference_Enabled", "\"Enabled\" IN (0,1)");
+
+                            t.HasCheckConstraint("CK_PartStartPreference_Part", "length(\"PartId\") BETWEEN 1 AND 100");
+
+                            t.HasCheckConstraint("CK_PartStartPreference_Version", "\"Version\">0");
+                        });
+                });
+
             modelBuilder.Entity("Sem.Web.Core.ProgressEstimate", b =>
                 {
                     b.Property<string>("EventId")
@@ -1972,6 +2007,21 @@ namespace Sem.Web.Data.Migrations
                     b.HasOne("Sem.Web.Core.SessionEvent", null)
                         .WithOne()
                         .HasForeignKey("Sem.Web.Core.NotificationScheduleState", "EventId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.PartStartPreference", b =>
+                {
+                    b.HasOne("Sem.Web.Core.SessionEvent", null)
+                        .WithMany()
+                        .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Sem.Web.Data.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
