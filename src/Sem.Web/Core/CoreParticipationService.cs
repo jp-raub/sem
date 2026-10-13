@@ -15,7 +15,7 @@ public sealed record SlotChoice(string Id,long RowVersion);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record AnswerEdit(string QuestionId,string? Value);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record ParticipationEdit(string RequestId,long RowVersion,string PhaseId,string Kind,SlotChoice[] Slots,AnswerEdit[] Answers,string? SubjectId=null,bool CompatibilityException=false,string Reason="",long ParticipantVersion=0);
+public sealed record ParticipationEdit(string RequestId,long RowVersion,string PhaseId,string Kind,SlotChoice[] Slots,AnswerEdit[] Answers,string? SubjectId=null,bool CompatibilityException=false,string Reason="",long ParticipantVersion=0,[property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Comment=null);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record CapacityEdit(long RowVersion,int? Capacity);
 public sealed record ParticipationItem(string Id,bool Success,string Code);
@@ -35,10 +35,11 @@ public sealed partial class CoreFoundationService {
  public async Task SetCapacityAsync(ClaimsPrincipal principal,string id,CapacityEdit edit,CancellationToken ct=default){if(edit.Capacity<0)throw new ValidationException("人数は0以上または制限なしで指定してください。");await using var db=await factory.CreateDbContextAsync(ct);await using var tx=await db.Database.BeginTransactionAsync(ct);var e=await Managed(db,principal,id,ct);var actor=await Actor(db,principal,ct);if(e.RowVersion!=edit.RowVersion)throw new CoreConflictException();if(edit.Capacity is int cap&&cap<(await Participants(db,id,ct)).Count)throw new ValidationException("現在の参加人数より小さい上限には設定できません。");e.Capacity=edit.Capacity;e.RowVersion++;Audit(db,actor.Id,"EventCapacityChanged",id);await db.SaveChangesAsync(ct);await tx.CommitAsync(ct);}
  public async Task<ParticipationResult> SubmitParticipationAsync(ClaimsPrincipal principal,string id,ParticipationEdit edit,CancellationToken ct=default){
   if(!Guid.TryParse(edit.RequestId,out _)||edit.RowVersion<0||edit.ParticipantVersion<0||edit.Kind is not ("Register" or "Spectate" or "Answers" or "Release" or "RemoveSpectator")||edit.Slots is null||edit.Answers is null||edit.Slots.Length>100||edit.Answers.Length>100||edit.Slots.Any(x=>x is null||x.RowVersion<0)||edit.Answers.Any(x=>x is null)||edit.Slots.Select(x=>x.Id).Distinct().Count()!=edit.Slots.Length||edit.Answers.Select(x=>x.QuestionId).Distinct().Count()!=edit.Answers.Length)throw new ValidationException("操作・識別子・選択数・回答を確認してください。");
-  if((edit.Kind is "Register" or "Release")&&edit.Slots.Length==0||(edit.Kind is "Spectate" or "Answers" or "RemoveSpectator")&&edit.Slots.Length!=0||(edit.Kind is "Release" or "RemoveSpectator")&&edit.Answers.Length!=0||edit.CompatibilityException&&edit.Kind!="Register")throw new ValidationException("選択枠・回答と操作の組み合わせを確認してください。");var reason=Text(edit.Reason,500,"理由");
+  if((edit.Kind is "Register" or "Release")&&edit.Slots.Length==0||(edit.Kind is "Spectate" or "Answers" or "RemoveSpectator")&&edit.Slots.Length!=0||(edit.Kind is "Release" or "RemoveSpectator")&&edit.Answers.Length!=0||edit.CompatibilityException&&edit.Kind!="Register")throw new ValidationException("選択枠・回答と操作の組み合わせを確認してください。");var reason=Text(edit.Reason,500,"理由");var comment=string.IsNullOrWhiteSpace(edit.Comment)?null:CommentBody(edit.Comment);if(comment is not null&&edit.Kind is "Release" or "RemoveSpectator")throw new ValidationException("解除操作とコメントは別々に行ってください。");
   await using var db=await factory.CreateDbContextAsync(ct);await using var tx=await db.Database.BeginTransactionAsync(ct);var(e,actor,phase,manager)=await ParticipantEvent(db,principal,id,ct);var subject=edit.SubjectId??actor.Id;
   if((subject!=actor.Id||edit.CompatibilityException||edit.Kind is "Release" or "RemoveSpectator")&&!manager)throw new UnauthorizedAccessException();if(edit.Kind is "Spectate" or "Answers"&&subject!=actor.Id)throw new ValidationException("観覧と回答だけの更新は本人が行ってください。");if((edit.CompatibilityException||edit.Kind is "Release" or "RemoveSpectator")&&reason.Length==0)throw new ValidationException("例外登録・管理者解除には理由が必要です。");
   var user=await db.Users.SingleOrDefaultAsync(x=>x.Id==subject&&x.Enabled&&x.EmailConfirmed,ct);if(user is null)throw new ValidationException("有効な対象者を選択してください。");var fingerprint=SemEndpoints.Hash(JsonSerializer.Serialize(edit));var previous=await db.RegistrationOperations.SingleOrDefaultAsync(x=>x.Id==edit.RequestId,ct);if(previous is not null){if(previous.ActorId!=actor.Id||previous.EventId!=id||previous.RequestHash!=fingerprint)throw new ValidationException("操作Idは再利用できません。");return JsonSerializer.Deserialize<ParticipationResult>(previous.ResultJson)! with{Replayed=true};}
+  if(comment is not null)RequireCommentOpen(e,manager);if(await db.CommentOperations.AnyAsync(x=>x.Id==edit.RequestId,ct))throw new ValidationException("操作Idは再利用できません。");
   var state=await db.EventParticipantStates.SingleOrDefaultAsync(x=>x.EventId==id&&x.UserId==subject,ct);if((state?.RowVersion??0)!=edit.ParticipantVersion)throw new CoreConflictException();
   if(e.RowVersion!=edit.RowVersion||phase.Id!=edit.PhaseId)throw new CoreConflictException();if(edit.Kind is "Register" or "Spectate" or "Answers"&&phase.Kind!="Custom"||edit.Kind=="Register"&&phase.MaxPicks==0)throw new ValidationException("現在のフェーズではこの申込み／回答更新を受け付けていません。");
   var parts=await db.SongParts.Where(x=>x.EventId==id).ToListAsync(ct);var spectator=await db.EventSpectators.SingleOrDefaultAsync(x=>x.EventId==id&&x.UserId==subject,ct);var participants=await Participants(db,id,ct);var results=new List<ParticipationItem>();var now=Utc(clock.GetUtcNow());
@@ -67,13 +68,18 @@ public sealed partial class CoreFoundationService {
    foreach(var q in questions){var answer=await db.EventQuestionAnswers.SingleOrDefaultAsync(x=>x.QuestionId==q.Id&&x.UserId==subject,ct);if(answer is null){answer=new(){QuestionId=q.Id,UserId=subject};db.EventQuestionAnswers.Add(answer);}answer.Value=answers[q.Id];answer.UpdatedAt=now;}
   }
   if(results.Any(x=>x.Success)){if(state is null){state=new(){EventId=id,UserId=subject};db.EventParticipantStates.Add(state);}state.RowVersion++;}
-  var result=new ParticipationResult(edit.RequestId,results.Count(x=>x.Success),results.ToArray());db.RegistrationOperations.Add(new(){Id=edit.RequestId,EventId=id,ActorId=actor.Id,SubjectId=subject,PhaseId=phase.Id,Kind=edit.Kind,Reason=reason,At=now,RequestHash=fingerprint,ResultJson=JsonSerializer.Serialize(result)});Audit(db,actor.Id,"Participation"+edit.Kind,edit.RequestId);
+
   if(edit.Kind is "Register" or "Release"&&results.Any(x=>x.Success)){
    var successful=results.Where(x=>x.Success).Select(x=>x.Id).ToArray();
    var snapshot=await(from p in db.SongParts join song in db.Songs on p.SongId equals song.Id join definition in db.EventPartDefinitions on p.PartDefinitionId equals definition.Id where p.EventId==id&&successful.Contains(p.Id) orderby song.SortOrder,song.Id,definition.SortOrder,p.Id select new BusinessSlot(p.Id,song.Id,song.Title,definition.Name)).ToArrayAsync(ct);
    if(snapshot.Length!=successful.Length)throw new InvalidOperationException("Business notification snapshot incomplete");
    businessNotifications.Enqueue(db,edit.RequestId,e,actor,subject,edit.Kind,reason,snapshot,clock.GetUtcNow());
   }
+  // Register comments remain independent of per-slot failures; spectator/answer comments require their success.
+  if(comment is not null&&(edit.Kind=="Register"||results.Any(x=>x.Success)&&edit.Kind is "Spectate" or "Answers")){
+   RequireCommentOpen(e,manager);AddComment(db,e,actor.Id,edit.RequestId,comment,manager);results.Add(new(edit.RequestId,true,"CommentCreated"));
+  }
+  var result=new ParticipationResult(edit.RequestId,results.Count(x=>x.Success),results.ToArray());db.RegistrationOperations.Add(new(){Id=edit.RequestId,EventId=id,ActorId=actor.Id,SubjectId=subject,PhaseId=phase.Id,Kind=edit.Kind,Reason=reason,At=now,RequestHash=fingerprint,ResultJson=JsonSerializer.Serialize(result)});Audit(db,actor.Id,"Participation"+edit.Kind,edit.RequestId);
   await db.SaveChangesAsync(ct);await tx.CommitAsync(ct);return result;
  }
 }

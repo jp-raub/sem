@@ -43,6 +43,12 @@ public static class CoreEndpoints
                     if(post){await service.SavePartStartPreferenceAsync(ctx.User,id,await ctx.Request.ReadFromJsonAsync<PartStartPreferenceEdit>()??throw new ValidationException("入力が必要です。"),ctx.RequestAborted);await ctx.Response.WriteAsJsonAsync(new{message="保存しました。"});}
                     else await ctx.Response.WriteAsJsonAsync(await service.ReadPartStartPreferencesAsync(ctx.User,id,ctx.RequestAborted));return;
                 }
+                if(action=="comments"){
+                    var id=ctx.Request.Query["id"].ToString();
+                    if(post)await ctx.Response.WriteAsJsonAsync(await service.PostCommentAsync(ctx.User,id,await ctx.Request.ReadFromJsonAsync<CommentEdit>()??throw new ValidationException("入力が必要です。"),ctx.RequestAborted));
+                    else {var at=ctx.Request.Query["beforeAt"].FirstOrDefault();var cursorId=ctx.Request.Query["beforeId"].FirstOrDefault();if((at is null)!=(cursorId is null))throw new ValidationException("一覧の続きを確認してください。");await ctx.Response.WriteAsJsonAsync(await service.ReadCommentsAsync(ctx.User,id,ctx.RequestAborted,at is null?null:new CommentCursor(at,cursorId!)));}return;
+                }
+                if(post&&action=="comment-delete"){await ctx.Response.WriteAsJsonAsync(await service.DeleteCommentAsync(ctx.User,ctx.Request.Query["id"].ToString(),await ctx.Request.ReadFromJsonAsync<CommentDeleteEdit>()??throw new ValidationException("入力が必要です。"),ctx.RequestAborted));return;}
                 if(action=="public-answers"){if(post){ctx.Response.StatusCode=405;return;}await ctx.Response.WriteAsJsonAsync(await service.ReadPublicAnswersAsync(ctx.User,ctx.Request.Query["id"].ToString(),ctx.RequestAborted));return;}
                 if(action=="notification-reservations"){if(post){ctx.Response.StatusCode=405;return;}await ctx.Response.WriteAsJsonAsync(await service.ReadNotificationReservationsAsync(ctx.User,ctx.Request.Query["id"].ToString(),ctx.RequestAborted));return;}
                 if(action=="notification-plan"){if(post){ctx.Response.StatusCode=405;return;}await ctx.Response.WriteAsJsonAsync(await service.ReadNotificationPlanAsync(ctx.User,ctx.Request.Query["id"].ToString(),ctx.RequestAborted));return;}

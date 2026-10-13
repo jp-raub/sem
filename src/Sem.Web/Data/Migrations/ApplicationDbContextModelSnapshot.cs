@@ -235,6 +235,49 @@ namespace Sem.Web.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Sem.Web.Core.CommentOperation", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ActorId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("At")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CommentId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EventId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RequestHash")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActorId");
+
+                    b.HasIndex("EventId");
+
+                    b.ToTable("CommentOperations", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_CommentOperation_Hash", "length(\"RequestHash\")=64");
+
+                            t.HasCheckConstraint("CK_CommentOperation_Kind", "\"Kind\" IN ('Post','Delete')");
+                        });
+                });
+
             modelBuilder.Entity("Sem.Web.Core.DailyDigestMail", b =>
                 {
                     b.Property<string>("Id")
@@ -324,6 +367,39 @@ namespace Sem.Web.Data.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("EventAdmins");
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.EventComment", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedAt")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EventId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("EventId", "CreatedAt", "Id");
+
+                    b.ToTable("EventComments", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_EventComments_Body", "length(trim(\"Body\"))>=3");
+                        });
                 });
 
             modelBuilder.Entity("Sem.Web.Core.EventPartDefinition", b =>
@@ -1998,6 +2074,21 @@ namespace Sem.Web.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Sem.Web.Core.CommentOperation", b =>
+                {
+                    b.HasOne("Sem.Web.Data.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("ActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Sem.Web.Core.SessionEvent", null)
+                        .WithMany()
+                        .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Sem.Web.Core.DailyDigestMail", b =>
                 {
                     b.HasOne("Sem.Web.Core.DailyDigestRun", null)
@@ -2019,6 +2110,21 @@ namespace Sem.Web.Data.Migrations
                         .WithMany("Admins")
                         .HasForeignKey("EventId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Sem.Web.Data.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.EventComment", b =>
+                {
+                    b.HasOne("Sem.Web.Core.SessionEvent", null)
+                        .WithMany()
+                        .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("Sem.Web.Data.ApplicationUser", null)
