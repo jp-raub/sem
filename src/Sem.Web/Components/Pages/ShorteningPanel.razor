@@ -1,0 +1,74 @@
+@using Sem.Web.Core
+@inject AuthenticationStateProvider Authentication
+@inject CoreFoundationService Core
+@if(Plan is not null){
+ <section id="shortening-panel" class="panel" data-event-version="@Plan.RowVersion" data-progress-version="@Plan.ProgressVersion">
+  <h3>巻き・バッファ短縮の最新提案</h3>
+  <p>承認するまで反映しません。演奏時間・当初計画・実績・開始済みパートは変更しません。</p>
+  <p id="shortening-error" role="alert">@Error</p><p id="shortening-message" role="status">@Message</p>
+  @if(Plan.Proposal.Target is DateTimeOffset target){<p>終了目標：@TimetableCalculator.Clock(target,"seconds")</p>}
+  <p id="shortening-summary">遅れ @Seconds(Plan.Proposal.DelaySeconds) ／ 吸収可能 @Seconds(Plan.Proposal.AbsorbedSeconds) ／ 残る遅れ @Seconds(Plan.Proposal.RemainingSeconds)</p>
+  @if(Plan.Proposal.HasCuts){
+   <div style="overflow-x:auto"><table id="shortening-cuts"><thead><tr><th>対象</th><th>時間</th><th>現在</th><th>短縮後</th><th>短縮量</th></tr></thead><tbody>
+   @foreach(var cut in Plan.Proposal.Cuts){<tr><td>@cut.Title</td><td>@(cut.Field=="PrepSeconds"?"準備":"進行")</td><td>@Seconds(cut.BeforeSeconds)</td><td>@Seconds(cut.AfterSeconds)</td><td>@Seconds(cut.CutSeconds)</td></tr>}
+   </tbody></table></div>
+  }else{<p id="shortening-empty">@(Plan.Proposal.DelaySeconds>0?"短縮できる未開始の許可枠がありません。":"短縮が必要な遅れはありません。")</p>}
+  <button id="shortening-approve" disabled="@(Locked||Editing||!Plan.EventDay||!Plan.Proposal.HasCuts)" @onclick="Approve">この提案を承認</button>
+  @if(!Plan.EventDay){<p>承認と当日条件の保存は、日本時間のイベント当日だけ可能です。</p>}
+  <details><summary>短縮可否・最短時間（@(Plan.Live?"当日条件":"事前条件")）</summary>
+   @foreach(var row in Plan.Policies){<p><strong>@row.Title</strong> ／ @(row.Kind=="Song"?"準備":"進行") @Seconds(row.CurrentSeconds) ／ @(row.Policy.AllowPrep||row.Policy.AllowDuration?"短縮可能":"時間確保")
+    <button data-shortening-edit="@row.Policy.PartId" disabled="@(Locked||Editing||!row.CanEdit)" @onclick="()=>Open(row)">条件を編集</button></p>}
+  </details>
+  @if(Editing&&Selected is not null){<section role="dialog" aria-modal="true" aria-label="短縮条件" class="panel">
+   <h4>短縮条件：@Selected.Title</h4>
+   <label><input id="shortening-allow" type="checkbox" @bind="Allowed" />@(Selected.Kind=="Song"?"準備":"進行")を短縮可能にする</label>
+   <label>最短時間（m:ss / h:mm:ss）<input id="shortening-minimum" @bind="Minimum" disabled="@(!Allowed)" /></label>
+   <p>未チェックは時間確保。演奏時間は短縮不可。保存先：@(Plan.Live?"当日条件（元の条件は保持）":"事前条件")</p>
+   <button id="shortening-policy-save" disabled="@Locked" @onclick="Save">条件を保存</button>
+   <button id="shortening-policy-cancel" disabled="@Busy" @onclick="Cancel">取消</button>
+  </section>}
+ </section>
+}else if(Error.Length>0){<p role="alert">@Error</p>}
+@code{
+ [Parameter]public string EventId{get;set;}="";
+ [Parameter]public long EventVersion{get;set;}
+ [Parameter]public long ProgressVersion{get;set;}
+ [Parameter]public bool ExternalBusy{get;set;}
+ [Parameter]public bool ExternalEditing{get;set;}
+ [Parameter]public EventCallback<bool> ActiveChanged{get;set;}
+ [Parameter]public EventCallback Saved{get;set;}
+ ShorteningPlan?Plan;ShorteningPolicyView?Selected;bool Busy,Editing,Allowed;string Minimum="",Error="",Message="",LoadedEvent="";long LoadedEventVersion=-1,LoadedProgressVersion=-1;
+ bool Locked=>Busy||ExternalBusy||ExternalEditing;
+ static string Seconds(long n)=>$"{n/60}:{n%60:00}";
+ protected override async Task OnParametersSetAsync(){
+  if(!Busy&&!Editing&&!ExternalBusy&&!ExternalEditing&&(LoadedEvent!=EventId||LoadedEventVersion!=EventVersion||LoadedProgressVersion!=ProgressVersion)){
+   LoadedEvent=EventId;LoadedEventVersion=EventVersion;LoadedProgressVersion=ProgressVersion;await Load();
+  }
+ }
+ async Task Load(){try{Plan=await Core.ReadShorteningAsync((await Authentication.GetAuthenticationStateAsync()).User,EventId);Error="";}catch{Plan=null;Selected=null;Editing=false;await ActiveChanged.InvokeAsync(false);Error="短縮提案の取得に失敗しました。ログイン状態と管理権限を確認してください。";}}
+ async Task Open(ShorteningPolicyView row){if(Locked||Editing||!row.CanEdit)return;Selected=row;Allowed=row.Kind=="Song"?row.Policy.AllowPrep:row.Policy.AllowDuration;Minimum=Seconds(row.Kind=="Song"?row.Policy.MinPrepSeconds:row.Policy.MinDurationSeconds);Editing=true;Error="";await ActiveChanged.InvokeAsync(true);}
+ async Task Cancel(){if(Busy)return;Editing=false;Selected=null;Error="";Message="条件の下書きを取り消しました。";await ActiveChanged.InvokeAsync(false);}
+ async Task Save(){
+  if(Locked||!Editing||Selected is null||Plan is null)return;
+  var minimum=0;if(Allowed&&!SongDuration.TryParse(Minimum,out minimum)){Error="最短時間を0以上のm:ss / h:mm:ssで指定してください。";return;}
+  Busy=true;Error="";await ActiveChanged.InvokeAsync(true);
+  try{var song=Selected.Kind=="Song";await Core.SaveShorteningPolicyAsync((await Authentication.GetAuthenticationStateAsync()).User,EventId,
+   new(Guid.NewGuid().ToString(),Plan.RowVersion,Plan.ProgressVersion,Selected.Policy.PartId,song&&Allowed,song?minimum:0,!song&&Allowed,song?0:minimum));
+   Editing=false;Selected=null;Message="短縮条件を保存しました。";await Load();LoadedEventVersion=Plan?.RowVersion??EventVersion;LoadedProgressVersion=Plan?.ProgressVersion??ProgressVersion;await Saved.InvokeAsync();}
+  catch(Exception e)when(e is CoreConflictException or System.ComponentModel.DataAnnotations.ValidationException){Error=e.Message;}
+  catch(UnauthorizedAccessException){Plan=null;Selected=null;Editing=false;Error="再ログインと管理権限を確認してください。";}
+  catch{Error="結果を確認できませんでした。再送前に条件の保存／取消と最新状態の確認を行ってください。";}
+  finally{Busy=false;await ActiveChanged.InvokeAsync(Editing);}
+ }
+ async Task Approve(){
+  if(Locked||Editing||Plan is null||!Plan.EventDay||!Plan.Proposal.HasCuts)return;
+  Busy=true;Error="";await ActiveChanged.InvokeAsync(true);
+  try{await Core.ApproveShorteningAsync((await Authentication.GetAuthenticationStateAsync()).User,EventId,
+   new(Guid.NewGuid().ToString(),Plan.RowVersion,Plan.ProgressVersion,Plan.Proposal.Token));Message="表示していた短縮提案を承認しました。";await Load();LoadedEventVersion=Plan?.RowVersion??EventVersion;LoadedProgressVersion=Plan?.ProgressVersion??ProgressVersion;await Saved.InvokeAsync();}
+  catch(CoreConflictException){await Load();Error="提案が更新されています。最新の内容を確認してから、改めて承認してください。";LoadedEventVersion=Plan?.RowVersion??EventVersion;LoadedProgressVersion=Plan?.ProgressVersion??ProgressVersion;await Saved.InvokeAsync();}
+  catch(System.ComponentModel.DataAnnotations.ValidationException e){Error=e.Message;}
+  catch(UnauthorizedAccessException){Plan=null;Error="再ログインと管理権限を確認してください。";}
+  catch{Error="結果を確認できませんでした。再送前に最新状態を確認してください。";}
+  finally{Busy=false;await ActiveChanged.InvokeAsync(false);}
+ }
+}

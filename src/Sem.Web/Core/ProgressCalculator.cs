@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 namespace Sem.Web.Core;
-public sealed record ProgressBaseline(string ScheduledDate,bool RoundStarts,int DefaultPrepSeconds,string ClockFormat,string? PlannedEndAt,TimedPart[] Rows,Dictionary<string,int?> PrepInputs);
+public sealed record ProgressBaseline(string ScheduledDate,bool RoundStarts,int DefaultPrepSeconds,string ClockFormat,string? PlannedEndAt,TimedPart[] Rows,Dictionary<string,int?> PrepInputs,ShorteningPolicy[]? PlannedPolicies=null);
 public sealed record ProgressNext(string PartId,string Point,string Label);
 public sealed record ProgressPoint(string Point,DateTimeOffset Original,DateTimeOffset Latest,DateTimeOffset? Actual);
 public sealed record ProgressRow(TimedPart Original,TimedPart Latest,ProgressPoint[] Points,string State,int? PrepInput);

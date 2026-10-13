@@ -65,19 +65,21 @@ public static class ShorteningCalculator {
             var row = rows.Single(r => r.Original.Id == policy.PartId);
             if (policy.AllowPrep && row.Original.Kind != "Song" ||
                 policy.AllowDuration && row.Original.Kind != "Transition" ||
-                policy.AllowPrep && policy.MinPrepSeconds > row.Latest.ConfiguredPrepSeconds ||
-                policy.AllowDuration && policy.MinDurationSeconds > row.Latest.LengthSeconds)
+                !row.Points.Any(p => p.Actual is not null) && (
+                    policy.AllowPrep && policy.MinPrepSeconds > row.Latest.ConfiguredPrepSeconds ||
+                    policy.AllowDuration && policy.MinDurationSeconds > row.Latest.LengthSeconds))
                 throw new ValidationException("短縮対象と最短時間を確認してください。演奏は短縮不可です。");
         }
 
         // Canonical input fingerprint, scoped to event and BOTH versions. It is not authorization.
         // Approval must recalculate this inside its authorized write transaction, never trust cuts.
         var canonical = JsonSerializer.Serialize(new {
-            Algorithm = "shortening-v1", EventId = eventId, EventVersion = eventVersion,
+            Algorithm = "shortening-v2", EventId = eventId, EventVersion = eventVersion,
             ProgressVersion = progressVersion,
             Baseline = new {
                 baseline.ScheduledDate, baseline.RoundStarts, baseline.DefaultPrepSeconds,
                 baseline.ClockFormat, baseline.PlannedEndAt, baseline.Rows,
+                PlannedPolicies = (baseline.PlannedPolicies ?? []).OrderBy(p => p.PartId, StringComparer.Ordinal).ToArray(),
                 PrepInputs = baseline.PrepInputs.OrderBy(p => p.Key, StringComparer.Ordinal)
                     .Select(p => new { p.Key, p.Value }).ToArray()
             },
