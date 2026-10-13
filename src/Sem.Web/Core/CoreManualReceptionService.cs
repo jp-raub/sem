@@ -25,6 +25,7 @@ public sealed partial class CoreFoundationService {
   var rows=await(from r in db.EventReceptions.AsNoTracking() join a in db.Users on r.ActorId equals a.Id join c in db.Users on r.CancelledBy equals c.Id into cancelled from c in cancelled.DefaultIfEmpty() where r.EventId==id&&r.UserId==userId orderby r.At descending,r.Id descending select new ReceptionHistory(r.Id,r.At,r.ActorId,a.DisplayName,r.Method,r.Note,r.CancelledAt,r.CancelledBy,c==null?null:c.DisplayName,r.ReadId)).Take(101).ToArrayAsync(ct);
   // Active receipt is fetched independently; it must not disappear behind a bounded history.
   var active=await(from r in db.EventReceptions.AsNoTracking() join a in db.Users on r.ActorId equals a.Id where r.EventId==id&&r.UserId==userId&&r.CancelledAt==null select new ReceptionHistory(r.Id,r.At,r.ActorId,a.DisplayName,r.Method,r.Note,null,null,null,r.ReadId)).SingleOrDefaultAsync(ct);
+  person=person with{Current=active is null?null:new ReceptionStatus(active.At,active.ActorName,active.Method)};
   var pv=await db.EventParticipantStates.Where(x=>x.EventId==id&&x.UserId==userId).Select(x=>x.RowVersion).SingleOrDefaultAsync(ct);var rv=await db.EventReceptionStates.Where(x=>x.EventId==id&&x.UserId==userId).Select(x=>x.RowVersion).SingleOrDefaultAsync(ct);
   await tx.CommitAsync(ct);return new(id,e.Title,e.RowVersion,person,pv,rv,active,rows.Take(100).ToArray(),rows.Length>100);
  }
