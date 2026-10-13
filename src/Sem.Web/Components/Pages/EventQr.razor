@@ -4,12 +4,12 @@
 @inject AuthenticationStateProvider Authentication
 @inject CoreFoundationService Core
 <PageTitle>自分のイベント受付QR</PageTitle>
-<h1>自分のイベント受付QR</h1><p><a href="/workspace">業務基盤へ戻る</a></p>
+<h1>自分のイベント受付QR：@View?.Title</h1><p><a href="/workspace">業務基盤へ戻る</a></p>
 <p>現在このイベントに参加登録している本人の受付用です。匿名プロフィールQRとは別です。QRを読んだだけで受付完了にはなりません。コードやコード付きリンクを公開・チャット共有しないでください。</p>
 <p>この版はQR画像の表示・発行／再発行までです。カメラ・読取画面・QRに連動する受付確定はまだ未実装です。</p>
 <p id="event-qr-error" role="alert">@Error</p><p id="event-qr-message" role="status">@Message</p>
 <button id="event-qr-refresh" disabled="@(Busy||Pending is not null)" @onclick="Load">最新の受付QRを取得</button>
-@if(View is not null){<section id="event-qr-view">
+@if(View is not null){<section id="event-qr-view"><p>対象者：@View.DisplayName</p>
  @if(View.Token is null){<p>受付QRはまだ発行していません。</p><button id="event-qr-issue" disabled="@(Busy||Pending is not null)" @onclick="()=>Issue(false)">自分の受付QRを発行</button>}
  else{<p id="event-qr-version">コード版：@View.TokenVersion</p>@if(Pending is null){<img id="event-qr-image" src="@ImageSource" alt="このイベントで本人の受付に使用するQRコード" style="display:block;width:min(100%,320px);height:auto;background:white;padding:12px" />}
  <p>再発行すると旧QRは直ちに無効になります。読み取った担当管理者が本人・申込状況と必要な受付対応を確認してから受付を確定します。</p>
