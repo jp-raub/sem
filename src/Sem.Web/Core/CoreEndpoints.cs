@@ -24,6 +24,7 @@ public static class CoreEndpoints
                     if (size is { IsReadOnly: false }) size.MaxRequestBodySize = 65536;
                     await csrf.ValidateRequestAsync(ctx);
                 }
+                if (!post && action == "digest-preview") { await ctx.Response.WriteAsJsonAsync(await service.ReadDigestPreviewAsync(ctx.User, ctx.Request.Query.ContainsKey("day") ? ctx.Request.Query["day"].ToString() : null, ctx.RequestAborted)); return; }
                 if (!post && action == "workspace") { await ctx.Response.WriteAsJsonAsync(await service.ReadAsync(ctx.User, ctx.RequestAborted)); return; }
                 if (!post && action == "profile") { await ctx.Response.WriteAsJsonAsync(await service.ReadProfileAsync(ctx.User, ctx.Request.Query["id"].ToString(), ctx.RequestAborted)); return; }
                 if (action == "participation") {
