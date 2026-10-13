@@ -550,7 +550,7 @@ namespace Sem.Web.Data.Migrations
 
                             t.HasCheckConstraint("CK_EventPushDelivery_Claim", "(\"Status\"='Sending' AND \"Claim\" IS NOT NULL AND \"LeaseUntil\" IS NOT NULL) OR (\"Status\"<>'Sending' AND \"Claim\" IS NULL AND \"LeaseUntil\" IS NULL)");
 
-                            t.HasCheckConstraint("CK_EventPushDelivery_Kind", "\"Kind\" IN ('OpeningReminder','SongPreparation')");
+                            t.HasCheckConstraint("CK_EventPushDelivery_Kind", "\"Kind\" IN ('OpeningReminder','SongPreparation','PartStart')");
 
                             t.HasCheckConstraint("CK_EventPushDelivery_Status", "\"Status\" IN ('Pending','Sending','Accepted','Cancelled','Failed')");
 
@@ -878,6 +878,12 @@ namespace Sem.Web.Data.Migrations
 
                     b.Property<string>("PartId")
                         .HasColumnType("TEXT");
+
+                    b.Property<long?>("ArmedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("ArmedProgressVersion")
+                        .HasColumnType("INTEGER");
 
                     b.Property<long>("ChangedAt")
                         .HasColumnType("INTEGER");

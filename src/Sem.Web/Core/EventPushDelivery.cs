@@ -46,7 +46,7 @@ public sealed partial class CoreFoundationService {
 public sealed class EventPushScheduler(IDbContextFactory<ApplicationDbContext> factory,TimeProvider clock){
  public static string Id(string eventId,string entryId,string userId,string deviceId)=>SemEndpoints.Hash(JsonSerializer.Serialize(new[]{"event-push",eventId,entryId,userId,deviceId}));
  public async Task<(string Cursor,int Failed)> Batch(string cursor,CancellationToken ct=default){
-  await using var db=await factory.CreateDbContextAsync(ct);var ids=await db.Set<EventPushRule>().Where(x=>x.Enabled&&x.EventId.CompareTo(cursor)>0).Select(x=>x.EventId).Distinct().OrderBy(x=>x).Take(20).ToArrayAsync(ct);if(ids.Length==0)return("",0);int failed=0;
+  await using var db=await factory.CreateDbContextAsync(ct);var ids=await db.Set<EventPushRule>().Where(x=>x.Enabled&&x.EventId.CompareTo(cursor)>0).Select(x=>x.EventId).Concat(db.Set<PartStartPreference>().Where(x=>x.Enabled&&x.EventId.CompareTo(cursor)>0).Select(x=>x.EventId)).Distinct().OrderBy(x=>x).Take(20).ToArrayAsync(ct);if(ids.Length==0)return("",0);int failed=0;
   foreach(var id in ids)try{await Generate(id,ct);}catch(OperationCanceledException)when(ct.IsCancellationRequested){throw;}catch{failed++;}
   return(ids[^1],failed);
  }
@@ -64,6 +64,17 @@ public sealed class EventPushScheduler(IDbContextFactory<ApplicationDbContext> f
      if(item is not null&&(item.Status is "Accepted" or "Sending"||item.SourceFingerprint==source.Plan.Fingerprint&&item.RuleVersion==rule!.Version&&item.DeviceFingerprint==fingerprint))continue;
      if(item is null){item=new(){Id=key,EventId=id,EntryId=entry.Id,Kind=entry.Kind,UserId=user.Id,DeviceId=device.Id};db.Add(item);}
      item.Status="Pending";item.Attempts=0;item.Claim=null;item.LeaseUntil=null;item.Error=null;item.SourceFingerprint=source.Plan.Fingerprint;item.DeviceFingerprint=fingerprint;item.RuleVersion=rule!.Version;item.Due=eligible.DueAt!.Value.ToUnixTimeMilliseconds();item.Expires=eligible.ExpiresAt!.Value.ToUnixTimeMilliseconds();
+    }
+   }
+  }
+  var personal=await db.Set<PartStartPreference>().AsNoTracking().Where(x=>x.EventId==id&&x.Enabled).ToArrayAsync(ct);
+  if(personal.Length>0){var actual=await CoreFoundationService.BuildPartStartSource(db,e,now,ct);
+   foreach(var preference in personal){var candidate=actual.Candidates.SingleOrDefault(x=>x.PartId==preference.PartId);if(PartStartDeliveryPolicy.Evaluate(candidate,preference,actual.ProgressVersion,now)!="Eligible")continue;
+    var user=await db.Users.AsNoTracking().SingleOrDefaultAsync(x=>x.Id==preference.UserId,ct);if(user is null||!CoreFoundationService.PushViewAllowed(e,user,now))continue;
+    foreach(var device in await db.PushDevices.AsNoTracking().Where(x=>x.UserId==user.Id).ToArrayAsync(ct)){if(!await PushBinding.Valid(db,user,device,ct))continue;var entry=PartStartDeliveryPolicy.Entry(preference.PartId);var key=Id(id,entry,user.Id,device.Id);var fingerprint=PushBinding.Fingerprint(device);var item=await db.Set<EventPushDelivery>().SingleOrDefaultAsync(x=>x.Id==key,ct);
+     if(item is not null&&(item.Status is "Accepted" or "Sending"||item.SourceFingerprint==candidate!.Fingerprint&&item.RuleVersion==preference.Version&&item.DeviceFingerprint==fingerprint))continue;
+     if(item is null){item=new(){Id=key,EventId=id,EntryId=entry,Kind="PartStart",UserId=user.Id,DeviceId=device.Id};db.Add(item);}
+     item.Status="Pending";item.Attempts=0;item.Claim=null;item.LeaseUntil=null;item.Error=null;item.SourceFingerprint=candidate!.Fingerprint;item.DeviceFingerprint=fingerprint;item.RuleVersion=preference.Version;item.Due=candidate.Started!.Value.ToUnixTimeMilliseconds();item.Expires=candidate.Expires!.Value.ToUnixTimeMilliseconds();
     }
    }
   }
@@ -97,6 +108,12 @@ public sealed class EventPushDispatcher(IDbContextFactory<ApplicationDbContext> 
   await using var db=await factory.CreateDbContextAsync(ct);await using var tx=await db.Database.BeginTransactionAsync(ct);var now=clock.GetUtcNow();
   var e=await db.SessionEvents.AsNoTracking().Include(x=>x.Admins).Include(x=>x.Phases).SingleOrDefaultAsync(x=>x.Id==item.EventId,ct);var user=await db.Users.AsNoTracking().SingleOrDefaultAsync(x=>x.Id==item.UserId,ct);var device=await db.PushDevices.AsNoTracking().SingleOrDefaultAsync(x=>x.Id==item.DeviceId,ct);
   if(e is null||user is null||device is null||!CoreFoundationService.PushViewAllowed(e,user,now)||!await PushBinding.Valid(db,user,device,ct)||PushBinding.Fingerprint(device)!=item.DeviceFingerprint)return null;
+  if(item.Kind=="PartStart"){
+   if(!item.EntryId.StartsWith("part-start:",StringComparison.Ordinal))return null;var partId=item.EntryId["part-start:".Length..];var preference=await db.Set<PartStartPreference>().AsNoTracking().SingleOrDefaultAsync(x=>x.EventId==e.Id&&x.UserId==user.Id&&x.PartId==partId,ct);
+   if(preference is null||preference.Version!=item.RuleVersion)return null;var actual=await CoreFoundationService.BuildPartStartSource(db,e,now,ct);var candidate=actual.Candidates.SingleOrDefault(x=>x.PartId==partId);
+   if(PartStartDeliveryPolicy.Evaluate(candidate,preference,actual.ProgressVersion,now)!="Eligible"||candidate!.Fingerprint!=item.SourceFingerprint)return null;
+   var personalExpires=candidate.Expires!.Value.ToUnixTimeMilliseconds();var personalBody="実開始日時："+candidate.Started!.Value.ToOffset(TimeSpan.FromHours(9)).ToString("yyyy/MM/dd HH:mm:ss zzz")+"。最新の情報はアプリで確認してください。";var personalTag=SemEndpoints.Hash(JsonSerializer.Serialize(new[]{"event-push-user",e.Id,item.EntryId,user.Id}));await tx.CommitAsync(ct);return(device,new("パート開始のお知らせ",personalBody,"/events/"+Uri.EscapeDataString(e.Id)+"/timetable",personalTag,personalExpires),personalExpires);
+  }
   var rule=await db.Set<EventPushRule>().AsNoTracking().SingleOrDefaultAsync(x=>x.EventId==e.Id&&x.Kind==item.Kind,ct);if(rule is null||!rule.Enabled||rule.Version!=item.RuleVersion)return null;
   var source=await CoreFoundationService.BuildNotificationSource(db,e,now,ct);if(source.Plan.Fingerprint!=item.SourceFingerprint)return null;var entry=source.Plan.Entries.SingleOrDefault(x=>x.Id==item.EntryId);if(entry is null||entry.Kind!=item.Kind)return null;
   var gate=EventPushRulePolicy.Evaluate(entry,rule,source.Plan.ProgressVersion,source.Rows,now);if(gate.State!="Eligible"||! (await CoreFoundationService.PushRecipients(db,e,entry,source.Rows,ct)).Contains(user.Id))return null;

@@ -53,7 +53,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         b.Entity<EventPushDelivery>().HasIndex(x=>new{x.Status,x.Due});
         b.Entity<EventPushDelivery>().ToTable("EventPushDeliveries",t=>{
             t.HasCheckConstraint("CK_EventPushDelivery_Status","\"Status\" IN ('Pending','Sending','Accepted','Cancelled','Failed')");
-            t.HasCheckConstraint("CK_EventPushDelivery_Kind","\"Kind\" IN ('OpeningReminder','SongPreparation')");
+            t.HasCheckConstraint("CK_EventPushDelivery_Kind","\"Kind\" IN ('OpeningReminder','SongPreparation','PartStart')");
             t.HasCheckConstraint("CK_EventPushDelivery_Version","\"RuleVersion\">0 AND \"Attempts\" BETWEEN 0 AND 5");
             t.HasCheckConstraint("CK_EventPushDelivery_Claim","(\"Status\"='Sending' AND \"Claim\" IS NOT NULL AND \"LeaseUntil\" IS NOT NULL) OR (\"Status\"<>'Sending' AND \"Claim\" IS NULL AND \"LeaseUntil\" IS NULL)");
             t.HasCheckConstraint("CK_EventPushDelivery_Accepted","(\"Status\"='Accepted' AND \"AcceptedAt\" IS NOT NULL) OR (\"Status\"<>'Accepted' AND \"AcceptedAt\" IS NULL)");

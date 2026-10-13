@@ -6,7 +6,7 @@ English reference; [Japanese translation](PART-START-PREFERENCES.ja.md).
 
 A signed-in user can opt in independently to **any currently viewable time part**, not only songs they perform: song, transition and the derived opening row. The personal setting is initially OFF and is independent of the automatic opening/song-preparation recipient groups. The timetable links to `/events/{EventId}/part-start-preferences`; each choice is an accessible `role=switch` with `aria-checked` and immediate save. The setting belongs to the authenticated actor; even a global manager only edits their own choices here.
 
-**Delivery is not connected in this increment.** `DeliveryConnected=false` and the UI explicitly states that ON does not send yet. Settings do not request or override browser permission, create subscriptions/messages, or call SMTP/Push. Future start notifications are intended to follow the recorded actual `Start`, not the forecast timetable time, and must not be confused with preparation reminders. Source restarts/past starts must not cause implicit historical sends.
+**Actual Start delivery is now connected** by the later [personal delivery increment](PART-START-DELIVERY.md). `DeliveryConnected=true`; missing host VAPID configuration is separately reported. Saving settings alone still does not request/override browser permission, create subscriptions or send a notification. Delivery follows newly recorded actual Start, never forecast/preparation or an implicit historical replay.
 
 ## Persistence and safety
 

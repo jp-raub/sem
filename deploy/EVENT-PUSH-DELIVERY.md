@@ -2,7 +2,7 @@
 
 ## Scope and activation
 
-Opening and song-preparation reminders are connected to the real Web Push transport. Manager rules still default OFF. Existing personal arbitrary-part Start preferences are NOT connected by this change. Their expiry policy remains undecided; do not interpret the personal switch as a delivery promise.
+Opening and song-preparation reminders are connected to the real Web Push transport. Manager rules still default OFF. Personal arbitrary-part Start delivery is a separate user-owned opt-in, not a manager automatic rule. See [personal actual Start delivery](PART-START-DELIVERY.md) for its approved expiry and connection.
 
 Both VAPID keys must be configured. The UI separately reports missing keys. No worker claims or sends jobs when transport configuration is absent. Keep the same hostname, VAPID keys, Data Protection keys and current `.env`; this change does not deploy or alter a live DXP environment.
 
