@@ -47,6 +47,14 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     protected override void OnModelCreating(ModelBuilder b)
     {
         base.OnModelCreating(b);
+        b.Entity<EventPushRule>().HasKey(x=>new{x.EventId,x.Kind});
+        b.Entity<EventPushRule>().Property(x=>x.Version).IsConcurrencyToken();
+        b.Entity<EventPushRule>().HasOne<SessionEvent>().WithMany().HasForeignKey(x=>x.EventId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<EventPushRule>().ToTable("EventPushRules",t=>{
+            t.HasCheckConstraint("CK_EventPushRule_Kind","\"Kind\" IN ('OpeningReminder','SongPreparation')");
+            t.HasCheckConstraint("CK_EventPushRule_Version","\"Version\">0");
+            t.HasCheckConstraint("CK_EventPushRule_Arming","(\"Enabled\"=1 AND \"ArmedAt\" IS NOT NULL AND \"ArmedProgressVersion\" IS NOT NULL AND \"ArmedProgressVersion\">=0) OR (\"Enabled\"=0 AND \"ArmedAt\" IS NULL AND \"ArmedProgressVersion\" IS NULL)");
+        });
         b.Entity<PartStartPreference>().HasKey(x=>new{x.EventId,x.UserId,x.PartId});
         b.Entity<PartStartPreference>().Property(x=>x.Version).IsConcurrencyToken();
         b.Entity<PartStartPreference>().HasOne<SessionEvent>().WithMany().HasForeignKey(x=>x.EventId).OnDelete(DeleteBehavior.Restrict);
