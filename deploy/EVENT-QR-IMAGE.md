@@ -21,3 +21,6 @@ Five dedicated renderer/payload checks and independent jsQR1.4.0/pngjs7.0.0 PNG 
 No new DB migration is needed. Existing protected tokens, read ledger, manual receipt history, registration/identity/notifications and origin/CSRF/session/rate guards are preserved. Source package versions are explicit; no remote CDN or third-party image endpoint is added. Remaining: real camera/paste/direct-link management surface, current-code recheck/read-linked QR receipt, full receipt/read history/roster UI and recovery/edit-mode integration. No DXP deployment, new bundle or merge.
 
 The page also identifies the current event and registered owner with encoded text to avoid wrong-event/account confusion.
+
+
+The next API increment is documented in [QR-RECEPTION.md](QR-RECEPTION.md). It adds confirmed read-linked receipts; camera/reader and QR confirmation UI remain separate unfinished work.

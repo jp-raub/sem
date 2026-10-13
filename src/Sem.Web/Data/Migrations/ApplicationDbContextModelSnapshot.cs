@@ -887,6 +887,9 @@ namespace Sem.Web.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("ReadId")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("UserId")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -903,13 +906,15 @@ namespace Sem.Web.Data.Migrations
                         .IsUnique()
                         .HasFilter("\"CancelledAt\" IS NULL");
 
+                    b.HasIndex("EventId", "UserId", "ReadId");
+
                     b.HasIndex("EventId", "UserId", "At", "Id");
 
                     b.ToTable("EventReceptions", null, t =>
                         {
                             t.HasCheckConstraint("CK_Reception_Cancel", "(\"CancelledAt\" IS NULL AND \"CancelledBy\" IS NULL) OR (\"CancelledAt\" IS NOT NULL AND \"CancelledBy\" IS NOT NULL)");
 
-                            t.HasCheckConstraint("CK_Reception_Method", "\"Method\"='Manual'");
+                            t.HasCheckConstraint("CK_Reception_Method", "(\"Method\"='Manual' AND \"ReadId\" IS NULL) OR (\"Method\"='QR' AND \"ReadId\" IS NOT NULL)");
 
                             t.HasCheckConstraint("CK_Reception_Note", "length(\"Note\")<=500");
                         });
@@ -2537,6 +2542,12 @@ namespace Sem.Web.Data.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("Sem.Web.Core.EventQrRead", null)
+                        .WithMany()
+                        .HasForeignKey("EventId", "UserId", "ReadId")
+                        .HasPrincipalKey("EventId", "UserId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("Sem.Web.Core.EventReceptionState", b =>

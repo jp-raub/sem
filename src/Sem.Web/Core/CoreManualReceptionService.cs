@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Sem.Web.Data;
 using Sem.Web.Runtime;
 namespace Sem.Web.Core;
-public sealed record ReceptionHistory(string Id,string At,string ActorId,string ActorName,string Method,string Note,string? CancelledAt,string? CancelledBy,string? CancelledByName);
+public sealed record ReceptionHistory(string Id,string At,string ActorId,string ActorName,string Method,string Note,string? CancelledAt,string? CancelledBy,string? CancelledByName,string? ReadId=null);
 public sealed record ReceptionTarget(string EventId,string Title,long EventVersion,ReceptionPerson Person,long ParticipantVersion,long ReceptionVersion,ReceptionHistory? Current,ReceptionHistory[] History,bool MoreHistory);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record ManualReceptionEdit(string RequestId,string UserId,long EventVersion,long ParticipantVersion,long ReceptionVersion,bool ReceptionDone,string Note);
@@ -22,9 +22,9 @@ public sealed partial class CoreFoundationService {
   var user=await db.Users.AsNoTracking().SingleAsync(x=>x.Id==userId,ct);var reading=await db.UserProfiles.Where(x=>x.UserId==userId).Select(x=>x.Reading).SingleOrDefaultAsync(ct)??"";
   var songs=await(from p in db.SongParts join s in db.Songs on p.SongId equals s.Id where p.EventId==id&&p.AssignedUserId==userId orderby s.SortOrder,s.Id select s.Title).Distinct().ToArrayAsync(ct);
   var person=new ReceptionPerson(userId,user.DisplayName,reading,await db.EventSpectators.AnyAsync(x=>x.EventId==id&&x.UserId==userId,ct),songs);
-  var rows=await(from r in db.EventReceptions.AsNoTracking() join a in db.Users on r.ActorId equals a.Id join c in db.Users on r.CancelledBy equals c.Id into cancelled from c in cancelled.DefaultIfEmpty() where r.EventId==id&&r.UserId==userId orderby r.At descending,r.Id descending select new ReceptionHistory(r.Id,r.At,r.ActorId,a.DisplayName,r.Method,r.Note,r.CancelledAt,r.CancelledBy,c==null?null:c.DisplayName)).Take(101).ToArrayAsync(ct);
+  var rows=await(from r in db.EventReceptions.AsNoTracking() join a in db.Users on r.ActorId equals a.Id join c in db.Users on r.CancelledBy equals c.Id into cancelled from c in cancelled.DefaultIfEmpty() where r.EventId==id&&r.UserId==userId orderby r.At descending,r.Id descending select new ReceptionHistory(r.Id,r.At,r.ActorId,a.DisplayName,r.Method,r.Note,r.CancelledAt,r.CancelledBy,c==null?null:c.DisplayName,r.ReadId)).Take(101).ToArrayAsync(ct);
   // Active receipt is fetched independently; it must not disappear behind a bounded history.
-  var active=await(from r in db.EventReceptions.AsNoTracking() join a in db.Users on r.ActorId equals a.Id where r.EventId==id&&r.UserId==userId&&r.CancelledAt==null select new ReceptionHistory(r.Id,r.At,r.ActorId,a.DisplayName,r.Method,r.Note,null,null,null)).SingleOrDefaultAsync(ct);
+  var active=await(from r in db.EventReceptions.AsNoTracking() join a in db.Users on r.ActorId equals a.Id where r.EventId==id&&r.UserId==userId&&r.CancelledAt==null select new ReceptionHistory(r.Id,r.At,r.ActorId,a.DisplayName,r.Method,r.Note,null,null,null,r.ReadId)).SingleOrDefaultAsync(ct);
   var pv=await db.EventParticipantStates.Where(x=>x.EventId==id&&x.UserId==userId).Select(x=>x.RowVersion).SingleOrDefaultAsync(ct);var rv=await db.EventReceptionStates.Where(x=>x.EventId==id&&x.UserId==userId).Select(x=>x.RowVersion).SingleOrDefaultAsync(ct);
   await tx.CommitAsync(ct);return new(id,e.Title,e.RowVersion,person,pv,rv,active,rows.Take(100).ToArray(),rows.Length>100);
  }
