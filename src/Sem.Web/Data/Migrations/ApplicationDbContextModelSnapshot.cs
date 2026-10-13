@@ -576,6 +576,12 @@ namespace Sem.Web.Data.Migrations
                     b.Property<int?>("Capacity")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("ClockFormat")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("seconds");
+
                     b.Property<string>("CreatedAt")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -588,6 +594,12 @@ namespace Sem.Web.Data.Migrations
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasColumnType("TEXT");
+
+                    b.Property<string>("DurationFormat")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("units");
 
                     b.Property<string>("Location")
                         .IsRequired()
@@ -603,6 +615,14 @@ namespace Sem.Web.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("PlannedEndAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("RoundStarts")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(true);
+
                     b.Property<long>("RowVersion")
                         .IsConcurrencyToken()
                         .HasColumnType("INTEGER");
@@ -610,6 +630,12 @@ namespace Sem.Web.Data.Migrations
                     b.Property<string>("ScheduledDate")
                         .IsRequired()
                         .HasColumnType("TEXT");
+
+                    b.Property<string>("SongIcon")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("🎵");
 
                     b.Property<string>("Title")
                         .IsRequired()
@@ -624,6 +650,8 @@ namespace Sem.Web.Data.Migrations
                             t.HasCheckConstraint("CK_SessionEvents_DefaultPrep", "\"DefaultPrepSeconds\" >= 0");
 
                             t.HasCheckConstraint("CK_SessionEvents_PhaseKind", "\"PhaseKind\" IN ('Hidden','View')");
+
+                            t.HasCheckConstraint("CK_SessionEvents_TimeDisplay", "\"RoundStarts\" IN (0,1) AND \"ClockFormat\" IN ('seconds','minutes') AND \"DurationFormat\" IN ('units','colon') AND \"SongIcon\" IN ('🎵','💿','🎤')");
                         });
                 });
 
@@ -712,6 +740,56 @@ namespace Sem.Web.Data.Migrations
                             t.HasCheckConstraint("CK_SongParts_Assignment", "(\"AssignedUserId\" IS NULL AND \"PhaseId\" IS NULL) OR (\"AssignedUserId\" IS NOT NULL AND \"PhaseId\" IS NOT NULL)");
 
                             t.HasCheckConstraint("CK_SongParts_Version", "\"RowVersion\" >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.TimePart", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DeletedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("DurationSeconds")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("EventId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Icon")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SongId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SongId")
+                        .IsUnique()
+                        .HasFilter("\"SongId\" IS NOT NULL");
+
+                    b.HasIndex("EventId", "SongId");
+
+                    b.HasIndex("EventId", "SortOrder");
+
+                    b.ToTable("TimeParts", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_TimeParts_Icon", "\"Icon\" IS NULL OR \"Icon\" IN ('🎵','💿','🎤')");
+
+                            t.HasCheckConstraint("CK_TimeParts_Kind", "(\"Kind\"='Song' AND \"SongId\" IS NOT NULL AND \"Name\"='' AND \"DurationSeconds\"=0) OR (\"Kind\"='Transition' AND \"SongId\" IS NULL AND length(\"Name\") BETWEEN 1 AND 200 AND \"DurationSeconds\">=0 AND \"Icon\" IS NULL)");
                         });
                 });
 
@@ -1471,6 +1549,21 @@ namespace Sem.Web.Data.Migrations
                         .HasPrincipalKey("EventId", "Id")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.TimePart", b =>
+                {
+                    b.HasOne("Sem.Web.Core.SessionEvent", null)
+                        .WithMany()
+                        .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Sem.Web.Core.Song", null)
+                        .WithMany()
+                        .HasForeignKey("EventId", "SongId")
+                        .HasPrincipalKey("EventId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("Sem.Web.Core.UserProfile", b =>

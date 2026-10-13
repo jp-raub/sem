@@ -32,6 +32,11 @@ public static class CoreEndpoints
                     else await ctx.Response.WriteAsJsonAsync(await service.ReadParticipationAsync(ctx.User,id,ctx.RequestAborted,ctx.Request.Query["subject"].FirstOrDefault()));return;
                 }
                 if(post && action == "capacity") { await service.SetCapacityAsync(ctx.User,ctx.Request.Query["id"].ToString(),await ctx.Request.ReadFromJsonAsync<CapacityEdit>()??throw new ValidationException("入力が必要です。"),ctx.RequestAborted);await ctx.Response.WriteAsJsonAsync(new{message="保存しました。"});return;}
+                if (action == "timetable") {
+                    var id=ctx.Request.Query["id"].ToString();
+                    if(post){var json=await ctx.Request.ReadFromJsonAsync<JsonElement>();if(json.ValueKind!=JsonValueKind.Object)throw new ValidationException("入力形式を確認してください。");foreach(var p in json.EnumerateObject().Where(x=>x.Name.Equals("plannedEndAt",StringComparison.OrdinalIgnoreCase)))if(p.Value.ValueKind!=JsonValueKind.Null&&(p.Value.ValueKind!=JsonValueKind.String||!Regex.IsMatch(p.Value.GetString()??"","(?:Z|[+-][0-9]{2}:[0-9]{2})$")))throw new ValidationException("終了予定はタイムゾーン付きで指定してください。");var edit=json.Deserialize<TimetableEdit>(new JsonSerializerOptions(JsonSerializerDefaults.Web))??throw new ValidationException("入力が必要です。");await ctx.Response.WriteAsJsonAsync(await service.SaveTimetableAsync(ctx.User,id,edit,ctx.RequestAborted));}
+                    else await ctx.Response.WriteAsJsonAsync(await service.ReadTimetableAsync(ctx.User,id,ctx.RequestAborted));return;
+                }
                 if (action == "songs") {
                     var id=ctx.Request.Query["id"].ToString();
                     if(post) await ctx.Response.WriteAsJsonAsync(await service.SaveSongsAsync(ctx.User,id,await ctx.Request.ReadFromJsonAsync<SongPlanEdit>()??throw new ValidationException("入力が必要です。"),ctx.RequestAborted));

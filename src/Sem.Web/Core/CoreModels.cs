@@ -26,6 +26,11 @@ public sealed class SessionEvent
     public string AnnouncementMessage { get; set; } = "";
     public int DefaultPrepSeconds { get; set; } = 600;
     public int? Capacity { get; set; }
+    public bool RoundStarts { get; set; } = true;
+    public string ClockFormat { get; set; } = "seconds";
+    public string DurationFormat { get; set; } = "units";
+    public string SongIcon { get; set; } = "🎵";
+    public string? PlannedEndAt { get; set; }
     // Compatibility visibility cache; the active Phases row is authoritative for phase kind.
     public string PhaseKind { get; set; } = "Hidden";
     public bool ManualPhaseOverride { get; set; }

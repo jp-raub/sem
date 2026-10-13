@@ -30,6 +30,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<EventParticipantState> EventParticipantStates => Set<EventParticipantState>();
     public DbSet<EventSpectator> EventSpectators => Set<EventSpectator>();
     public DbSet<RegistrationOperation> RegistrationOperations => Set<RegistrationOperation>();
+    public DbSet<TimePart> TimeParts => Set<TimePart>();
     public DbSet<Song> Songs => Set<Song>();
     public DbSet<SongPart> SongParts => Set<SongPart>();
     protected override void OnModelCreating(ModelBuilder b)
@@ -99,6 +100,19 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             t.HasCheckConstraint("CK_RegistrationOperations_Kind","\"Kind\" IN ('Register','Spectate','Answers','Release','RemoveSpectator')");
             t.HasCheckConstraint("CK_RegistrationOperations_Result","json_valid(\"ResultJson\")");
             t.HasCheckConstraint("CK_RegistrationOperations_Reason","length(\"Reason\") <= 500");
+        });
+        b.Entity<SessionEvent>().Property(x=>x.ClockFormat).HasDefaultValue("seconds");
+        b.Entity<SessionEvent>().Property(x=>x.DurationFormat).HasDefaultValue("units");
+        b.Entity<SessionEvent>().Property(x=>x.SongIcon).HasDefaultValue("🎵");
+        b.Entity<SessionEvent>().Property(x=>x.RoundStarts).HasDefaultValue(true).HasSentinel(true);
+        b.Entity<SessionEvent>().ToTable("SessionEvents",t=>t.HasCheckConstraint("CK_SessionEvents_TimeDisplay", "\"RoundStarts\" IN (0,1) AND \"ClockFormat\" IN ('seconds','minutes') AND \"DurationFormat\" IN ('units','colon') AND \"SongIcon\" IN ('🎵','💿','🎤')"));
+        b.Entity<TimePart>().HasOne<SessionEvent>().WithMany().HasForeignKey(x=>x.EventId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<TimePart>().HasOne<Song>().WithMany().HasForeignKey(x=>new{x.EventId,x.SongId}).HasPrincipalKey(x=>new{x.EventId,x.Id}).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<TimePart>().HasIndex(x=>x.SongId).IsUnique().HasFilter("\"SongId\" IS NOT NULL");
+        b.Entity<TimePart>().HasIndex(x=>new{x.EventId,x.SortOrder});
+        b.Entity<TimePart>().ToTable("TimeParts",t=>{
+            t.HasCheckConstraint("CK_TimeParts_Kind", "(\"Kind\"='Song' AND \"SongId\" IS NOT NULL AND \"Name\"='' AND \"DurationSeconds\"=0) OR (\"Kind\"='Transition' AND \"SongId\" IS NULL AND length(\"Name\") BETWEEN 1 AND 200 AND \"DurationSeconds\">=0 AND \"Icon\" IS NULL)");
+            t.HasCheckConstraint("CK_TimeParts_Icon", "\"Icon\" IS NULL OR \"Icon\" IN ('🎵','💿','🎤')");
         });
         b.Entity<Song>().HasAlternateKey(x=>new{x.EventId,x.Id});
         b.Entity<EventPartDefinition>().HasAlternateKey(x=>new{x.EventId,x.Id});
