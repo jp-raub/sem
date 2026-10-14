@@ -25,6 +25,7 @@ public static class CoreEndpoints
                     await csrf.ValidateRequestAsync(ctx);
                 }
                 if (!post && action == "digest-preview") { await ctx.Response.WriteAsJsonAsync(await service.ReadDigestPreviewAsync(ctx.User, ctx.Request.Query.ContainsKey("day") ? ctx.Request.Query["day"].ToString() : null, ctx.RequestAborted)); return; }
+                if (action == "participant-roster") { if (post) { ctx.Response.StatusCode = 405; return; } await ctx.Response.WriteAsJsonAsync(await service.ReadParticipantRosterAsync(ctx.User, ctx.Request.Query["id"].ToString(), ctx.Request.Query["afterUserId"].FirstOrDefault(), ctx.RequestAborted)); return; }
                 if (action == "navigation") { if (post) { ctx.Response.StatusCode = 405; return; } await ctx.Response.WriteAsJsonAsync(await service.ReadNavigationAsync(ctx.User, ctx.RequestAborted)); return; }
                 if (!post && action == "workspace") { await ctx.Response.WriteAsJsonAsync(await service.ReadAsync(ctx.User, ctx.RequestAborted)); return; }
                 if (!post && action == "profile") { await ctx.Response.WriteAsJsonAsync(await service.ReadProfileAsync(ctx.User, ctx.Request.Query["id"].ToString(), ctx.RequestAborted)); return; }
