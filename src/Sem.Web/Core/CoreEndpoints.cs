@@ -9,6 +9,30 @@ using Sem.Web.Runtime;
 namespace Sem.Web.Core;
 public static class CoreEndpoints
 {
+    // A 1 MiB UTF-8 CSV can expand sixfold when JSON-escaped; the 7 MiB envelope
+    // leaves room for the fixed apply fields while keeping the in-memory read bounded.
+    private const int EventImportRequestMaxBytes = 7 * 1024 * 1024;
+    private static readonly JsonSerializerOptions EventImportJsonOptions = new(JsonSerializerDefaults.Web);
+
+    private static async Task<T> ReadEventImportRequestAsync<T>(HttpRequest request, CancellationToken ct) where T : class
+    {
+        if (!request.HasJsonContentType()) throw new ValidationException("JSON形式で送信してください。");
+        using var body = new MemoryStream();
+        var buffer = new byte[16 * 1024];
+        while (true)
+        {
+            var remaining = EventImportRequestMaxBytes + 1 - (int)body.Length;
+            if (remaining <= 0) throw new EventImportPayloadTooLargeException();
+            var read = await request.Body.ReadAsync(buffer.AsMemory(0, Math.Min(buffer.Length, remaining)), ct);
+            if (read == 0) break;
+            await body.WriteAsync(buffer.AsMemory(0, read), ct);
+        }
+        if (body.Length > EventImportRequestMaxBytes) throw new EventImportPayloadTooLargeException();
+        return JsonSerializer.Deserialize<T>(body.GetBuffer().AsSpan(0, (int)body.Length), EventImportJsonOptions)
+            ?? throw new ValidationException("入力が必要です。");
+    }
+
+    private sealed class EventImportPayloadTooLargeException : Exception { }
     public static void MapCoreFoundation(this WebApplication app) => app.MapMethods("/api/core/{action}", ["GET", "POST"],
         async (HttpContext ctx, CoreFoundationService service, IAntiforgery csrf, DeploymentSettings deployment, ManualPushRuntime manualRuntime, IEventPushTransport pushTransport) =>
         {
@@ -17,12 +41,46 @@ public static class CoreEndpoints
             {
                 var action = ctx.Request.RouteValues["action"]?.ToString();
                 var post = HttpMethods.IsPost(ctx.Request.Method);
+                var eventImport = action is "event-import-preview" or "event-import-apply";
+                if (eventImport && !post) { ctx.Response.StatusCode = 405; return; }
+                string? eventImportId = null;
                 if (post)
                 {
                     if (ctx.Request.Headers.Origin.ToString() != deployment.PublicUrl.TrimEnd('/')) throw new UnauthorizedAccessException();
+                    if (eventImport)
+                    {
+                        var idValues = ctx.Request.Query["id"];
+                        if (idValues.Count != 1 || string.IsNullOrEmpty(idValues[0])) throw new ValidationException("イベントを確認してください。");
+                        eventImportId = idValues[0]!;
+                        // Fail closed on the current cookie principal before antiforgery or any body handling.
+                        await service.AuthorizeEventImportRequestAsync(ctx.User, eventImportId, ctx.RequestAborted);
+                    }
                     var size = ctx.Features.Get<IHttpMaxRequestBodySizeFeature>();
-                    if (size is { IsReadOnly: false }) size.MaxRequestBodySize = 65536;
+                    if (size is { IsReadOnly: false })
+                    {
+                        // Keep a read buffer of headroom so Kestrel can deliver the first over-limit byte;
+                        // the bounded reader below stops at 7 MiB + 1 and never buffers beyond it.
+                        size.MaxRequestBodySize = eventImport ? EventImportRequestMaxBytes + 16 * 1024L : 65536;
+                    }
                     await csrf.ValidateRequestAsync(ctx);
+                    if (eventImport && ctx.Request.ContentLength > EventImportRequestMaxBytes) throw new EventImportPayloadTooLargeException();
+                }
+                if (eventImport)
+                {
+                    // Non-POST methods were returned as 405 above; POST validated this before any body reads.
+                    var id = eventImportId!;
+                    if (action == "event-import-preview")
+                    {
+                        var request = await ReadEventImportRequestAsync<EventImportPreviewRequest>(ctx.Request, ctx.RequestAborted);
+                        if (request.Csv is null) throw new ValidationException("CSVを指定してください。");
+                        await ctx.Response.WriteAsJsonAsync(await service.ReadEventImportPreviewAsync(ctx.User, id, request.Csv, ctx.RequestAborted));
+                    }
+                    else
+                    {
+                        var request = await ReadEventImportRequestAsync<EventImportApply>(ctx.Request, ctx.RequestAborted);
+                        await ctx.Response.WriteAsJsonAsync(await service.ApplyEventImportAsync(ctx.User, id, request, ctx.RequestAborted));
+                    }
+                    return;
                 }
                 if (action == "manual-push-control") {
                     if (post) { ctx.Response.StatusCode = 405; return; }
@@ -194,6 +252,7 @@ public static class CoreEndpoints
                 else { ctx.Response.StatusCode = 404; return; }
                 await ctx.Response.WriteAsJsonAsync(new { message = "保存しました。" });
             }
+            catch (EventImportPayloadTooLargeException) { ctx.Response.StatusCode = 413; await ctx.Response.WriteAsJsonAsync(new { error = "取込リクエストが大きすぎます。" }); }
             catch (UnauthorizedAccessException) { ctx.Response.StatusCode = 403; await ctx.Response.WriteAsJsonAsync(new { error = "ログイン状態と操作権限を確認してください。" }); }
             catch (CoreConflictException e) { ctx.Response.StatusCode = 409; await ctx.Response.WriteAsJsonAsync(new { error = e.Message }); }
             catch (DbUpdateConcurrencyException) { ctx.Response.StatusCode = 409; await ctx.Response.WriteAsJsonAsync(new { error = "更新が競合しました。最新状態を確認してください。" }); }
