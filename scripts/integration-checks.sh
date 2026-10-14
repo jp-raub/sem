@@ -18,7 +18,11 @@ for project in tests/*/*.csproj; do
   name=$(basename "$(dirname "$project")")
   dotnet build "$project" -c Release 2>&1 | tee "verification/${name}-build.log"
   # Tests may use synthetic loopback fixtures but cannot reach an external provider.
-  sudo -E unshare --net bash -c 'ip link set lo up; exec dotnet run --project "$1" -c Release --no-build --no-restore' bash "$project" 2>&1 | tee "verification/${name}.log"
+  output_type=$(dotnet msbuild "$project" -getProperty:OutputType -nologo)
+  command=run; project_flag=--project
+  if [[ $output_type != Exe && $output_type != WinExe ]]; then command=test; project_flag=; fi
+  # Drop root/capabilities/supplementary groups and forbid privilege escalation.
+  sudo -E unshare --net bash -c 'set -euo pipefail; ip link set lo up; exec setpriv --reuid="$2" --regid=65534 --clear-groups --no-new-privs --bounding-set=-all --inh-caps=-all --ambient-caps=-all "$3" "$4" ${5:+"$5"} "$1" -c Release --no-build --no-restore' bash "$project" "$(id -u)" "$(command -v dotnet)" "$command" "$project_flag" 2>&1 | tee "verification/${name}.log"
   suites=$((suites+1))
 done
 if [[ $suites -eq 0 ]]; then
@@ -43,7 +47,7 @@ docker run -d --name sem-integration --network none --cap-drop ALL --security-op
  -v sem-integration-data:/data sem-integration:check
 ready() {
  for n in $(seq 1 60); do
-  if docker exec sem-integration bash -c 'exec 3<>/dev/tcp/127.0.0.1/8080; printf "GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n" >&3; cat <&3' > verification/ready.json && grep -q '^HTTP/1.1 200' verification/ready.json && grep -q storage-ready verification/ready.json; then
+  if timeout 5s docker exec sem-integration bash -c 'exec 3<>/dev/tcp/127.0.0.1/8080; printf "GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n" >&3; cat <&3' > verification/ready.json && grep -q '^HTTP/1.1 200' verification/ready.json && grep -q storage-ready verification/ready.json; then
    return 0
   fi
   sleep 1
