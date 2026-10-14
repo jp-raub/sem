@@ -5,7 +5,7 @@
 @inject CoreFoundationService Core
 <PageTitle>@(View?.Title ?? "イベント")</PageTitle>
 <EventTabNavigation EventId="@EventId" Selected="main" />
-<section id="event-tab-panel" role="tabpanel" aria-label="イベント" tabindex="0">
+<section id="event-tab-panel" role="tabpanel" aria-label="イベント" aria-labelledby="event-tab-main" tabindex="0">
 <h1 id="event-overview-title">@(View?.Title ?? "イベント")</h1>
 <p role="alert">@Error</p>
 @if (View is not null) {

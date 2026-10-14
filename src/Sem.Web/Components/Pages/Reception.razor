@@ -4,7 +4,7 @@
 @inject AuthenticationStateProvider Authentication
 @inject CoreFoundationService Core
 <EventTabNavigation EventId="@EventId" Selected="checkin" />
-<section id="event-tab-panel" role="tabpanel" aria-label="受付" tabindex="0">
+<section id="event-tab-panel" role="tabpanel" aria-label="受付" aria-labelledby="event-tab-checkin" tabindex="0">
 <PageTitle>受付対象の検索</PageTitle>
 <h1>受付対象の検索：@Plan?.Title</h1><p><a href="/workspace">業務基盤へ戻る</a></p>
 <p>管理者向けの現在の参加登録者一覧です。選択した本人・申込みと必要な受付対応を確認して手動受付できます。この画面は手動受付です。QR貼付／リンク読取・確認は上の専用欄で扱います。カメラまたは貼付／リンクで取り込み、明示して読取を記録してください。</p>

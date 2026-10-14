@@ -5,7 +5,7 @@
 @inject CoreFoundationService Core
 <p><a id="event-push-rules-link" href="@($"/events/{EventId}/event-push-rules")">イベント通知ルールのON／OFF</a></p>
 <EventTabNavigation EventId="@EventId" Selected="notifications" />
-<section id="event-tab-panel" role="tabpanel" aria-label="通知" tabindex="0">
+<section id="event-tab-panel" role="tabpanel" aria-label="通知" aria-labelledby="event-tab-notifications" tabindex="0">
 <PageTitle>通知予定プレビュー</PageTitle>
 <h1>通知予定プレビュー：@Plan?.Title</h1>
 <p><a href="/workspace">イベント一覧</a> ／ <a href="@($"/events/{EventId}/timetable")">タイムテーブル</a> ／ <a href="@($"/events/{EventId}/progress")">当日進行</a></p>

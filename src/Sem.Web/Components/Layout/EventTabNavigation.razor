@@ -6,6 +6,7 @@
 @inject IJSRuntime JS
 @if (View is not null)
 {
+    @if (!View.Available.Contains(Selected)) { <span id="@TabId(Selected)">@Label(Selected)（独立画面）</span> }
     <div class="event-tabs" id="@RootId" role="tablist" aria-label="イベント内の画面" data-event-tabs-ready="@Ready.ToString().ToLowerInvariant()">
         @foreach (var kind in View.Available)
         {

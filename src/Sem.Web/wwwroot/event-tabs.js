@@ -6,7 +6,7 @@ export function bindTabs(id,sink,userId,eventId,available,selected,restore){
  // Defensive client filter never grants server permissions. No event data or drafts are persisted.
  const buttons=[...root.querySelectorAll('[role=tab][data-event-tab]')].filter(b=>available.includes(b.dataset.eventTab));
  const key=e=>{if(e.altKey||e.ctrlKey||e.metaKey||e.shiftKey)return;const index=buttons.indexOf(e.target),next=nextTabIndex(e.key,index,buttons.length);if(next===null)return;e.preventDefault();const b=buttons[next];b.focus();b.scrollIntoView({block:'nearest',inline:'nearest'});sink.invokeMethodAsync('SelectFromKeyboard',b.dataset.eventTab).catch(()=>{});};
- const active=buttons.find(b=>b.dataset.eventTab===selected);if(active){document.getElementById('event-tab-panel')?.setAttribute('aria-labelledby',active.id);active.focus({preventScroll:true});active.scrollIntoView({block:'nearest',inline:'nearest'});}else if(buttons[0])buttons[0].tabIndex=0;
+ const active=buttons.find(b=>b.dataset.eventTab===selected);if(active){active.focus({preventScroll:true});active.scrollIntoView({block:'nearest',inline:'nearest'});}else if(buttons[0])buttons[0].tabIndex=0;
  root.addEventListener('keydown',key);bindings.set(id,{root,key});
  let storage;try{storage=window.sessionStorage;}catch{return null;}
  const target=restore?readTabSelection(storage,userId,eventId,available):selected;

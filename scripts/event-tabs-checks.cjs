@@ -12,7 +12,7 @@ module.exports=async({p,g,ok})=>{
   ok((await a.locator('[role=tab]').evaluateAll(bs=>bs.map(b=>b.dataset.eventTab))).join(',')==='main,roster','Ordinary off-day event shows only main and public roster tabs');
   ok(await a.locator('#event-overview-title').innerText()===fixture.title,'Main overview reads approved event title');
   await a.locator('[data-event-tab=main]').focus();await a.keyboard.press('End');await a.waitForURL('**/participants');await ready(a);await a.locator('[data-participant-roster-user]').first().waitFor();
-  ok(await selected(a)==='roster'&&await a.locator('#event-tab-panel').getAttribute('aria-labelledby')==='event-tab-roster','Keyboard End selects actual authorized roster route and labelled panel');
+  ok(await selected(a)==='roster'&&await a.locator('#event-tab-panel').getAttribute('aria-labelledby')==='event-tab-roster','Keyboard End selects actual authorized roster route and labelled panel: '+await selected(a)+'/'+await a.locator('#event-tab-panel').getAttribute('aria-labelledby'));
   const scope=await a.evaluate(()=>Object.keys(sessionStorage).filter(k=>k.startsWith('sem.event-tab.v1:')));
   ok(scope.length===1&&await a.evaluate(k=>sessionStorage.getItem(k),scope[0])==='roster','Native session storage contains only current scoped tab identifier');
   await a.reload();await ready(a);ok(await selected(a)==='roster','Native reload keeps actual selected roster route');

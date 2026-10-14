@@ -5,7 +5,7 @@
 @inject AuthenticationStateProvider Authentication
 @inject CoreFoundationService Core
 <EventTabNavigation EventId="@EventId" Selected="roster" />
-<section id="event-tab-panel" role="tabpanel" aria-label="参加者名簿" tabindex="0">
+<section id="event-tab-panel" role="tabpanel" aria-label="参加者名簿" aria-labelledby="event-tab-roster" tabindex="0">
 <PageTitle>参加者名簿</PageTitle>
 <h1>参加者名簿：@View?.Title</h1>
 <p><a href="/workspace">イベント一覧</a> ／ <a href="@($"/events/{EventId}/participation")">参加登録・観覧</a></p>
