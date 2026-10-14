@@ -27,7 +27,7 @@ try{
  await using(var db=await factory.CreateDbContextAsync()){
   await db.GetService<IMigrator>().MigrateAsync("20261014080345_AddManualNotificationPushQueue");
   foreach(var id in new[]{"admin","admin2","manager","member"})db.Users.Add(new(){Id=id,UserName=id,Email=id+"@PRIVATE.invalid",DisplayName=id,Enabled=true,EmailConfirmed=true,SecurityStamp=id+"-stamp",IsAdmin=id.StartsWith("admin")});
-  var e=new SessionEvent{Id="event",Title="Event",ScheduledDate="2099-01-01T00:00:00Z",CreatedAt="2026-10-01T00:00:00Z",ManualPhaseOverride=true};e.Phases.Add(new(){Id="view",EventId="event",Kind="View",Name="View",IsActive=true});e.Phases.Add(new(){Id="hidden",EventId="event",Kind="Hidden",Name="Hidden"});e.Admins.Add(new(){EventId="event",UserId="manager",GrantedAt="2026-10-01T00:00:00Z"});db.SessionEvents.Add(e);
+  var e=new SessionEvent{Id="event",Title="Event",ScheduledDate="2099-01-01T00:00:00Z",CreatedAt="2026-10-01T00:00:00Z",ManualPhaseOverride=true};e.Phases.Add(new(){Id="view",EventId="event",Kind="View",Name="View",IsActive=true});e.Phases.Add(new(){Id="hidden",EventId="event",Kind="Hidden",Name="Hidden"});e.Admins.Add(new(){EventId="event",UserId="manager",GrantedAt="2026-10-01T00:00:00Z"});await LegacySessionEventSeed.AddAsync(db,e);
   db.EventSpectators.Add(new(){EventId="event",UserId="member",RegisteredBy="admin",RegisteredAt="2026-10-01T00:00:00Z"});db.Messages.Add(new(){Id="prior",UserId="member",Title="keep",Body="keep",Created=123,ReadAt=124});
   await db.SaveChangesAsync();await db.Database.MigrateAsync();
   Check(!db.Database.HasPendingModelChanges()&&await db.Messages.AnyAsync(x=>x.Id=="prior"&&x.ReadAt==124),"additive control migration preserves old inbox and model");

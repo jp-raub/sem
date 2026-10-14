@@ -19,7 +19,7 @@ var clock = new TestClock(DateTimeOffset.Parse("2026-10-14T09:00:00Z"));
 var services = new ServiceCollection();
 services.AddLogging();
 services.AddDbContextFactory<ApplicationDbContext>(o => o.UseSqlite("Data Source=" + path), ServiceLifetime.Scoped);
-services.AddIdentityCore<ApplicationUser>().AddEntityFrameworkStores<ApplicationDbContext>();
+services.AddIdentityCore<ApplicationUser>(o => o.Stores.SchemaVersion = IdentitySchemaVersions.Version3).AddEntityFrameworkStores<ApplicationDbContext>();
 services.AddDataProtection();
 services.AddSingleton<TimeProvider>(clock);
 services.AddSingleton<BusinessNotificationStore>();
@@ -82,17 +82,19 @@ try
         e.Phases.Add(new EventPhase { Id = "hidden", EventId = "event", Kind = "Hidden", Name = "Hidden" });
         e.Admins.Add(new EventAdmin { EventId = "event", UserId = "manager", GrantedAt = "2026-10-01T00:00:00Z" });
         e.Admins.Add(new EventAdmin { EventId = "event", UserId = "other-manager", GrantedAt = "2026-10-01T00:00:00Z" });
-        db.SessionEvents.Add(e);
+        await LegacySessionEventSeed.AddAsync(db,e);
         foreach (var n in Enumerable.Range(1, 4)) db.EventSpectators.Add(new EventSpectator {
             EventId = "event", UserId = "member-" + n, RegisteredBy = "manager", RegisteredAt = "2026-10-01T00:00:00Z" });
         var otherEvent = new SessionEvent { Id = "other-event", Title = "PRIVATE-OTHER-EVENT", ScheduledDate = "2099-01-01T00:00:00Z",
             CreatedAt = "2026-10-01T00:00:00Z", PhaseKind = "View", ManualPhaseOverride = true };
         otherEvent.Phases.Add(new EventPhase { Id = "other-view", EventId = "other-event", Kind = "View", Name = "View", IsActive = true });
         otherEvent.Admins.Add(new EventAdmin { EventId = "other-event", UserId = "manager", GrantedAt = "2026-10-01T00:00:00Z" });
-        db.SessionEvents.Add(otherEvent);
+        await LegacySessionEventSeed.AddAsync(db,otherEvent);
         db.EventSpectators.Add(new EventSpectator { EventId = "other-event", UserId = "member-1", RegisteredBy = "manager", RegisteredAt = "2026-10-01T00:00:00Z" });
         await db.SaveChangesAsync();
     }
+
+    await using (var upgrade = await factory.CreateDbContextAsync()) await upgrade.Database.MigrateAsync();
 
     // Accepted while activation is OFF: no admission is ever backfilled by a later ON state.
     var offId = await Accept("PRIVATE-OFF-SUBJECT");

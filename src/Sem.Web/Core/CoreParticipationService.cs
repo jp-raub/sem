@@ -43,7 +43,7 @@ public sealed partial class CoreFoundationService {
   var state=await db.EventParticipantStates.SingleOrDefaultAsync(x=>x.EventId==id&&x.UserId==subject,ct);if((state?.RowVersion??0)!=edit.ParticipantVersion)throw new CoreConflictException();
   if(e.RowVersion!=edit.RowVersion||phase.Id!=edit.PhaseId)throw new CoreConflictException();if(edit.Kind is "Register" or "Spectate" or "Answers"&&phase.Kind!="Custom"||edit.Kind=="Register"&&phase.MaxPicks==0)throw new ValidationException("現在のフェーズではこの申込み／回答更新を受け付けていません。");
   var parts=await db.SongParts.Where(x=>x.EventId==id).ToListAsync(ct);var spectator=await db.EventSpectators.SingleOrDefaultAsync(x=>x.EventId==id&&x.UserId==subject,ct);var participants=await Participants(db,id,ct);var results=new List<ParticipationItem>();var now=Utc(clock.GetUtcNow());
-  var questions=await db.EventQuestions.Where(x=>x.EventId==id&&x.DeletedAt==null&&!x.Disabled).ToListAsync(ct);var answers=new Dictionary<string,string?>();
+  var questions=await db.EventQuestions.Where(x=>x.EventId==id&&x.DeletedAt==null&&!x.Disabled).ToListAsync(ct);var answers=new Dictionary<string,string?>();var successfulParticipationWrite=false;
   if(edit.Kind is "Register" or "Spectate" or "Answers"){
    if(edit.Answers.Any(x=>!questions.Any(q=>q.Id==x.QuestionId)))throw new ValidationException("現在有効な設問だけに回答してください。");var retained=await db.EventQuestionAnswers.Where(x=>x.UserId==subject&&questions.Select(q=>q.Id).Contains(x.QuestionId)).ToDictionaryAsync(x=>x.QuestionId,x=>x.Value,ct);foreach(var q in questions){var input=edit.Answers.SingleOrDefault(x=>x.QuestionId==q.Id);var value=Text(input is null?retained.GetValueOrDefault(q.Id):input.Value,2000,"回答");if(q.Required&&value.Length==0||q.Type=="YesNo"&&value.Length>0&&value is not ("YES" or "NO"))throw new ValidationException("必須回答とYES／NOの形式を確認してください。");answers[q.Id]=value.Length==0?null:value;}
   }
@@ -54,15 +54,16 @@ public sealed partial class CoreFoundationService {
    foreach(var group in eligible.GroupBy(x=>x.SongId)){var categories=parts.Where(x=>x.SongId==group.Key&&x.AssignedUserId==subject).Concat(group).Select(x=>definitions.GetValueOrDefault(x.PartDefinitionId,"invalid")).ToArray();if(categories.Length>1&&(categories.Length!=2||categories.Count(x=>x=="Sing")!=1||categories.Count(x=>x=="Play")!=1)&&!edit.CompatibilityException)throw new ValidationException("兼務は1枠、または声1＋楽器1です。管理者例外には指定と理由が必要です。");}
    var counted=parts.Where(x=>x.AssignedUserId==subject&&x.PhaseId==phase.Id).Select(x=>x.SongId).ToHashSet();
    foreach(var choice in edit.Slots){var p=parts.SingleOrDefault(x=>x.Id==choice.Id);var code=p is null||!activeSongs.Contains(p.SongId)||!definitions.ContainsKey(p.PartDefinitionId)?"Unavailable":p.AssignedUserId!=null?"Occupied":p.RowVersion!=choice.RowVersion?"StaleSlot":!counted.Contains(p.SongId)&&phase.MaxPicks>=0&&counted.Count>=phase.MaxPicks?"PhaseLimit":"Registered";if(code=="Registered"){p!.AssignedUserId=subject;p.PhaseId=phase.Id;p.RowVersion++;counted.Add(p.SongId);}results.Add(new(choice.Id,code=="Registered",code));}
+   successfulParticipationWrite=results.Any(x=>x.Success);
    if(results.Any(x=>x.Success)&&spectator is not null)db.EventSpectators.Remove(spectator);
   }else if(edit.Kind=="Spectate"){
-   if(parts.Any(x=>x.AssignedUserId==subject))throw new ValidationException("演奏登録がある場合は観覧申込みできません。管理者へ解除を依頼してください。");if(spectator is null){db.EventSpectators.Add(new(){EventId=id,UserId=subject,RegisteredAt=now,RegisteredBy=actor.Id});results.Add(new(subject,true,"SpectatorRegistered"));}else results.Add(new(subject,false,"AlreadySpectator"));
+   if(parts.Any(x=>x.AssignedUserId==subject))throw new ValidationException("演奏登録がある場合は観覧申込みできません。管理者へ解除を依頼してください。");if(spectator is null){db.EventSpectators.Add(new(){EventId=id,UserId=subject,RegisteredAt=now,RegisteredBy=actor.Id});results.Add(new(subject,true,"SpectatorRegistered"));}else results.Add(new(subject,false,"AlreadySpectator"));successfulParticipationWrite=results.Any(x=>x.Success);
   }else if(edit.Kind=="Answers"){
-   if(!participants.Contains(subject))throw new ValidationException("参加登録のある本人のみ回答を更新できます。");results.Add(new(subject,true,"AnswersUpdated"));
+   if(!participants.Contains(subject))throw new ValidationException("参加登録のある本人のみ回答を更新できます。");results.Add(new(subject,true,"AnswersUpdated"));successfulParticipationWrite=true;
   }else if(edit.Kind=="Release"){
-   foreach(var c in edit.Slots){var p=parts.SingleOrDefault(x=>x.Id==c.Id);if(p is null||p.AssignedUserId!=subject||p.RowVersion!=c.RowVersion)throw new CoreConflictException();}foreach(var c in edit.Slots){var p=parts.Single(x=>x.Id==c.Id);p.AssignedUserId=p.PhaseId=null;p.RowVersion++;results.Add(new(p.Id,true,"Released"));}
+   foreach(var c in edit.Slots){var p=parts.SingleOrDefault(x=>x.Id==c.Id);if(p is null||p.AssignedUserId!=subject||p.RowVersion!=c.RowVersion)throw new CoreConflictException();}foreach(var c in edit.Slots){var p=parts.Single(x=>x.Id==c.Id);p.AssignedUserId=p.PhaseId=null;p.RowVersion++;results.Add(new(p.Id,true,"Released"));}successfulParticipationWrite=results.Any(x=>x.Success);
   }else{
-   if(spectator is null)throw new CoreConflictException();db.EventSpectators.Remove(spectator);results.Add(new(subject,true,"SpectatorRemoved"));
+   if(spectator is null)throw new CoreConflictException();db.EventSpectators.Remove(spectator);results.Add(new(subject,true,"SpectatorRemoved"));successfulParticipationWrite=true;
   }
   if(results.Any(x=>x.Success)&&edit.Kind is "Register" or "Spectate" or "Answers"){
    foreach(var q in questions){var answer=await db.EventQuestionAnswers.SingleOrDefaultAsync(x=>x.QuestionId==q.Id&&x.UserId==subject,ct);if(answer is null){answer=new(){QuestionId=q.Id,UserId=subject};db.EventQuestionAnswers.Add(answer);}answer.Value=answers[q.Id];answer.UpdatedAt=now;}
@@ -79,6 +80,8 @@ public sealed partial class CoreFoundationService {
   if(comment is not null&&(edit.Kind=="Register"||results.Any(x=>x.Success)&&edit.Kind is "Spectate" or "Answers")){
    RequireCommentOpen(e,manager);AddComment(db,e,actor.Id,edit.RequestId,comment,manager);results.Add(new(edit.RequestId,true,"CommentCreated"));
   }
+  if(successfulParticipationWrite&&phase.Kind=="Custom"&&CoreEventImportHistory.Observe(e,phase,clock.GetUtcNow()))
+   e.RowVersion++;
   var result=new ParticipationResult(edit.RequestId,results.Count(x=>x.Success),results.ToArray());db.RegistrationOperations.Add(new(){Id=edit.RequestId,EventId=id,ActorId=actor.Id,SubjectId=subject,PhaseId=phase.Id,Kind=edit.Kind,Reason=reason,At=now,RequestHash=fingerprint,ResultJson=JsonSerializer.Serialize(result)});Audit(db,actor.Id,"Participation"+edit.Kind,edit.RequestId);
   await db.SaveChangesAsync(ct);await tx.CommitAsync(ct);return result;
  }

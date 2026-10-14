@@ -53,7 +53,7 @@ try {
             var e = new SessionEvent { Id = id, Title = id, ScheduledDate = date.ToString("O"),
                 PlannedEndAt = date.AddSeconds(600).ToString("O"), DefaultPrepSeconds = 60, RoundStarts = false,
                 PhaseKind = "View", ManualPhaseOverride = true, CreatedAt = date.AddDays(-1).ToString("O"), RowVersion = 7 };
-            db.SessionEvents.Add(e);
+            await LegacySessionEventSeed.AddAsync(db,e);
             db.Phases.Add(new() { Id = id + "-view", EventId = id, Name = "View", Kind = "View", IsActive = true });
             if (id != "other") {
                 db.EventAdmins.Add(new() { EventId = id, UserId = "manager", GrantedAt = date.ToString("O") });
@@ -72,7 +72,7 @@ try {
                 new() { Id = id + "-tail", EventId = id, Kind = "Transition", Name = "Tail", DurationSeconds = 300, SortOrder = 2 });
         }
         await db.SaveChangesAsync();
-        var legacy = await db.SessionEvents.SingleAsync(e => e.Id == "legacy");
+        var legacy = await db.SessionEvents.Where(e => e.Id == "legacy").Select(e => new SessionEvent { Id=e.Id, ScheduledDate=e.ScheduledDate, OpensAt=e.OpensAt, DefaultPrepSeconds=e.DefaultPrepSeconds, RoundStarts=e.RoundStarts, SongIcon=e.SongIcon, PlannedEndAt=e.PlannedEndAt }).SingleAsync();
         var rows = TimetableCalculator.Calculate(legacy, await db.TimeParts.Where(x => x.EventId == "legacy").ToArrayAsync(),
             await db.Songs.Where(x => x.EventId == "legacy").ToArrayAsync()).Rows;
         var old = new ProgressBaseline(legacy.ScheduledDate, false, 60, "seconds", legacy.PlannedEndAt, rows,
