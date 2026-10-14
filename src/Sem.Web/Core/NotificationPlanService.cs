@@ -40,7 +40,8 @@ public sealed partial class CoreFoundationService {
   var e=await Managed(db,principal,id,ct);
   var plan=await BuildNotificationPlan(db,e,clock.GetUtcNow(),ct);await tx.CommitAsync(ct);return plan;
  }
- internal static async Task<EventNotificationPlan> BuildNotificationPlan(Sem.Web.Data.ApplicationDbContext db,SessionEvent e,DateTimeOffset now,CancellationToken ct){
+ internal static async Task<EventNotificationPlan> BuildNotificationPlan(Sem.Web.Data.ApplicationDbContext db,SessionEvent e,DateTimeOffset now,CancellationToken ct)=> (await BuildNotificationSource(db,e,now,ct)).Plan;
+ internal static async Task<(EventNotificationPlan Plan,ProgressRow[] Rows)> BuildNotificationSource(Sem.Web.Data.ApplicationDbContext db,SessionEvent e,DateTimeOffset now,CancellationToken ct){
   var id=e.Id;var state=await db.EventProgressStates.AsNoTracking().SingleOrDefaultAsync(x=>x.EventId==id,ct);
   ProgressBaseline baseline;
   try{baseline=state is null?await BaselineWithPolicies(db,e,true,ct):JsonSerializer.Deserialize<ProgressBaseline>(state.PlanJson)??throw new ValidationException("進行計画を確認してください。");}
@@ -49,6 +50,6 @@ public sealed partial class CoreFoundationService {
   var estimates=await db.ProgressEstimates.AsNoTracking().Where(x=>x.EventId==id).ToArrayAsync(ct);
   var rows=ProgressCalculator.Calculate(baseline,marks,estimates);var entries=NotificationPlanCalculator.Calculate(e,rows,now);
   var fingerprint=SemEndpoints.Hash(JsonSerializer.Serialize(new{e.Id,e.RowVersion,ProgressVersion=state?.RowVersion??0,Entries=entries.Select(x=>new{x.Id,x.Kind,x.PartId,x.Basis,x.PreviousPartId,x.ReferenceAt,x.DueAt,Obsolete=x.State=="Obsolete"})}));
-  return new(e.Id,e.Title,e.RowVersion,state?.RowVersion??0,"Asia/Tokyo",now,fingerprint,true,entries);
+  return (new(e.Id,e.Title,e.RowVersion,state?.RowVersion??0,"Asia/Tokyo",now,fingerprint,true,entries),rows);
  }
 }

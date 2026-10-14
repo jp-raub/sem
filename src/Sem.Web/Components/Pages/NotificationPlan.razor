@@ -3,6 +3,7 @@
 @using Sem.Web.Core
 @inject AuthenticationStateProvider Authentication
 @inject CoreFoundationService Core
+<p><a id="event-push-rules-link" href="@($"/events/{EventId}/event-push-rules")">イベント通知ルールのON／OFF</a></p>
 <PageTitle>通知予定プレビュー</PageTitle>
 <h1>通知予定プレビュー：@Plan?.Title</h1>
 <p><a href="/workspace">イベント一覧</a> ／ <a href="@($"/events/{EventId}/timetable")">タイムテーブル</a> ／ <a href="@($"/events/{EventId}/progress")">当日進行</a></p>

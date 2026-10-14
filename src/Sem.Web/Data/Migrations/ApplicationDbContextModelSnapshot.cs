@@ -474,6 +474,42 @@ namespace Sem.Web.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Sem.Web.Core.EventPushRule", b =>
+                {
+                    b.Property<string>("EventId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Kind")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("ArmedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("ArmedProgressVersion")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("ChangedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("EventId", "Kind");
+
+                    b.ToTable("EventPushRules", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_EventPushRule_Arming", "(\"Enabled\"=1 AND \"ArmedAt\" IS NOT NULL AND \"ArmedProgressVersion\" IS NOT NULL AND \"ArmedProgressVersion\">=0) OR (\"Enabled\"=0 AND \"ArmedAt\" IS NULL AND \"ArmedProgressVersion\" IS NULL)");
+
+                            t.HasCheckConstraint("CK_EventPushRule_Kind", "\"Kind\" IN ('OpeningReminder','SongPreparation')");
+
+                            t.HasCheckConstraint("CK_EventPushRule_Version", "\"Version\">0");
+                        });
+                });
+
             modelBuilder.Entity("Sem.Web.Core.EventQuestion", b =>
                 {
                     b.Property<string>("Id")
@@ -1930,6 +1966,15 @@ namespace Sem.Web.Data.Migrations
                 });
 
             modelBuilder.Entity("Sem.Web.Core.EventProgressState", b =>
+                {
+                    b.HasOne("Sem.Web.Core.SessionEvent", null)
+                        .WithMany()
+                        .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.EventPushRule", b =>
                 {
                     b.HasOne("Sem.Web.Core.SessionEvent", null)
                         .WithMany()
