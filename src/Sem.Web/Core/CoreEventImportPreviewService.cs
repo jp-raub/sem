@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Sem.Web.Data;
 
 namespace Sem.Web.Core;
 
@@ -12,7 +13,7 @@ public sealed record EventImportPreview(string EventId, long RowVersion, string 
     EventImportPreviewRow[] Rows, int NewSongs, int NewTransitions, int SkippedRows, string[] Errors,
     DateTimeOffset? ProposedEnd, long? OverrunSeconds)
 {
-    // Validation only: this version has no mutation endpoint or confirmation operation.
+    // Preview validation only; application requires a separate confirmed operation.
     public bool IsValid => Errors.Length == 0 && Rows.All(x => x.Error is null);
 }
 
@@ -25,6 +26,14 @@ public sealed partial class CoreFoundationService
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         var (e, actor, phase, manager) = await ParticipantEvent(db, principal, eventId, ct);
         if (!manager) throw new UnauthorizedAccessException();
+        return await BuildEventImportPreview(db, e, actor, phase, csv, ct);
+    }
+
+    // Reused inside the SAME apply transaction, never through a second context/snapshot.
+    private async Task<EventImportPreview> BuildEventImportPreview(ApplicationDbContext db, SessionEvent e,
+        ApplicationUser actor, EventPhase phase, string csv, CancellationToken ct)
+    {
+        var eventId = e.Id;
         var eligibility = CoreEventImportHistory.Assess(e, phase, clock.GetUtcNow());
         if (!eligibility.IsEligible)
             throw new System.ComponentModel.DataAnnotations.ValidationException("取込条件を満たしていません: " + eligibility.RejectionReason);
@@ -83,6 +92,9 @@ public sealed partial class CoreFoundationService
         if (parts.Count(x => x.Kind == "Transition") + newTransitions > 300) errors.Add("進行枠の上限300を超えます。");
         if (parts.Length + additions.Count > 600) errors.Add("タイムパートの上限600を超えます。");
         if (additions.Count == 0) errors.Add("追加可能な行がありません。");
+        if ((long)(songs.Length == 0 ? -1 : songs.Max(x => x.SortOrder)) + newSongs > int.MaxValue ||
+            (long)(parts.Length == 0 ? -1 : parts.Max(x => x.SortOrder)) + additions.Count > int.MaxValue)
+            errors.Add("並び順が上限です。");
         DateTimeOffset? proposedEnd = null;
         long? overrun = null;
         if (errors.Count == 0 && result.All(x => x.Error is null))

@@ -402,6 +402,52 @@ namespace Sem.Web.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Sem.Web.Core.EventImportOperation", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("AcceptedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ActorId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EventId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("NewSongs")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("NewTransitions")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("RequestHash")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("ResultVersion")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("SkippedRows")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActorId");
+
+                    b.HasIndex("EventId");
+
+                    b.ToTable("EventImportOperations", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_EventImportOperation_Hash", "length(\"Id\")=36 AND length(\"RequestHash\")=64");
+
+                            t.HasCheckConstraint("CK_EventImportOperation_Result", "\"ResultVersion\">0 AND \"NewSongs\">=0 AND \"NewTransitions\">=0 AND \"NewSongs\"+\"NewTransitions\">0 AND \"SkippedRows\">=0 AND \"AcceptedAt\">=0");
+                        });
+                });
+
             modelBuilder.Entity("Sem.Web.Core.EventPartDefinition", b =>
                 {
                     b.Property<string>("Id")
@@ -2636,6 +2682,21 @@ namespace Sem.Web.Data.Migrations
                     b.HasOne("Sem.Web.Data.ApplicationUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.EventImportOperation", b =>
+                {
+                    b.HasOne("Sem.Web.Data.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("ActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Sem.Web.Core.SessionEvent", null)
+                        .WithMany()
+                        .HasForeignKey("EventId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
