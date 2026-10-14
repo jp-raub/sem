@@ -17,6 +17,7 @@ module.exports=async({p,g,ok})=>{
  ok((await api(p,'manual-push-control-change',request,member)).status===403,'Current-cookie actor mismatch cannot change activation');
  ok((await api(p,'manual-push-control-change',{...request,confirmed:false},actor)).status===400,'Operational change requires explicit confirmation');
  ok((await api(p,'manual-push-control-change',{...request,unexpected:true},actor)).status===400,'Operational change rejects unmapped properties');
+ for(const field of ['requestId','enabled','expectedEpoch','confirmed']){const missing={...request};delete missing[field];ok((await api(p,'manual-push-control-change',missing,actor)).status===400,'Operational change requires explicit '+field);}
  const csrfDenied=await p.evaluate(async({actor,request})=>(await fetch('/api/core/manual-push-control-change?'+new URLSearchParams({actor}),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(request)})).status,{actor,request});ok(csrfDenied===400,'Operational change requires CSRF');
  const {token}=await p.evaluate(async()=>await(await fetch('/api/csrf')).json());
  const wrongOrigin=await p.context().request.post(origin+'/api/core/manual-push-control-change?actor='+actor,{headers:{Origin:'https://invalid.example','X-CSRF-TOKEN':token},data:request});ok(wrongOrigin.status()===403,'Operational change rejects foreign Origin independently of valid cookie/CSRF');
@@ -62,6 +63,9 @@ module.exports=async({p,g,ok})=>{
   ok(await a.locator('#manual-push-pending').count()===0&&await a.locator('#manual-push-control').count()===0,'First definite epoch conflict clears request and requires fresh approval');await a.locator('#manual-push-reauthorize').click();await a.waitForFunction(()=>document.getElementById('manual-push-current')?.textContent.includes('世代：3'));
   await a.locator('#manual-push-stage').click();await a.locator('#manual-push-confirm').check();await a.locator('#manual-push-submit').click();await a.waitForFunction(()=>document.getElementById('manual-push-current')?.textContent.includes('世代：4'));
   ok((await api(p,'manual-push-control')).body.enabled===false,'Final native control explicitly returns synthetic activation OFF');
+  await a.route('**/api/core/manual-push-control',route=>route.fulfill({status:403,contentType:'application/json',body:'{}'}));await a.locator('#manual-push-refresh').click();await a.locator('#manual-push-reauthorize').waitFor();
+  ok(await a.locator('#manual-push-operation-result').count()===0,'Current authority loss hides historical operation result as well as current state');await a.unroute('**/api/core/manual-push-control');await a.locator('#manual-push-reauthorize').click();await ready();
+  ok(await a.locator('#manual-push-operation-result').count()===1,'Historical result returns only after original actor reauthorization');
   await m.goto(origin+'/service/manual-push');await m.locator('#manual-push-reauthorize').waitFor();ok(await m.locator('#manual-push-control').count()===0,'Ordinary actual Blazor page never renders privileged state');
   ok(errors.length===0,'Operational native pages have zero runtime errors');
  }finally{await a.close();await m.close()}

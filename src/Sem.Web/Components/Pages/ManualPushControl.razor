@@ -39,7 +39,7 @@
 @if (State.Pending is null && State.NavigationBlocked) { <button @onclick="Discard">非表示の未送信変更を取り消す</button> }
 }
 @if (State.Pending is { } pending) { <p id="manual-push-pending">@(State.Busy ? "処理中" : "結果未確認")：操作ID <code>@pending.RequestId</code>。別の操作は始めず、このIDの結果を確認してください。</p> }
-@if (State.Result is { } result) { <p id="manual-push-operation-result">操作結果：@(result.Enabled ? "ON" : "OFF")・世代@result.Epoch @(result.Replayed ? "（保存済みの結果を再取得）" : "")。これは操作当時の結果で、現在の状態とは別です。</p> }
+@if (State.View is not null && State.Result is { } result) { <p id="manual-push-operation-result">操作結果：@(result.Enabled ? "ON" : "OFF")・世代@result.Epoch @(result.Replayed ? "（保存済みの結果を再取得）" : "")。これは操作当時の結果で、現在の状態とは別です。</p> }
 @code {
     ManualPushControlState State = new(); IJSObjectReference? Module;
     bool Ready, Initializing, Disposed; long Generation; string Error = "", Message = "";

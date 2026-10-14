@@ -16,7 +16,8 @@ public sealed class ManualNotificationPushActivationOperation
 }
 public sealed record ManualNotificationPushActivationView(bool Enabled, long Epoch);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record ManualNotificationPushActivationEdit(string RequestId, bool Enabled, long ExpectedEpoch, bool Confirmed);
+public sealed record ManualNotificationPushActivationEdit([property: JsonRequired] string RequestId, [property: JsonRequired] bool Enabled,
+    [property: JsonRequired] long ExpectedEpoch, [property: JsonRequired] bool Confirmed);
 public sealed record ManualNotificationPushActivationResult(string RequestId, bool Enabled, long Epoch, bool Changed, bool Replayed = false);
 
 public sealed partial class CoreFoundationService
