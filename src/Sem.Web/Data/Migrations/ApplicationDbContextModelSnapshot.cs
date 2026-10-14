@@ -604,6 +604,95 @@ namespace Sem.Web.Data.Migrations
                     b.ToTable("EventSpectators");
                 });
 
+            modelBuilder.Entity("Sem.Web.Core.NotificationReservation", b =>
+                {
+                    b.Property<string>("EventId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Basis")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CancelReason")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("ChangedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("DueAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PartId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PreviousPartId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("ReferenceAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Version")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("EventId", "Id");
+
+                    b.HasIndex("State", "DueAt");
+
+                    b.ToTable("NotificationReservations", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Reservation_Kind", "\"Kind\" IN ('OpeningReminder','SongPreparation')");
+
+                            t.HasCheckConstraint("CK_Reservation_Reason", "(\"State\"='Cancelled' AND \"CancelReason\" IS NOT NULL AND \"CancelReason\" IN ('PartRemoved','TargetStarted')) OR (\"State\"<>'Cancelled' AND \"CancelReason\" IS NULL)");
+
+                            t.HasCheckConstraint("CK_Reservation_State", "\"State\" IN ('Planned','Due','WaitingActual','Cancelled')");
+
+                            t.HasCheckConstraint("CK_Reservation_Time", "(\"State\"='WaitingActual' AND \"DueAt\" IS NULL AND \"ReferenceAt\" IS NULL) OR (\"State\" IN ('Planned','Due') AND \"DueAt\" IS NOT NULL AND \"ReferenceAt\" IS NOT NULL) OR \"State\"='Cancelled'");
+
+                            t.HasCheckConstraint("CK_Reservation_Version", "\"Version\">0");
+                        });
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.NotificationScheduleState", b =>
+                {
+                    b.Property<string>("EventId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("ChangedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("EventVersion")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Fingerprint")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("ProgressVersion")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("EventId");
+
+                    b.ToTable("NotificationScheduleStates", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_NotificationSchedule_Versions", "\"Version\">0 AND \"EventVersion\">=0 AND \"ProgressVersion\">=0");
+                        });
+                });
+
             modelBuilder.Entity("Sem.Web.Core.PartPreset", b =>
                 {
                     b.Property<string>("Id")
@@ -1865,6 +1954,24 @@ namespace Sem.Web.Data.Migrations
                     b.HasOne("Sem.Web.Data.ApplicationUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.NotificationReservation", b =>
+                {
+                    b.HasOne("Sem.Web.Core.NotificationScheduleState", null)
+                        .WithMany()
+                        .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.NotificationScheduleState", b =>
+                {
+                    b.HasOne("Sem.Web.Core.SessionEvent", null)
+                        .WithOne()
+                        .HasForeignKey("Sem.Web.Core.NotificationScheduleState", "EventId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

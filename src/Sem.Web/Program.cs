@@ -48,6 +48,8 @@ builder.Services.AddHostedService<BusinessEmailWorker>();
 builder.Services.AddScoped<DailyDigestScheduler>();
 builder.Services.AddScoped<DailyDigestDispatcher>();
 builder.Services.AddHostedService<DailyDigestWorker>();
+builder.Services.AddScoped<NotificationReservationReconciler>();
+builder.Services.AddHostedService<NotificationReservationWorker>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<PasskeyAdditionService>();
 builder.Services.AddHostedService<NotificationWorker>();

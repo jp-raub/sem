@@ -33,6 +33,7 @@ public static class CoreEndpoints
                     else await ctx.Response.WriteAsJsonAsync(await service.ReadParticipationAsync(ctx.User,id,ctx.RequestAborted,ctx.Request.Query["subject"].FirstOrDefault()));return;
                 }
                 if(post && action == "capacity") { await service.SetCapacityAsync(ctx.User,ctx.Request.Query["id"].ToString(),await ctx.Request.ReadFromJsonAsync<CapacityEdit>()??throw new ValidationException("入力が必要です。"),ctx.RequestAborted);await ctx.Response.WriteAsJsonAsync(new{message="保存しました。"});return;}
+                if(action=="notification-reservations"){if(post){ctx.Response.StatusCode=405;return;}await ctx.Response.WriteAsJsonAsync(await service.ReadNotificationReservationsAsync(ctx.User,ctx.Request.Query["id"].ToString(),ctx.RequestAborted));return;}
                 if(action=="notification-plan"){if(post){ctx.Response.StatusCode=405;return;}await ctx.Response.WriteAsJsonAsync(await service.ReadNotificationPlanAsync(ctx.User,ctx.Request.Query["id"].ToString(),ctx.RequestAborted));return;}
                 if(action=="progress") {if(post){ctx.Response.StatusCode=405;return;}await ctx.Response.WriteAsJsonAsync(await service.ReadProgressAsync(ctx.User,ctx.Request.Query["id"].ToString(),ctx.RequestAborted));return;}
                 if(post&&action=="progress-record"){await ctx.Response.WriteAsJsonAsync(await service.RecordProgressAsync(ctx.User,ctx.Request.Query["id"].ToString(),await ctx.Request.ReadFromJsonAsync<ProgressRecordEdit>()??throw new ValidationException("入力が必要です。"),ctx.RequestAborted));return;}
