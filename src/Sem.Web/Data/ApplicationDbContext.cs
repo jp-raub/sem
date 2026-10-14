@@ -27,6 +27,8 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<EventPartDefinition> EventPartDefinitions => Set<EventPartDefinition>();
     public DbSet<EventQuestion> EventQuestions => Set<EventQuestion>();
     public DbSet<EventQuestionAnswer> EventQuestionAnswers => Set<EventQuestionAnswer>();
+    public DbSet<Song> Songs => Set<Song>();
+    public DbSet<SongPart> SongParts => Set<SongPart>();
     protected override void OnModelCreating(ModelBuilder b)
     {
         base.OnModelCreating(b);
@@ -39,6 +41,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         b.Entity<UserProfile>().Property(x => x.RowVersion).IsConcurrencyToken();
         b.Entity<UserProfile>().ToTable("UserProfiles", t => t.HasCheckConstraint("CK_UserProfiles_SocialJson", "json_valid(\"SocialJson\")"));
         b.Entity<SessionEvent>().Property(x => x.RowVersion).IsConcurrencyToken();
+        b.Entity<SessionEvent>().Property(x=>x.DefaultPrepSeconds).HasDefaultValue(600).HasSentinel(-1);
         b.Entity<SessionEvent>().ToTable("SessionEvents", t => t.HasCheckConstraint("CK_SessionEvents_PhaseKind", "\"PhaseKind\" IN ('Hidden','View')"));
         b.Entity<EventPhase>().ToTable("Phases", t => {
             t.HasCheckConstraint("CK_Phases_Kind", "\"Kind\" IN ('Hidden','View','Custom')");
@@ -73,6 +76,22 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         b.Entity<EventQuestionAnswer>().HasOne<EventQuestion>().WithMany().HasForeignKey(x=>x.QuestionId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<EventQuestionAnswer>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x=>x.UserId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<EventQuestionAnswer>().ToTable("EventQuestionAnswers",t=>t.HasCheckConstraint("CK_EventQuestionAnswers_Value","\"Value\" IS NULL OR length(\"Value\") <= 2000"));
+        b.Entity<SessionEvent>().ToTable("SessionEvents", t => t.HasCheckConstraint("CK_SessionEvents_DefaultPrep", "\"DefaultPrepSeconds\" >= 0"));
+        b.Entity<Song>().HasAlternateKey(x=>new{x.EventId,x.Id});
+        b.Entity<EventPartDefinition>().HasAlternateKey(x=>new{x.EventId,x.Id});
+        b.Entity<EventPhase>().HasAlternateKey(x=>new{x.EventId,x.Id});
+        b.Entity<Song>().HasOne<SessionEvent>().WithMany().HasForeignKey(x=>x.EventId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<Song>().ToTable("Songs", t=> {
+            t.HasCheckConstraint("CK_Songs_Title", "length(\"Title\") BETWEEN 1 AND 200");
+            t.HasCheckConstraint("CK_Songs_Artist", "length(\"Artist\") <= 200");
+            t.HasCheckConstraint("CK_Songs_Seconds", "\"PerformanceSeconds\" >= 1 AND (\"PrepSeconds\" IS NULL OR \"PrepSeconds\" >= 0)");
+        });
+        b.Entity<Song>().HasIndex(x=>new{x.EventId,x.SortOrder});
+        b.Entity<SongPart>().HasOne<Song>().WithMany().HasForeignKey(x=>new{x.EventId,x.SongId}).HasPrincipalKey(x=>new{x.EventId,x.Id}).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<SongPart>().HasOne<EventPartDefinition>().WithMany().HasForeignKey(x=>new{x.EventId,x.PartDefinitionId}).HasPrincipalKey(x=>new{x.EventId,x.Id}).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<SongPart>().HasOne<EventPhase>().WithMany().HasForeignKey(x=>new{x.EventId,x.PhaseId}).HasPrincipalKey(x=>new{x.EventId,x.Id}).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<SongPart>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x=>x.AssignedUserId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<SongPart>().ToTable("SongParts",t=>t.HasCheckConstraint("CK_SongParts_Assignment","(\"AssignedUserId\" IS NULL AND \"PhaseId\" IS NULL) OR (\"AssignedUserId\" IS NOT NULL AND \"PhaseId\" IS NOT NULL)"));
         b.Entity<EventAdmin>().HasKey(x => new { x.EventId, x.UserId });
         b.Entity<EventAdmin>().HasOne<SessionEvent>().WithMany(x => x.Admins).HasForeignKey(x => x.EventId).OnDelete(DeleteBehavior.Cascade);
         b.Entity<EventAdmin>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);

@@ -474,6 +474,11 @@ namespace Sem.Web.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<int>("DefaultPrepSeconds")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(600);
+
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -508,7 +513,91 @@ namespace Sem.Web.Data.Migrations
 
                     b.ToTable("SessionEvents", null, t =>
                         {
+                            t.HasCheckConstraint("CK_SessionEvents_DefaultPrep", "\"DefaultPrepSeconds\" >= 0");
+
                             t.HasCheckConstraint("CK_SessionEvents_PhaseKind", "\"PhaseKind\" IN ('Hidden','View')");
+                        });
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.Song", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Artist")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DeletedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EventId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("PerformanceSeconds")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("PrepSeconds")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EventId", "SortOrder");
+
+                    b.ToTable("Songs", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Songs_Artist", "length(\"Artist\") <= 200");
+
+                            t.HasCheckConstraint("CK_Songs_Seconds", "\"PerformanceSeconds\" >= 1 AND (\"PrepSeconds\" IS NULL OR \"PrepSeconds\" >= 0)");
+
+                            t.HasCheckConstraint("CK_Songs_Title", "length(\"Title\") BETWEEN 1 AND 200");
+                        });
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.SongPart", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AssignedUserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EventId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PartDefinitionId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PhaseId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SongId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AssignedUserId");
+
+                    b.HasIndex("EventId", "PartDefinitionId");
+
+                    b.HasIndex("EventId", "PhaseId");
+
+                    b.HasIndex("EventId", "SongId");
+
+                    b.ToTable("SongParts", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_SongParts_Assignment", "(\"AssignedUserId\" IS NULL AND \"PhaseId\" IS NULL) OR (\"AssignedUserId\" IS NOT NULL AND \"PhaseId\" IS NOT NULL)");
                         });
                 });
 
@@ -1165,6 +1254,43 @@ namespace Sem.Web.Data.Migrations
                     b.HasOne("Sem.Web.Data.ApplicationUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.Song", b =>
+                {
+                    b.HasOne("Sem.Web.Core.SessionEvent", null)
+                        .WithMany()
+                        .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.SongPart", b =>
+                {
+                    b.HasOne("Sem.Web.Data.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("AssignedUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Sem.Web.Core.EventPartDefinition", null)
+                        .WithMany()
+                        .HasForeignKey("EventId", "PartDefinitionId")
+                        .HasPrincipalKey("EventId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Sem.Web.Core.EventPhase", null)
+                        .WithMany()
+                        .HasForeignKey("EventId", "PhaseId")
+                        .HasPrincipalKey("EventId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Sem.Web.Core.Song", null)
+                        .WithMany()
+                        .HasForeignKey("EventId", "SongId")
+                        .HasPrincipalKey("EventId", "Id")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

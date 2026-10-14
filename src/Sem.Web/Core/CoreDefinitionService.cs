@@ -44,7 +44,8 @@ public sealed partial class CoreFoundationService {
    var e=await Managed(db,principal,eventId,ct);if(e.RowVersion!=edit.RowVersion)throw new CoreConflictException();
    var rows=await db.EventPartDefinitions.Where(x=>x.EventId==e.Id).ToListAsync(ct);
    foreach(var d in drafts){var old=rows.SingleOrDefault(x=>x.Id==d.Id);if(old is not null&&old.DeletedAt is not null||old is null&&(!Guid.TryParse(d.Id,out _)||await db.EventPartDefinitions.AnyAsync(x=>x.Id==d.Id,ct)||await db.PartPresets.AnyAsync(x=>x.Id==d.Id,ct)))throw new ValidationException("定義の識別子を確認してください。");}
-   // SongParts do not exist yet. Their referenced-definition deletion/category guard must be added with songs, before enabling signup.
+   var protectedIds=rows.Where(x=>x.DeletedAt is null&&(!drafts.Any(d=>d.Id==x.Id)||drafts.Any(d=>d.Id==x.Id&&d.Category!=x.Category))).Select(x=>x.Id).ToArray();
+   if(await db.SongParts.AnyAsync(x=>protectedIds.Contains(x.PartDefinitionId),ct))throw new ValidationException("曲の枠で使用中の定義は削除／分類変更できません。名前は同じ識別子のまま変更できます。");
    foreach(var old in rows.Where(x=>x.DeletedAt is null)){old.NormalizedName="|"+old.Id;if(!drafts.Any(d=>d.Id==old.Id))old.DeletedAt=Utc(clock.GetUtcNow());}
    await db.SaveChangesAsync(ct);var order=0;
    foreach(var d in drafts){var row=rows.SingleOrDefault(x=>x.Id==d.Id);if(row is null){row=new(){Id=d.Id,EventId=e.Id};db.EventPartDefinitions.Add(row);}row.Name=d.Name;row.NormalizedName=d.Name.ToUpperInvariant();row.Category=d.Category;row.SortOrder=order++;}
