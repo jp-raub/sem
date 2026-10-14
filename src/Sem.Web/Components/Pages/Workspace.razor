@@ -47,7 +47,7 @@ else
     <p>基本プロフィールはログイン済みメンバーに公開されます。メールは公開しません。アイコン・追加設問・登録履歴は後続実装です。</p></section>
     @if (View.IsAdmin)
     {
-        <section class="panel" id="core-service"><h2>サービス管理</h2><p><a href="/service/part-presets">新規イベント用パートプリセット</a></p>
+        <section class="panel" id="core-service"><h2>サービス管理</h2><p><a href="/service/part-presets">新規イベント用パートプリセット</a> ／ <a id="digest-preview-link" href="/service/digest-preview">日次ダイジェスト文面プレビュー</a></p>
         @if (Editing == "service")
         {
             <form @onsubmit="SaveService" @onsubmit:preventDefault>
