@@ -1092,6 +1092,93 @@ namespace Sem.Web.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Sem.Web.Core.ManualNotificationPushDelivery", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("BindingFingerprint")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Claim")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DeviceId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("DueAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("ExpiresAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("LeaseUntil")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("ProviderAcceptedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RecipientId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RecipientId", "DeviceId")
+                        .IsUnique();
+
+                    b.HasIndex("State", "DueAt");
+
+                    b.ToTable("ManualNotificationPushDeliveries", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ManualPushDelivery_Accepted", "(\"State\"='Accepted' AND \"ProviderAcceptedAt\" IS NOT NULL) OR (\"State\"<>'Accepted' AND \"ProviderAcceptedAt\" IS NULL)");
+
+                            t.HasCheckConstraint("CK_ManualPushDelivery_Attempts", "\"Attempts\" BETWEEN 0 AND 5");
+
+                            t.HasCheckConstraint("CK_ManualPushDelivery_Claim", "(\"State\"='Claimed' AND \"Claim\" IS NOT NULL AND \"LeaseUntil\" IS NOT NULL AND \"Attempts\">0 AND \"LeaseUntil\"<=\"ExpiresAt\") OR (\"State\"<>'Claimed' AND \"Claim\" IS NULL AND \"LeaseUntil\" IS NULL)");
+
+                            t.HasCheckConstraint("CK_ManualPushDelivery_Digests", "length(\"Id\")=64 AND length(\"BindingFingerprint\")=64");
+
+                            t.HasCheckConstraint("CK_ManualPushDelivery_State", "\"State\" IN ('Pending','Claimed','Unknown','Accepted','Expired','Suppressed','Failed')");
+                        });
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.ManualNotificationPushPreparation", b =>
+                {
+                    b.Property<string>("RecipientId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("DeviceCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Outcome")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("PreparedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("RecipientId");
+
+                    b.ToTable("ManualNotificationPushPreparations", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ManualPushPreparation_Count", "\"DeviceCount\">=0 AND ((\"Outcome\"='Prepared' AND \"DeviceCount\">0) OR (\"Outcome\"<>'Prepared' AND \"DeviceCount\"=0))");
+                        });
+                });
+
             modelBuilder.Entity("Sem.Web.Core.ManualNotificationRecipient", b =>
                 {
                     b.Property<string>("Id")
@@ -2748,6 +2835,24 @@ namespace Sem.Web.Data.Migrations
                     b.HasOne("Sem.Web.Core.ManualNotificationOperation", null)
                         .WithOne()
                         .HasForeignKey("Sem.Web.Core.ManualNotificationPushAdmission", "OperationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.ManualNotificationPushDelivery", b =>
+                {
+                    b.HasOne("Sem.Web.Core.ManualNotificationPushPreparation", null)
+                        .WithMany()
+                        .HasForeignKey("RecipientId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.ManualNotificationPushPreparation", b =>
+                {
+                    b.HasOne("Sem.Web.Core.ManualNotificationRecipient", null)
+                        .WithOne()
+                        .HasForeignKey("Sem.Web.Core.ManualNotificationPushPreparation", "RecipientId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

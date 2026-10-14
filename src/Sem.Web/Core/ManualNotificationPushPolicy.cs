@@ -35,7 +35,22 @@ public sealed class ManualNotificationPushPolicy(IDbContextFactory<ApplicationDb
             return new("InvalidInput");
         await using var db = await factory.CreateDbContextAsync(ct);
         await using var tx = await db.Database.BeginTransactionAsync(ct);
-        var now = clock.GetUtcNow();
+        var result = await ReadInTransactionAsync(db, clock.GetUtcNow(), recipientId, deviceId, expectedBindingFingerprint, ct);
+        await tx.CommitAsync(ct);
+        return result;
+    }
+    internal static async Task<ManualNotificationPushPolicyResult> ReadInTransactionAsync(ApplicationDbContext db,
+        DateTimeOffset now, string recipientId, string deviceId, string expectedBindingFingerprint, CancellationToken ct)
+    {
+        var policy = await ReadRecipientInTransactionAsync(db, now, recipientId, ct);
+        if (policy.State != "EligibleForStaging") return policy;
+        var facts = await ManualNotificationDevicePreflight.ReadInTransactionAsync(db, now, recipientId,
+            deviceId, expectedBindingFingerprint, ct);
+        return facts.State == "PolicyPending" ? policy : new(facts.State);
+    }
+    internal static async Task<ManualNotificationPushPolicyResult> ReadRecipientInTransactionAsync(ApplicationDbContext db,
+        DateTimeOffset now, string recipientId, CancellationToken ct)
+    {
         var recipient = await db.Set<ManualNotificationRecipient>().AsNoTracking()
             .SingleOrDefaultAsync(x => x.Id == recipientId, ct);
         if (recipient is null) return new("MissingAcceptedRecipient");
@@ -54,12 +69,9 @@ public sealed class ManualNotificationPushPolicy(IDbContextFactory<ApplicationDb
         // At the exact deadline no further Push may be sent. Clock rollback fails closed.
         if (now.ToUnixTimeSeconds() < admission.AcceptedAt) return new("ClockBeforeAcceptance");
         if (now.ToUnixTimeSeconds() >= admission.ExpiresAt) return new("Expired", admission.ExpiresAt);
-        // One read transaction and one clock value for policy + current binding facts.
-        var facts = await ManualNotificationDevicePreflight.ReadInTransactionAsync(db, now, recipientId,
-            deviceId, expectedBindingFingerprint, ct);
+        var (facts, _) = await ManualNotificationDevicePreflight.ReadRecipientInTransactionAsync(db, now, recipientId, ct);
         if (facts.State != "PolicyPending") return new(facts.State);
         if (facts.CurrentlyRegistered != true) return new("NoLongerRegistered");
-        await tx.CommitAsync(ct);
         return new("EligibleForStaging", admission.ExpiresAt);
     }
 }
