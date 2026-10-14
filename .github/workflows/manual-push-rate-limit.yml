@@ -1,0 +1,58 @@
+name: Manual Push rate-limit recovery
+on:
+  push:
+    branches: [fix/manual-push-rate-limit]
+  pull_request:
+    branches: [feat/manual-notification-push-engine]
+    paths:
+      - src/**
+      - tests/**
+      - .github/workflows/manual-push-rate-limit.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: manual-push-rate-limit-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  backend-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Release with warnings as errors
+        run: |
+          set -euo pipefail
+          mkdir -p verification
+          if dotnet build src/Sem.Web -c Release -warnaserror 2>&1 | tee verification/device-preflight-build.log; then
+            echo "Release build passed with warnings as errors."
+          else
+            python3 - <<'PYERROR'
+          import pathlib
+          lines = pathlib.Path("verification/device-preflight-build.log").read_text(errors="replace").splitlines()
+          errors = [line for line in lines if "error" in line.lower()][-20:]
+          for line in errors:
+              safe = line.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+              print("::error title=Release build diagnostic::" + safe)
+          PYERROR
+            exit 1
+          fi
+      - name: 429 recovery and all existing .NET regressions
+        run: |
+          set -euo pipefail
+          suites=0
+          for project in tests/*/*.csproj; do
+            name=$(basename "$(dirname "$project")")
+            dotnet run --project "$project" -c Release 2>&1 | tee "verification/${name}.log"
+            suites=$((suites+1))
+          done
+          echo "::notice title=.NET regressions::All $suites suites completed. No transport, native UI, Docker or DXP claim."
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: manual-push-rate-limit-backend
+          path: verification/*.log
+          retention-days: 7
