@@ -1,0 +1,23 @@
+# Event questionnaire definitions and answer-reference protection
+
+English source of truth. Stacked on verified event-part definitions; no deployment or merge.
+
+## Implemented
+
+The additive `AddEventQuestions` migration creates `EventQuestions` and `EventQuestionAnswers`. It invents no default questionnaires and changes no pre-existing event version, identity, phase, manager, preset, profile, invitation or notification rows. Questions belong to a formal event; IDs remain stable across rename/reorder/stop/resume. Event/question/user deletion is restricted by FKs when referenced, rather than silently removing answers.
+
+Questions have text (trimmed 1–200 characters), immutable-after-creation `YesNo` or `Text` type, independent required/stopped flags, sort order, aggregate publication and explicit text-body publication. New questions are private by default. Text-body publication requires `Text` AND aggregate publication; invalid direct API combinations are rejected. The UI clears/disables body permission when aggregate permission is revoked or the new-question type changes. Stopping does not erase publication preferences or existing references; any future public results must also exclude stopped/deleted questions.
+
+`/events/{id}/questions` is actual InteractiveServer management: text-click editor, add, up/down order, required/stop/publication settings, immutable existing type, draft apply, final atomic save and cancellation. `/api/core/questions?id={id}` GET/POST is management-only. Current enabled/confirmed account, security stamp, session revocation and actual global/event assignment are rechecked; writes retain existing exact-Origin/CSRF/body-limit protection and reject unknown fields/forged answer payloads. Plans share event RowVersion with phases/overview/part definitions; stale/concurrent drafts cannot silently replace newer plans. Lists are bounded to 100 questions/64 KiB request bodies. Deleted IDs cannot be resurrected or transferred between events. Question text is Razor-escaped, never interpreted as markup.
+
+Answer storage exists **only as a reference-preservation foundation** in this unit. It has `(QuestionId,UserId)` PK, real user/question restricted FKs, nullable string value (NO is different from null/unanswered), at most 2000 characters, and update timestamp. The management plan returns only per-question record counts, not answer values or respondent identities. Any stored answer record—including null/empty—blocks removal; stop the question instead. Definition edits preserve stored answers. Removing an unreferenced question creates a tombstone.
+
+## Verification and continuation
+
+`tests/Sem.QuestionChecks` migrates a populated fixed prior schema and exercises no invented questions, data/version preservation, current role/session checks, private defaults, text/type/publication validation, immutable types before/after references, stale/shared/concurrent versions, cross-event IDs, answer counts without values, NO/null distinction, blocked answered deletion, stop/resume without data loss, unused tombstones, database restricted FKs and restart. Answer fixtures are synthetic direct DB inserts—not proof of a real participant submission path.
+
+HTTPS/native virtual-passkey acceptance appends to previous core/phase/definition tests. It covers manager API defaults/validation/forged-answer denial, real Blazor save/cancel/order/stop/publication controls, actual immutable type, unused deletion/ID-reuse denial, restart and native key re-login. Dedicated CI retains Docker builds, static-asset presence, rate-limit regressions and existing storage/auth/reset/copy tests. Read completed results before declaring CI successful.
+
+Not implemented here: participant answers, enrollment/answer-only update rules, required-answer enforcement during partial signup, public aggregates/respondent/text display, profile questions, real-time broadcasts, full v33 layout/modal focus-trapping, drag ordering, Songs/SongParts/capacity/business notifications. No answer-writing endpoint is exposed. **Do not enable it until real participation and Custom-phase/current-version checks exist.** Null/NO/type/length validation, merged stopped-question history and server-side publication authorization must accompany that later path. A saved Public flag alone grants nobody access to this management endpoint or to any answer values.
+
+No DXP, `.env`, keys, RP/proxy/network, original volumes, image delivery or PR merge is changed. Under existing authorization, finish validation then continue with Songs/SongParts and the referenced-part-definition guards needed for registration/answers. Only new contradictions/destructive decisions require a specific user question.

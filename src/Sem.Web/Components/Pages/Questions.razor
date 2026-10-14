@@ -1,0 +1,42 @@
+@page "/events/{EventId}/questions"
+@rendermode InteractiveServer
+@using Sem.Web.Core
+@inject AuthenticationStateProvider Authentication
+@inject CoreFoundationService Core
+<PageTitle>イベント設問管理</PageTitle>
+<h1>イベント設問管理：@Plan?.Title</h1><p><a href="/workspace">業務基盤へ戻る</a></p>
+<p>設問の定義を管理します。申込み・回答入力・公開集計は後続実装で、この画面から参加登録や回答送信はできません。</p>
+<p id="question-error" role="alert">@Error</p><p id="question-message" role="status">@Message</p>
+@if(Plan is not null){
+ @if(!Editing){<button id="question-edit" @onclick="()=>{Editing=true;Message=string.Empty;}">編集</button><button id="question-refresh" @onclick="Load">最新状態を取得</button>}
+ else{<p>変更は下書きです。最後の保存まで共有されません。</p><button id="question-add" disabled="@(Busy||Modal)" @onclick="New">設問を追加</button>}
+ <table><thead><tr><th>質問文</th><th>形式</th><th>必須／状態</th><th>公開設定</th><th>回答レコード数</th><th>順序</th></tr></thead><tbody>
+ @foreach(var row in Rows){<tr data-question="@row.Id"><td>@if(Editing){<button data-question-text="@row.Id" disabled="@(Busy||Modal)" @onclick="()=>Open(row)">@row.Text</button>}else{@row.Text}</td><td>@(row.Type=="YesNo"?"YES / NO":"自由記述")</td><td>@(row.Required?"必須":"任意") ／ @(row.Disabled?"停止中":"使用中")</td><td>集計：@(row.Public?"公開":"非公開") ／ 本文：@(row.PublicText?"公開":"非公開")</td><td>@row.AnswerCount</td><td>@if(Editing){<button data-question-up="@row.Id" disabled="@(Busy||Modal||Rows.IndexOf(row)==0)" @onclick="()=>Move(row,-1)">↑</button><button data-question-down="@row.Id" disabled="@(Busy||Modal||Rows.IndexOf(row)==Rows.Count-1)" @onclick="()=>Move(row,1)">↓</button>}</td></tr>}
+ </tbody></table>
+ @if(Rows.Count==0){<p>設問はありません。</p>}
+ @if(Editing){<button id="question-save" disabled="@(Busy||Modal)" @onclick="Save">保存</button><button id="question-cancel" disabled="@Busy" @onclick="Cancel">取消</button>}
+ @if(Modal){<section role="dialog" aria-modal="true" aria-label="イベント設問編集" class="panel"><h2>イベント設問編集</h2>
+ <label>質問文<input id="question-text" @bind="QuestionText" maxlength="200" /></label><label>回答形式<select id="question-type" @bind="Kind" disabled="@(Selected is not null)"><option value="YesNo">YES / NO</option><option value="Text">自由記述</option></select></label>
+ <label><input id="question-required" type="checkbox" @bind="Required" />必須回答</label><label><input id="question-disabled" type="checkbox" @bind="Disabled" />使用停止</label>
+ <label><input id="question-public" type="checkbox" @bind="Public" />回答数と回答者をイベント閲覧者へ公開</label><label><input id="question-public-text" type="checkbox" @bind="PublicText" disabled="@(Kind!="Text"||!Public)" />自由記述の回答本文を公開</label>
+ <p>既定は非公開。本文公開は自由記述＋集計公開の場合のみ。回答形式は作成後に変更できません。回答レコードのある設問は削除せず使用停止を利用してください。</p>
+ <button id="question-apply" @onclick="Apply">下書きに反映</button><button id="question-close" @onclick="()=>Modal=false">閉じる</button>
+ @if(Selected is not null){<button id="question-delete" disabled="@(Selected.AnswerCount>0)" @onclick="Delete">下書きから削除</button>}
+ </section>}
+}
+@code{
+ [Parameter]public string EventId{get;set;}="";
+ EventQuestionPlan?Plan;List<EventQuestionView>Rows=[];EventQuestionView?Selected;bool Editing,Busy,Modal,Required,Disabled,PublicText;string QuestionText="",Error="",Message="";
+ string _kind="YesNo";bool _public;
+ string Kind{get=>_kind;set{_kind=value;if(value!="Text")PublicText=false;}}
+ bool Public{get=>_public;set{_public=value;if(!value)PublicText=false;}}
+ protected override async Task OnParametersSetAsync(){Editing=Modal=false;await Load();}
+ async Task Load(){try{Plan=await Core.ReadQuestionsAsync((await Authentication.GetAuthenticationStateAsync()).User,EventId);Rows=Plan.Questions.ToList();Error="";}catch{Plan=null;Rows=[];Editing=Modal=false;Error="ログイン状態とイベント管理権限を確認してください。";}}
+ void Cancel(){Rows=Plan!.Questions.ToList();Editing=Modal=false;Error="";Message="下書きを取り消しました。";}
+ void New(){if(Busy||Modal)return;Selected=null;QuestionText="";Kind="YesNo";Required=Disabled=Public=PublicText=false;Modal=true;}
+ void Open(EventQuestionView row){if(Busy||Modal)return;Selected=row;QuestionText=row.Text;Kind=row.Type;Required=row.Required;Disabled=row.Disabled;Public=row.Public;PublicText=row.PublicText;Modal=true;}
+ void Move(EventQuestionView row,int change){if(Busy||Modal)return;var index=Rows.FindIndex(x=>x.Id==row.Id);if(index<0)return;var next=index+change;if(next>=0&&next<Rows.Count)(Rows[index],Rows[next])=(Rows[next],Rows[index]);}
+ void Apply(){var text=QuestionText.Trim();if(text.Length is <1 or >200){Error="質問文を1〜200文字で指定してください。";return;}var row=new EventQuestionView(Selected?.Id??Guid.NewGuid().ToString(),text,Kind,Required,Disabled,Public,PublicText,Selected?.AnswerCount??0);if(Selected is not null)Rows[Rows.IndexOf(Selected)]=row;else Rows.Add(row);Modal=false;Error="";}
+ void Delete(){if(Selected is not null&&Selected.AnswerCount==0){Rows.Remove(Selected);Modal=false;}}
+ async Task Save(){if(Busy)return;Busy=true;Error="";try{await Core.SaveQuestionsAsync((await Authentication.GetAuthenticationStateAsync()).User,EventId,new(Plan!.RowVersion,Rows.Select(x=>new EventQuestionEdit(x.Id,x.Text,x.Type,x.Required,x.Disabled,x.Public,x.PublicText)).ToArray()));Editing=Modal=false;Message="保存しました。";await Load();}catch(UnauthorizedAccessException){Plan=null;Rows=[];Editing=Modal=false;Error="再ログインと管理権限を確認してください。";}catch(Exception e)when(e is CoreConflictException or System.ComponentModel.DataAnnotations.ValidationException){Error=e.Message;}catch{Error="保存できませんでした。下書きを保持しています。最新状態を確認してください。";}finally{Busy=false;}}
+}

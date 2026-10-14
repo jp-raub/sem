@@ -25,6 +25,8 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<PartPresetState> PartPresetStates => Set<PartPresetState>();
     public DbSet<PartPreset> PartPresets => Set<PartPreset>();
     public DbSet<EventPartDefinition> EventPartDefinitions => Set<EventPartDefinition>();
+    public DbSet<EventQuestion> EventQuestions => Set<EventQuestion>();
+    public DbSet<EventQuestionAnswer> EventQuestionAnswers => Set<EventQuestionAnswer>();
     protected override void OnModelCreating(ModelBuilder b)
     {
         base.OnModelCreating(b);
@@ -60,6 +62,17 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         });
         b.Entity<EventPartDefinition>().HasOne<SessionEvent>().WithMany().HasForeignKey(x=>x.EventId).OnDelete(DeleteBehavior.Cascade);
         b.Entity<EventPartDefinition>().HasIndex(x=>new {x.EventId,x.NormalizedName}).IsUnique().HasFilter("\"DeletedAt\" IS NULL");
+        b.Entity<EventQuestion>().ToTable("EventQuestions",t=> {
+            t.HasCheckConstraint("CK_EventQuestions_Type","\"Type\" IN ('YesNo','Text')");
+            t.HasCheckConstraint("CK_EventQuestions_Text","length(\"Text\") BETWEEN 1 AND 200");
+            t.HasCheckConstraint("CK_EventQuestions_PublicText","\"PublicText\"=0 OR (\"Type\"='Text' AND \"Public\"=1)");
+        });
+        b.Entity<EventQuestion>().HasOne<SessionEvent>().WithMany().HasForeignKey(x=>x.EventId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<EventQuestion>().HasIndex(x=>new{x.EventId,x.SortOrder});
+        b.Entity<EventQuestionAnswer>().HasKey(x=>new{x.QuestionId,x.UserId});
+        b.Entity<EventQuestionAnswer>().HasOne<EventQuestion>().WithMany().HasForeignKey(x=>x.QuestionId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<EventQuestionAnswer>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x=>x.UserId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<EventQuestionAnswer>().ToTable("EventQuestionAnswers",t=>t.HasCheckConstraint("CK_EventQuestionAnswers_Value","\"Value\" IS NULL OR length(\"Value\") <= 2000"));
         b.Entity<EventAdmin>().HasKey(x => new { x.EventId, x.UserId });
         b.Entity<EventAdmin>().HasOne<SessionEvent>().WithMany(x => x.Admins).HasForeignKey(x => x.EventId).OnDelete(DeleteBehavior.Cascade);
         b.Entity<EventAdmin>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
