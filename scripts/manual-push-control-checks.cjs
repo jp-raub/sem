@@ -28,8 +28,8 @@ module.exports=async({p,g,ok})=>{
   ok(html.headers()['cache-control']?.includes('no-store'),'Operational HTML is private no-store');
   ok(await a.locator('#manual-push-submit').isDisabled(),'Operational view alone does not authorize change');
   await a.locator('#manual-push-stage').click();ok(await a.locator('#manual-push-submit').isDisabled(),'Staged target still requires separate confirmation');
-  await a.locator('a[href="/workspace#core-service"]').click();await a.waitForFunction(()=>document.getElementById('manual-push-control-error').textContent.includes('未送信'));
-  ok(a.url().endsWith('/service/manual-push'),'Unsent activation draft blocks internal navigation');await a.locator('#manual-push-discard').click();await a.locator('a[href="/workspace#core-service"]').click();await a.waitForURL('**/workspace#core-service');
+  await a.getByRole('link',{name:'サービス管理へ戻る',exact:true}).click();await a.waitForFunction(()=>document.getElementById('manual-push-control-error').textContent.includes('未送信'));
+  ok(a.url().endsWith('/service/manual-push'),'Unsent activation draft blocks internal navigation');await a.locator('#manual-push-discard').click();await a.getByRole('link',{name:'サービス管理へ戻る',exact:true}).click();await a.waitForURL('**/workspace#core-service');
   ok(a.url().includes('/workspace'),'Discarding unsent change permits navigation without altering activation');
   await a.locator('#manual-push-control-link').click();await ready();await a.locator('#manual-push-stage').click();await a.locator('#manual-push-confirm').check();
   ok(await a.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'390px operational control has no horizontal page overflow');
@@ -40,7 +40,7 @@ module.exports=async({p,g,ok})=>{
   await a.locator('#manual-push-submit').click();await a.waitForFunction(()=>document.querySelector('#manual-push-control')?.dataset.busy==='true');
   ok(await a.locator('#manual-push-refresh').isDisabled()&&await a.locator('#manual-push-stage').count()===0,'In-flight operation prevents refresh and alternate operation');release();await a.waitForFunction(()=>document.querySelector('#manual-push-control')?.dataset.uncertain==='true');
   ok((await a.locator('#manual-push-pending').innerText()).includes(frozen.requestId),'Lost operational response preserves original request ID');
-  await a.locator('a[href="/workspace#core-service"]').click();ok(a.url().endsWith('/service/manual-push'),'Unknown operational result blocks navigation');await a.unroute('**/api/core/manual-push-control-change?*');
+  await a.getByRole('link',{name:'サービス管理へ戻る',exact:true}).click();ok(a.url().endsWith('/service/manual-push'),'Unknown operational result blocks navigation');await a.unroute('**/api/core/manual-push-control-change?*');
   const on=await api(p,'manual-push-control');ok(on.body.enabled&&on.body.epoch===1,'Lost response actually committed exactly one ON epoch');
   const other=await api(p,'manual-push-control-change',{requestId:guid(),enabled:false,expectedEpoch:1,confirmed:true},actor);ok(other.status===200&&other.body.epoch===2,'Independent administrator operation can stop newer current state');
   await a.route('**/api/core/manual-push-control-change?*',route=>route.fulfill({status:403,contentType:'application/json',body:'{}'}));await a.locator('#manual-push-submit').click();await a.locator('#manual-push-reauthorize').waitFor();
