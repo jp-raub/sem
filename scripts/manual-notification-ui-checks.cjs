@@ -93,8 +93,9 @@ module.exports = async ({p,g,ok}) => {
   await a.unroute('**/api/core/manual-notification-accept?*');
   const liveContext=(await api(p,'manual-notification-context',undefined,q)).body;
   await a.route('**/api/core/manual-notification-context?*',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({...liveContext,userId:'different-cookie-account'})}));
-  await a.locator('#manual-notification-reauthorize').click();
-  await a.waitForFunction(()=>document.getElementById('manual-notification-error').textContent.length>0);
+  const switchedContext=a.waitForResponse(r=>r.url().includes('/api/core/manual-notification-context?')&&r.status()===200);
+  await a.locator('#manual-notification-reauthorize').click();await switchedContext;
+  await a.waitForFunction(()=>document.getElementById('manual-notification-error').textContent==='ログイン状態と現在のイベント管理権限を確認してください。');
   ok(await a.locator('#manual-notification-composer').count()===0,'Different current-cookie actor cannot reauthorize or reveal the original private composer');
   await a.unroute('**/api/core/manual-notification-context?*');
   await a.locator('#manual-notification-reauthorize').click();await ready(a);
