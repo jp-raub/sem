@@ -1068,6 +1068,42 @@ namespace Sem.Web.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Sem.Web.Core.ManualNotificationPushActivationOperation", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ActorId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("At")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("Changed")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("ExpectedEpoch")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("ResultEpoch")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActorId");
+
+                    b.ToTable("ManualNotificationPushActivationOperations", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ManualPushActivationOperation_Request", "length(\"Id\")=36 AND \"ExpectedEpoch\">=0 AND \"ResultEpoch\">=0");
+
+                            t.HasCheckConstraint("CK_ManualPushActivationOperation_Result", "(\"Changed\"=1 AND \"ExpectedEpoch\"<9223372036854775807 AND \"ResultEpoch\"=\"ExpectedEpoch\"+1) OR (\"Changed\"=0 AND \"ResultEpoch\"=\"ExpectedEpoch\")");
+                        });
+                });
+
             modelBuilder.Entity("Sem.Web.Core.ManualNotificationPushAdmission", b =>
                 {
                     b.Property<string>("OperationId")
@@ -2826,6 +2862,15 @@ namespace Sem.Web.Data.Migrations
                     b.HasOne("Sem.Web.Core.SessionEvent", null)
                         .WithMany()
                         .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.ManualNotificationPushActivationOperation", b =>
+                {
+                    b.HasOne("Sem.Web.Data.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("ActorId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
