@@ -70,6 +70,15 @@ public sealed partial class CoreFoundationService
             PreviewFingerprint = source.Preview.Fingerprint, Subject = draft.Subject, Body = draft.Body,
             RecipientCount = source.Recipients.Length, AcceptedAt = at
         });
+        // Explicit durable admission, atomic with the original accept. An absent/disabled
+        // activation leaves NO admission; later activation or replay must never backfill it.
+        var pushActivation = await db.Set<ManualNotificationPushActivation>().AsNoTracking()
+            .SingleOrDefaultAsync(x => x.Id == 1, ct);
+        if (pushActivation is { Enabled: true } && at >= 0 && at <= long.MaxValue - ManualNotificationPushPolicy.LifetimeSeconds)
+            db.Add(new ManualNotificationPushAdmission {
+                OperationId = edit.RequestId, Epoch = pushActivation.Epoch, AcceptedAt = at,
+                ExpiresAt = at + ManualNotificationPushPolicy.LifetimeSeconds
+            });
         foreach (var userId in source.Recipients) {
             var messageId = SemEndpoints.Hash(JsonSerializer.Serialize(new[] { "manual-notification-inbox-v1", id, edit.RequestId, userId }));
             db.Messages.Add(new Message { Id = messageId, UserId = userId, Title = draft.Subject, Body = draft.Body, Created = at });
