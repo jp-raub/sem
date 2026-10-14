@@ -7,7 +7,7 @@
 <NavigationLock ConfirmExternalNavigation="@State.NavigationBlocked" OnBeforeInternalNavigation="BeforeNavigation" />
 <PageTitle>手動Pushの運用制御</PageTitle>
 <h1>手動Pushの運用制御</h1>
-<p><a href="/workspace#core-service" @onclick="ReturnToService" @onclick:preventDefault="true">サービス管理へ戻る</a></p>
+<p><button type="button" id="manual-push-return" @onclick="ReturnToService">サービス管理へ戻る</button></p>
 <p>全体管理者専用です。有効化後に新しく受付した通知だけが対象で、有効化前の受付は後付け配信しません。期限は元の受付から10分。参加解除後も保存済みメッセージは残しますが、以後のPushは抑止します。</p>
 <p>停止・再有効化は世代を変更します。以前の世代の通知は再開しません。配信基盤への受付は端末受信・既読の保証ではありません。</p>
 <p>下書きと結果未確認の操作はこの画面のメモリだけです。処理中・結果不明では再読込や画面を閉じる操作を避け、同じ操作IDで結果を確認してください。</p>
