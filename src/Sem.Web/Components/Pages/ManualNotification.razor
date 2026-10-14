@@ -9,7 +9,7 @@
 <PageTitle>参加者への手動メッセージ</PageTitle>
 <h1>参加者への手動メッセージ：@Title</h1>
 <p><a href="@($"/events/{EventId}/notification-plan")">通知予定へ戻る</a></p>
-<p id="manual-notification-policy">現在の演奏・観覧登録者へ1人1件、メッセージボックスに保存します。プレビューだけでは保存しません。受付済みは保存完了で、既読・端末到着ではありません。この工期では手動Push配信は未接続です。</p>
+<p id="manual-notification-policy">現在の演奏・観覧登録者へ1人1件、メッセージボックスに保存します。プレビューだけでは保存しません。受付済みは保存完了で、既読・端末到着ではありません。Pushは有効化後の受付だけが対象です。受付方針・ホストの鍵・現在の閲覧権限と端末条件・元の受付から10分の期限を満たす場合に処理します。保存成功はPush配信成功を意味しません。</p>
 <p>下書きと処理中の要求はこの画面のメモリだけに保持します。処理中・結果不明では再読込や画面を閉じる操作を避け、同じ操作IDで結果を確認してください。別IDでの送信は別の通知になります。</p>
 <p id="manual-notification-error" role="alert">@Error</p>
 <p id="manual-notification-message" role="status">@Message</p>
@@ -22,7 +22,7 @@
     <h2>メッセージの受付済み</h2>
     <p>@accepted.RecipientCount 人分を保存しました。受付日時：@Time(accepted.AcceptedAt)。@(accepted.Replayed ? "同じ操作IDの保存済み結果を確認しました。" : "")</p>
     <p>操作ID：<code>@accepted.RequestId</code></p>
-    <p>手動Pushは未配信です。端末受信・既読・外部配信の完全な一回性を意味しません。</p>
+    <p>この受付結果だけでは手動Pushの配信結果は確認できません。端末受信・既読・外部配信の完全な一回性を意味しません。</p>
     <button id="manual-notification-new" @onclick="StartNew">別のメッセージを新しく作成</button>
     </section>
 }
@@ -45,7 +45,7 @@ else
         <p id="manual-notification-count">現在の対象：@preview.RecipientCount 人（演奏・観覧の重複なし）</p>
         <h3 id="manual-notification-preview-subject">@preview.Subject</h3>
         <p id="manual-notification-preview-body" class="manual-notification-plain">@preview.Body</p>
-        <p>Push表示予定：@preview.Subject ／ @preview.PushPreviewBody ／ 本人のメッセージボックスへ（配信は未接続）</p>
+        <p>Push表示予定：@preview.Subject ／ @preview.PushPreviewBody ／ 本人のメッセージボックスへ（配信は現在の条件と期限によります）</p>
         <p>対象者・イベント・内容が変わった場合は、新しいプレビューが必要です。</p>
         <label class="manual-notification-confirmation"><input id="manual-notification-confirm" type="checkbox" checked="@State.Confirmed" disabled="@(!State.CanEdit)" @onchange="ConfirmChanged" />対象人数と件名・本文を確認し、メッセージの保存を実行する</label>
         </section>
@@ -136,7 +136,7 @@ else if (Ready)
         try {
             var result = await Module.InvokeAsync<Transport<ManualNotificationAcceptance>>("post", "manual-notification-accept", LoadedId, ActorId, request);
             if (Disposed || generation != Generation) return;
-            if (result.Status == 200 && result.Value is { } acceptance) { State.SubmissionAccepted(acceptance); Message = "受付結果を確認しました。メッセージボックスへの保存完了です。手動Pushは未配信です。"; }
+            if (result.Status == 200 && result.Value is { } acceptance) { State.SubmissionAccepted(acceptance); Message = "受付結果を確認しました。メッセージボックスへの保存完了です。この応答では手動Pushの配信結果は確認できません。"; }
             else if (result.Status is 400 or 403 or 409) {
                 State.SubmissionRejected();
                 if (result.Status == 403) { Allowed = false; Title = ""; }

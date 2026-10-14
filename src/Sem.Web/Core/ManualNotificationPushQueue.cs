@@ -4,7 +4,7 @@ using Sem.Web.Data;
 using Sem.Web.Runtime;
 namespace Sem.Web.Core;
 
-// Preparations pin the accepted audience's device set once. No worker is connected.
+// Preparations pin the accepted audience's device set once; later devices never expand that snapshot.
 public sealed class ManualNotificationPushPreparation
 {
     public string RecipientId { get; set; } = "";
@@ -32,7 +32,7 @@ public sealed record ManualNotificationPushPreparationResult(string State, int D
 public sealed record ManualNotificationPushClaim(string DeliveryId, string Token, long LeaseUntil, int Attempt);
 public enum ManualNotificationPushCompletion { ProviderAccepted, RetryableNotAccepted, AcceptanceUnknown, SubscriptionGone, PermanentFailure, FinalGateRejected, ExpiredBeforeSend }
 
-// Infrastructure only: no DI, HTTP, scanning worker or transport invocation.
+// Scoped infrastructure: no direct HTTP or transport invocation; worker calls the fenced queue.
 public sealed class ManualNotificationPushQueue(IDbContextFactory<ApplicationDbContext> factory, TimeProvider clock)
 {
     public const int MaxAttempts = 5;

@@ -11,7 +11,7 @@ public sealed class ManualNotificationPushScanState
     internal Position? Read() => Volatile.Read(ref position);
     internal void Set(Position? value) => Volatile.Write(ref position, value);
 }
-// Bounded orchestration only. Not registered in DI/HTTP/hosted services.
+// Bounded orchestration composed by AddManualNotificationPushPipeline; activation remains a durable gate.
 public sealed class ManualNotificationPushEngine(IDbContextFactory<ApplicationDbContext> factory,
     ManualNotificationPushQueue queue, ManualNotificationPushDispatcher dispatcher, TimeProvider clock)
 {
@@ -79,7 +79,7 @@ public sealed class ManualNotificationPushEngine(IDbContextFactory<ApplicationDb
         return new(prepared, processed, swept, failed);
     }
 }
-// Defined for later explicit composition, but deliberately NOT AddHostedService'd.
+// Hosted worker uses a fresh scope per pass and preserves only a transient fairness hint.
 public sealed class ManualNotificationPushWorker(IServiceScopeFactory scopes, ILogger<ManualNotificationPushWorker> logger):BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken ct)
