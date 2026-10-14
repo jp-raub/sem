@@ -30,6 +30,7 @@
  </section>}
 </fieldset>
 <QrReadHistoryPanel EventId="@EventId" @key="@(EventId+":qr-history")" ExternalBusy="@(QrLocked||Busy||Pending is not null||PendingCancel is not null)" />
+<ReceiptHistoryPanel EventId="@EventId" @key="@(EventId+":receipt-history")" ExternalBusy="@(QrLocked||Busy||Pending is not null||PendingCancel is not null)" />
 @code{
  [Parameter]public string EventId{get;set;}="";
  ReceptionRoster?Plan;ReceptionTarget?Target;ManualReceptionEdit?Pending;ReceptionCancelEdit?PendingCancel;string Query="",Error="",Message="",Note="";bool Busy,Ready,Done,ConfirmCancel,QrLocked;long Epoch;
