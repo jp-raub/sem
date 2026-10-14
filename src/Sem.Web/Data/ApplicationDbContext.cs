@@ -55,6 +55,12 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     protected override void OnModelCreating(ModelBuilder b)
     {
         base.OnModelCreating(b);
+        b.Entity<ManualNotificationPushActivationOperation>().HasOne<ApplicationUser>().WithMany()
+            .HasForeignKey(x => x.ActorId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<ManualNotificationPushActivationOperation>().ToTable("ManualNotificationPushActivationOperations", t => {
+            t.HasCheckConstraint("CK_ManualPushActivationOperation_Request", "length(\"Id\")=36 AND \"ExpectedEpoch\">=0 AND \"ResultEpoch\">=0");
+            t.HasCheckConstraint("CK_ManualPushActivationOperation_Result", "(\"Changed\"=1 AND \"ExpectedEpoch\"<9223372036854775807 AND \"ResultEpoch\"=\"ExpectedEpoch\"+1) OR (\"Changed\"=0 AND \"ResultEpoch\"=\"ExpectedEpoch\")");
+        });
         b.Entity<ManualNotificationPushPreparation>().HasKey(x => x.RecipientId);
         b.Entity<ManualNotificationPushPreparation>().HasOne<ManualNotificationRecipient>().WithOne()
             .HasForeignKey<ManualNotificationPushPreparation>(x => x.RecipientId).OnDelete(DeleteBehavior.Restrict);
