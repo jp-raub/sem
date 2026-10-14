@@ -305,6 +305,34 @@ namespace Sem.Web.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Sem.Web.Core.EventProgressState", b =>
+                {
+                    b.Property<string>("EventId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedAt")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PlanJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("RowVersion")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("SourceVersion")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("EventId");
+
+                    b.ToTable("EventProgressStates", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ProgressState", "\"RowVersion\">=0 AND \"SourceVersion\">=0 AND json_valid(\"PlanJson\")");
+                        });
+                });
+
             modelBuilder.Entity("Sem.Web.Core.EventQuestion", b =>
                 {
                     b.Property<string>("Id")
@@ -456,6 +484,102 @@ namespace Sem.Web.Data.Migrations
                     b.ToTable("PartPresetStates", null, t =>
                         {
                             t.HasCheckConstraint("CK_PartPresetStates_Id", "\"Id\" = 1");
+                        });
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.ProgressEstimate", b =>
+                {
+                    b.Property<string>("EventId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PartId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("DurationSeconds")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("PrepSeconds")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("EventId", "PartId");
+
+                    b.ToTable("ProgressEstimates", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ProgressEstimate", "(\"PrepSeconds\" IS NULL OR \"PrepSeconds\">=0) AND (\"DurationSeconds\" IS NULL OR \"DurationSeconds\">=0)");
+                        });
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.ProgressMark", b =>
+                {
+                    b.Property<string>("EventId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PartId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Point")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ActorId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("At")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OperationId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("EventId", "PartId", "Point");
+
+                    b.HasIndex("ActorId");
+
+                    b.HasIndex("EventId", "OperationId");
+
+                    b.ToTable("ProgressMarks", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ProgressMark_Point", "\"Point\" IN ('PrepStart','Start','End')");
+                        });
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.ProgressOperation", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ActorId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("At")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EventId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Fingerprint")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ResultJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActorId");
+
+                    b.ToTable("ProgressOperations", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ProgressOperation", "\"Kind\" IN ('Record','Estimate') AND json_valid(\"ResultJson\")");
                         });
                 });
 
@@ -1432,6 +1556,15 @@ namespace Sem.Web.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Sem.Web.Core.EventProgressState", b =>
+                {
+                    b.HasOne("Sem.Web.Core.SessionEvent", null)
+                        .WithMany()
+                        .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Sem.Web.Core.EventQuestion", b =>
                 {
                     b.HasOne("Sem.Web.Core.SessionEvent", null)
@@ -1473,6 +1606,52 @@ namespace Sem.Web.Data.Migrations
                     b.HasOne("Sem.Web.Data.ApplicationUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.ProgressEstimate", b =>
+                {
+                    b.HasOne("Sem.Web.Core.EventProgressState", null)
+                        .WithMany()
+                        .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.ProgressMark", b =>
+                {
+                    b.HasOne("Sem.Web.Data.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("ActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Sem.Web.Core.EventProgressState", null)
+                        .WithMany()
+                        .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Sem.Web.Core.ProgressOperation", null)
+                        .WithMany()
+                        .HasForeignKey("EventId", "OperationId")
+                        .HasPrincipalKey("EventId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.ProgressOperation", b =>
+                {
+                    b.HasOne("Sem.Web.Data.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("ActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Sem.Web.Core.EventProgressState", null)
+                        .WithMany()
+                        .HasForeignKey("EventId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
