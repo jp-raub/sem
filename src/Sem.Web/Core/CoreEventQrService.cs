@@ -9,7 +9,7 @@ using Microsoft.EntityFrameworkCore;
 using Sem.Web.Data;
 using Sem.Web.Runtime;
 namespace Sem.Web.Core;
-public sealed record EventQrView(string EventId,string UserId,long TokenVersion,string? Token);
+public sealed record EventQrView(string EventId,string UserId,long TokenVersion,string? Token,string Title="",string DisplayName="");
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record EventQrEdit(string RequestId,string? UserId,long TokenVersion,bool Reissue);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
@@ -25,8 +25,8 @@ public sealed partial class CoreFoundationService {
   if(user is null||!(await Participants(db,eventId,ct)).Contains(userId))throw new ValidationException("このイベントの有効な参加者コードではありません。");return user;
  }
  public async Task<EventQrView> ReadEventQrAsync(ClaimsPrincipal principal,string id,string? subjectId=null,CancellationToken ct=default){
-  await using var db=await factory.CreateDbContextAsync(ct);await using var tx=await db.Database.BeginTransactionAsync(ct);var(_,actor,_,manager)=await ParticipantEvent(db,principal,id,ct);var userId=subjectId??actor.Id;if(userId!=actor.Id&&!manager)throw new UnauthorizedAccessException();await QrParticipant(db,id,userId,ct);
-  var row=await db.EventParticipantQrs.AsNoTracking().SingleOrDefaultAsync(x=>x.EventId==id&&x.UserId==userId,ct);var token=row is null?null:EventQrProtector().Unprotect(row.ProtectedToken);await tx.CommitAsync(ct);return new(id,userId,row?.RowVersion??0,token);
+  await using var db=await factory.CreateDbContextAsync(ct);await using var tx=await db.Database.BeginTransactionAsync(ct);var(e,actor,_,manager)=await ParticipantEvent(db,principal,id,ct);var userId=subjectId??actor.Id;if(userId!=actor.Id&&!manager)throw new UnauthorizedAccessException();var subject=await QrParticipant(db,id,userId,ct);
+  var row=await db.EventParticipantQrs.AsNoTracking().SingleOrDefaultAsync(x=>x.EventId==id&&x.UserId==userId,ct);var token=row is null?null:EventQrProtector().Unprotect(row.ProtectedToken);await tx.CommitAsync(ct);return new(id,userId,row?.RowVersion??0,token,e.Title,subject.DisplayName);
  }
  public async Task<EventQrIssueResult> IssueEventQrAsync(ClaimsPrincipal principal,string id,EventQrEdit edit,CancellationToken ct=default){
   ReceptionId(edit.RequestId);if(edit.TokenVersion<0)throw new ValidationException("コードの版を確認してください。");var hash=SemEndpoints.Hash(JsonSerializer.Serialize(edit));

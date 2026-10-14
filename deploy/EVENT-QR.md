@@ -25,3 +25,5 @@ Migration `20261013173823_AddEventParticipantQr` adds EventParticipantQrs/EventQ
 Dedicated checks cover own/manager/Hidden/current membership scopes, old-token rejection, replay versus new reads, no implicit receipt, cancellation retention, key-backed restart, removed roles/session, secret storage/projections and additive model. Native authenticated acceptance uses the real API/native passkeys/legacy adoption and demonstrates spectator own issuance, manager scope, rotation, no implicit receipt and private history. Existing full regressions/fixed-source full CI are confirmed separately.
 
 Remaining: actual QR images and camera/paste/direct-link interface, current-code recheck and read-linked QR-method receipt completion, per-person latest scan/whole roster reception state, full history UI, recovery/edit-mode integration and live device/network/DP restore acceptance. No DXP change, bundle, merge or automatic user submission is performed here.
+
+Follow-up actual authenticated QR images and self-service issuance UI: [EVENT-QR-IMAGE.md](EVENT-QR-IMAGE.md). Camera/reader and QR-method receipt linkage remain separate.
