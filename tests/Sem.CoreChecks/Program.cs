@@ -35,6 +35,33 @@ try
         db.SiteStates.Add(new SiteState { Initialized = true, Name = "Retained bootstrap site", PendingAdminId = "not-public" }); await db.SaveChangesAsync();
     }
     var admin = Principal("admin"); var manager = Principal("manager"); var member = Principal("member");
+    await using (var db = await factory.CreateDbContextAsync())
+    {
+        db.Messages.AddRange(new Message { Id="nav-unread", UserId="member", Title="Private title", Body="Private body", Created=1 },
+            new Message { Id="nav-read", UserId="member", ReadAt=2, Created=1 }, new Message { Id="nav-admin", UserId="admin", Created=1 });
+        await db.SaveChangesAsync();
+    }
+    var navigation = await core.ReadNavigationAsync(Principal("member", forgedAdmin:true));
+    Check(!navigation.IsAdmin && navigation.UnreadCount == 1 && navigation.UserId == "member", "Header uses current DB role and only own unread messages");
+    Check(navigation.ServiceName == "Retained bootstrap site", "Header falls back to the existing bootstrap service name");
+    var navigationJson = JsonSerializer.Serialize(navigation);
+    Check(!navigationJson.Contains("@") && !navigationJson.Contains("Private") && !navigationJson.Contains("stamp") && !navigationJson.Contains("not-public"), "Header DTO excludes email, bodies, tokens and bootstrap secrets");
+    await Deny<UnauthorizedAccessException>(() => core.ReadNavigationAsync(new ClaimsPrincipal(new ClaimsIdentity())), "Anonymous header request is denied");
+    await Deny<UnauthorizedAccessException>(() => core.ReadNavigationAsync(Principal("disabled")), "Disabled user cannot obtain header state");
+    await Deny<UnauthorizedAccessException>(() => core.ReadNavigationAsync(Principal("member", stamp:"stale")), "Header revalidates security stamp");
+    await using (var db = await factory.CreateDbContextAsync())
+    {
+        (await db.Messages.SingleAsync(m => m.Id=="nav-unread")).ReadAt=3;
+        (await db.Users.SingleAsync(u => u.Id=="admin")).IsAdmin=false;
+        await db.SaveChangesAsync();
+    }
+    Check((await core.ReadNavigationAsync(member)).UnreadCount==0, "Read message changes authoritative unread count");
+    Check(!(await core.ReadNavigationAsync(admin)).IsAdmin, "Global administrator removal immediately affects header");
+    await using (var db = await factory.CreateDbContextAsync())
+    {
+        (await db.Users.SingleAsync(u => u.Id=="admin")).IsAdmin=true;
+        await db.SaveChangesAsync();
+    }
     Check((await core.ReadAsync(admin)).Service.Name == "Retained bootstrap site", "Service name falls back to preserved bootstrap name without invented data");
     Check((await core.ReadAsync(member)).Profile.RowVersion == 0, "Missing profile is an empty editable draft, not a fabricated profile");
     await Deny<UnauthorizedAccessException>(() => core.ReadAsync(new ClaimsPrincipal(new ClaimsIdentity())), "Unauthenticated workspace is denied");
@@ -96,6 +123,7 @@ try
         Check(await db.Users.Where(u => u.Id == "manager" || u.Id == "member").AllAsync(u => !u.IsAdmin), "Event assignments never promote global-admin flags");
         db.RevokedAuthSessions.Add(new() { TokenHash = SemEndpoints.Hash("member-session-1"), UserId = "member", RevokedAt = "2026-10-20T00:00:00.000Z" }); await db.SaveChangesAsync();
     }
+    await Deny<UnauthorizedAccessException>(() => core.ReadNavigationAsync(member), "Revoked session cannot obtain header identity or unread count");
     await Deny<UnauthorizedAccessException>(() => core.ReadAsync(member), "Logged-out session cannot read through a still-connected circuit");
     await Deny<UnauthorizedAccessException>(() => core.SaveProfileAsync(member, new("After logout", "", "", [], 1)), "Logged-out session cannot write through a still-connected circuit");
     Check((await core.ReadAsync(Principal("member", "session-2"))).Profile.DisplayName == "Member updated", "An independent session is not revoked by another session's logout");

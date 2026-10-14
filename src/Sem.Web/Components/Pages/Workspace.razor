@@ -7,7 +7,7 @@
 <PageTitle>@Title — 業務基盤</PageTitle>
 <h1 id="core-title">@Title</h1>
 @if (View is not null) { <p>@(Editing == "service" ? ServiceDescription : View.Service.Description)</p> }
-<p>サービス・プロフィール・イベント概要の実DB基盤です。カスタムフェーズは専用画面で管理できます。曲／参加受付／当日進行はまだ移植していません。</p>
+<p>サービス・プロフィール・イベント概要の実DB基盤です。カスタムフェーズは専用画面で管理できます。曲・参加登録・当日進行・受付等の実装済み画面は、イベント一覧から開けます。画面の統合と実機受入は別工程です。</p>
 <p><a href="/">認証・招待・通知の画面へ</a></p>
 <p id="core-error" role="alert">@Error</p><p id="core-message" role="status">@Message</p>
 @if (View is null)

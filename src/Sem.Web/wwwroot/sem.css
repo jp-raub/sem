@@ -1,1 +1,20 @@
 body{font-family:system-ui,sans-serif;color:#172b22;background:#f6f8f6}main{max-width:1100px;margin:auto;padding:16px}.panel{background:white;border:1px solid #ccd8ce;border-radius:12px;padding:18px;margin:16px 0}label{display:block;margin:12px 0}input,select{display:block;width:100%;max-width:600px;padding:10px;border:1px solid #aaa;border-radius:6px}button{padding:10px 14px;margin:5px;border:1px solid #bbb;border-radius:7px;cursor:pointer}article{border-top:1px solid #ddd;padding:12px 0}a{overflow-wrap:anywhere}small{color:#53675c}#blazor-error-ui{display:none}
+/* Common navigation: scoped to avoid changing existing business forms. */
+.service-navigation{background:#fff;border-bottom:1px solid #d8ded9;color:#26332b;font-size:16px;line-height:1.5}
+.service-navigation [hidden]{display:none!important}
+.service-navigation-inner{max-width:1100px;padding:12px 16px;margin:auto;display:flex;align-items:center;gap:16px;position:relative}
+.service-brand{flex:1;min-width:0;text-decoration:none;color:inherit;display:flex;flex-direction:column;overflow-wrap:anywhere}
+.service-brand strong{font-size:20px;line-height:1.35}.service-brand span{font-size:14px;color:#536057}.service-brand small{color:#765018;font-size:14px}
+.navigation-controls{display:flex;align-items:center;flex-shrink:0;gap:8px}
+.navigation-controls a,.navigation-controls button,.navigation-panel a,.navigation-panel button{box-sizing:border-box;min-height:44px;min-width:44px;padding:10px 12px;border-radius:6px;color:#1767ad;font:inherit;text-decoration:none;margin:0}
+.navigation-controls a{border:1px solid #d8ded9}.navigation-controls button{background:#f6f8f6;border:1px solid #d8ded9}
+.navigation-panel{position:absolute;right:16px;top:calc(100% + 4px);z-index:1000;width:min(300px,calc(100vw - 32px));background:#fff;border:1px solid #d8ded9;border-radius:8px;box-shadow:0 8px 24px #172b2220;padding:8px}
+.navigation-panel a,.navigation-panel button{display:block;width:100%;text-align:left;overflow-wrap:anywhere}.navigation-panel button{background:transparent;border:0}.navigation-panel p{margin:8px 12px;padding-bottom:8px;border-bottom:1px solid #d8ded9;overflow-wrap:anywhere}
+.navigation-panel a:hover,.navigation-panel button:hover{background:#eef4f9}
+.service-navigation :focus-visible{outline:3px solid #1767ad;outline-offset:3px}
+.navigation-status{max-width:1100px;margin:0 auto;padding:0 16px;font-size:14px}.navigation-status:empty{display:none}
+@media(max-width:480px){.service-navigation-inner{gap:8px}.service-brand strong{font-size:18px}.navigation-controls{gap:4px}.navigation-controls a,.navigation-controls button{padding:10px 8px}.navigation-controls button span{display:none}}
+@media(prefers-color-scheme:dark){.service-navigation{background:#191919;color:#fff;border-color:#555}.service-brand span{color:#c2c8c3}.service-brand small{color:#e9bd79}.navigation-panel{background:#202020;border-color:#555}.navigation-controls a,.navigation-controls button{border-color:#555}.navigation-controls button{background:#202020}.navigation-controls a,.navigation-controls button,.navigation-panel a,.navigation-panel button{color:#78b8ff}.navigation-panel p{border-color:#555}.navigation-panel a:hover,.navigation-panel button:hover{background:#303843}.service-navigation :focus-visible{outline-color:#78b8ff}}
+@media(forced-colors:active){.service-navigation,.navigation-panel,.navigation-controls a,.navigation-controls button{border:1px solid CanvasText}.service-navigation :focus-visible{outline-color:Highlight}}
+
+.navigation-controls svg{display:inline-block;vertical-align:middle;flex-shrink:0}
