@@ -7,7 +7,7 @@
 <PageTitle>@Title — 業務基盤</PageTitle>
 <h1 id="core-title">@Title</h1>
 @if (View is not null) { <p>@(Editing == "service" ? ServiceDescription : View.Service.Description)</p> }
-<p>サービス・プロフィール・イベント概要の実DB基盤です。曲／参加受付／カスタムフェーズ／当日進行はまだ移植していません。</p>
+<p>サービス・プロフィール・イベント概要の実DB基盤です。カスタムフェーズは専用画面で管理できます。曲／参加受付／当日進行はまだ移植していません。</p>
 <p><a href="/">認証・招待・通知の画面へ</a></p>
 <p id="core-error" role="alert">@Error</p><p id="core-message" role="status">@Message</p>
 @if (View is null)
@@ -65,10 +65,10 @@ else
         @foreach (var item in View.Events)
         {
             <article data-core-event="@item.Id"><h3>@item.Title</h3><p>@item.Description</p><p>@item.Location ／ @Japan(item.ScheduledDate)</p>
-                <p>開場：@(item.OpensAt is null ? "未指定" : Japan(item.OpensAt)) ／ @(item.PhaseKind == "Hidden" ? "非表示" : "閲覧公開")</p>
+                <p>開場：@(item.OpensAt is null ? "未指定" : Japan(item.OpensAt)) ／ @item.ActivePhaseName ／ @(item.ManualPhaseOverride ? "手動優先" : "自動")</p>
                 <p>@item.AnnouncementMessage</p>
                 <p>担当管理者：@string.Join("、", item.ManagerIds.Select(id => View.Members.FirstOrDefault(m => m.UserId == id)?.DisplayName ?? "不明"))</p>
-                @if (item.CanManage) { <button disabled="@(Busy || Editing is not null)" @onclick="() => EditEvent(item)">概要・管理者を編集</button> }
+                @if (item.CanManage) { <button disabled="@(Busy || Editing is not null)" @onclick="() => EditEvent(item)">概要・管理者を編集</button> <a href="@($"/events/{item.Id}/phases")">フェーズ管理</a> }
             </article>
         }
         @if (View.Events.Length == 0) { <p>閲覧できるイベントはありません。</p> }

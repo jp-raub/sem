@@ -21,6 +21,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<UserProfile> UserProfiles => Set<UserProfile>();
     public DbSet<SessionEvent> SessionEvents => Set<SessionEvent>();
     public DbSet<EventAdmin> EventAdmins => Set<EventAdmin>();
+    public DbSet<EventPhase> Phases => Set<EventPhase>();
     protected override void OnModelCreating(ModelBuilder b)
     {
         base.OnModelCreating(b);
@@ -34,6 +35,15 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         b.Entity<UserProfile>().ToTable("UserProfiles", t => t.HasCheckConstraint("CK_UserProfiles_SocialJson", "json_valid(\"SocialJson\")"));
         b.Entity<SessionEvent>().Property(x => x.RowVersion).IsConcurrencyToken();
         b.Entity<SessionEvent>().ToTable("SessionEvents", t => t.HasCheckConstraint("CK_SessionEvents_PhaseKind", "\"PhaseKind\" IN ('Hidden','View')"));
+        b.Entity<EventPhase>().ToTable("Phases", t => {
+            t.HasCheckConstraint("CK_Phases_Kind", "\"Kind\" IN ('Hidden','View','Custom')");
+            t.HasCheckConstraint("CK_Phases_MaxPicks", "\"MaxPicks\" >= -1");
+            t.HasCheckConstraint("CK_Phases_Active", "\"IsActive\" IN (0,1) AND (\"IsActive\"=0 OR \"DeletedAt\" IS NULL)");
+            t.HasCheckConstraint("CK_Phases_Default", "\"Kind\"='Custom' OR (\"MaxPicks\"=0 AND \"ActivateAt\" IS NULL AND \"DeactivateAt\" IS NULL AND \"DeletedAt\" IS NULL)");
+        });
+        b.Entity<EventPhase>().HasOne<SessionEvent>().WithMany(e => e.Phases).HasForeignKey(p => p.EventId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<EventPhase>().HasIndex(p => p.EventId).IsUnique().HasFilter("\"IsActive\"=1");
+        b.Entity<EventPhase>().HasIndex(p => new { p.EventId, p.Kind }).IsUnique().HasFilter("\"Kind\" IN ('Hidden','View')");
         b.Entity<EventAdmin>().HasKey(x => new { x.EventId, x.UserId });
         b.Entity<EventAdmin>().HasOne<SessionEvent>().WithMany(x => x.Admins).HasForeignKey(x => x.EventId).OnDelete(DeleteBehavior.Cascade);
         b.Entity<EventAdmin>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
