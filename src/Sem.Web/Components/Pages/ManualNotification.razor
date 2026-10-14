@@ -2,8 +2,6 @@
 @rendermode InteractiveServer
 @implements IAsyncDisposable
 @using Sem.Web.Core
-@inject AuthenticationStateProvider Authentication
-@inject CoreFoundationService Core
 @inject IJSRuntime JS
 <NavigationLock ConfirmExternalNavigation="@State.NavigationBlocked" OnBeforeInternalNavigation="BeforeNavigation" />
 <EventTabNavigation EventId="@EventId" Selected="notifications" />
@@ -91,11 +89,13 @@ else if (Ready)
         if (Initializing || State.Busy || Disposed) return;
         Initializing = true; var generation = Generation; var id = LoadedId;
         try {
-            var view = await Core.ReadEventTabsAsync((await Authentication.GetAuthenticationStateAsync()).User, id);
-            if (Disposed || generation != Generation || EventId != id) return;
-            if (!view.Available.Contains("notifications") || ActorId.Length > 0 && view.UserId != ActorId) throw new UnauthorizedAccessException();
             Module ??= await JS.InvokeAsync<IJSObjectReference>("import", "/manual-notification.js");
             if (Disposed || generation != Generation) return;
+            // Reauthorize through the CURRENT browser cookie, not a potentially stale circuit principal.
+            var result = await Module.InvokeAsync<Transport<EventTabsView>>("context", id);
+            if (Disposed || generation != Generation || EventId != id) return;
+            if (result.Status != 200 || result.Value is not { } view || view.EventId != id || string.IsNullOrEmpty(view.UserId) ||
+                !view.Available.Contains("notifications") || ActorId.Length > 0 && view.UserId != ActorId) throw new UnauthorizedAccessException();
             ActorId = view.UserId; Title = view.Title; Allowed = true; Error = "";
         } catch { if (!Disposed && generation == Generation) { Allowed = false; Title = ""; Error = "ログイン状態と現在のイベント管理権限を確認してください。"; } }
         finally { if (!Disposed && generation == Generation) { Ready = true; Initializing = false; } }

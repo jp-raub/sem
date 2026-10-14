@@ -87,6 +87,12 @@ module.exports = async ({p,g,ok}) => {
   await a.locator('#manual-notification-submit').click();await a.locator('#manual-notification-reauthorize').waitFor();
   ok(await a.locator('#manual-notification-composer').count()===0,'Revoked authorization hides private composer fields');
   await a.unroute('**/api/core/manual-notification-accept?*');
+  const liveContext=(await api(p,'event-tabs',undefined,q)).body;
+  await a.route('**/api/core/event-tabs?*',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({...liveContext,userId:'different-cookie-account'})}));
+  await a.locator('#manual-notification-reauthorize').click();
+  await a.waitForFunction(()=>document.getElementById('manual-notification-error').textContent.length>0);
+  ok(await a.locator('#manual-notification-composer').count()===0,'Different current-cookie actor cannot reauthorize or reveal the original private composer');
+  await a.unroute('**/api/core/event-tabs?*');
   await a.locator('#manual-notification-reauthorize').click();await ready(a);
   ok((await a.locator('#manual-notification-pending').innerText()).includes(frozen),'Reauthorization preserves original unknown operation identity');
   await a.route('**/api/core/manual-notification-accept?*',route=>route.fulfill({status:200,contentType:'application/json',body:'null'}));

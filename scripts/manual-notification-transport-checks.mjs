@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';
 const source=await fs.readFile(new URL('../src/Sem.Web/wwwroot/manual-notification.js',import.meta.url),'utf8');
-const {post}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
+const {post,context}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
 let passed=0;
 const check=(v,s)=>{if(!v)throw Error(s);passed++;console.log('PASS '+s)};
 const reject=async(fn,s)=>{let denied=false;try{await fn()}catch{denied=true}check(denied,s)};
@@ -32,6 +32,14 @@ try {
  await reject(()=>post('manual-notification-accept','e','a',payload),'malformed success remains uncertain');
  n=0;globalThis.fetch=async()=>{n++;return new Response('{}')};
  await reject(()=>post('manual-notification-accept','e','a',payload),'missing CSRF token refuses submission');check(n===1,'missing CSRF never issues acceptance');
+ const reads=[];globalThis.fetch=async(url,options)=>{reads.push({url,options});return new Response('{"userId":"current-cookie-actor","eventId":"event"}')};
+ const current=await context('event');
+ check(current.status===200&&current.value.userId==='current-cookie-actor'&&reads.length===1,'reauthorization reads current browser cookie context independently of circuit');
+ check(reads[0].url.startsWith('/api/core/event-tabs?')&&reads[0].options.cache==='no-store'&&reads[0].options.redirect==='error','context uses existing authorized no-store GET and refuses redirects');
+ globalThis.fetch=async()=>new Response('{}',{status:403});
+ check((await context('event')).status===403,'current-cookie denial remains explicit');
+ globalThis.fetch=async()=>new Response('{}',{status:500});
+ await reject(()=>context('event'),'unknown context cannot reauthorize private composer');
  check(!/localStorage|sessionStorage|console\.|setInterval/.test(source),'transport has no browser storage, logs or background loop');
  console.log(`Manual notification transport: ${passed} checks passed.`);
 }finally{globalThis.fetch=originalFetch}
