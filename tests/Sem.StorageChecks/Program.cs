@@ -71,7 +71,8 @@ try
     using (var fixture = new Fixture(legacy))
     {
         await SqliteStorageInitializer.InitializeAsync(fixture.Db);
-        Check(before == await DumpAsync(legacy), "Legacy adoption preserves every business row including passkey bytes");
+        Check(before == await DumpAsync(legacy), "Legacy adoption preserves every pre-existing business row including passkey bytes");
+        Check(await fixture.Db.PartPresets.CountAsync()==6 && (await fixture.Db.PartPresetStates.SingleAsync()).RowVersion==0, "Legacy adoption adds only the explicit new preset seed rows");
         Check((await fixture.Db.Database.GetAppliedMigrationsAsync()).SequenceEqual(fixture.Db.Database.GetMigrations()),
             "Legacy schema receives baseline history and pending migration after validation");
         await SqliteStorageInitializer.InitializeAsync(fixture.Db);
@@ -184,7 +185,7 @@ static async Task<string> DumpAsync(string path)
     var tables = new List<string>();
     using (var command = connection.CreateCommand())
     {
-        command.CommandText = "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '__EF%' ORDER BY name";
+        command.CommandText = "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '__EF%' AND name NOT IN ('PartPresetStates','PartPresets') ORDER BY name";
         using var reader = await command.ExecuteReaderAsync();
         while (await reader.ReadAsync()) tables.Add(reader.GetString(0));
     }

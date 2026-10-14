@@ -1,0 +1,23 @@
+module.exports=async({p,g,ok})=>{
+ const api=(page,action,data,query='')=>page.evaluate(async({action,data,query})=>{const{token}=await(await fetch('/api/csrf')).json();const r=await fetch('/api/core/'+action+query,{method:data===undefined?'GET':'POST',headers:data===undefined?{}:{'Content-Type':'application/json','X-CSRF-TOKEN':token},body:data===undefined?undefined:JSON.stringify(data)});return{status:r.status,body:await r.json()}},{action,data,query});
+ let presets=(await api(p,'definitions')).body;const before=(await api(p,'workspace')).body;const event=before.events.find(e=>e.title==='Core multi-manager event'||e.title==='Manager updated overview');const query='?id='+event.id;const old=(await api(p,'definitions',undefined,query)).body;
+ ok(presets.definitions.length===6&&old.definitions.length===6&&old.definitions.every(x=>!presets.definitions.some(y=>y.id===x.id)),'Populated event receives independent six-definition migration snapshot');
+ ok((await api(g,'definitions')).status===403&&(await api(g,'definitions',undefined,query)).status===403,'Member cannot read service or event management definitions');
+ const bad={rowVersion:presets.rowVersion,definitions:[{...presets.definitions[0],sourcePresetId:undefined,name:'<unsafe>'}]};ok((await api(p,'definitions',bad)).status===400,'Definition API rejects unsafe names');
+ const row=require('crypto').randomUUID();const draft={rowVersion:presets.rowVersion,definitions:[{id:row,name:'New preset voice',category:'Sing'}]};presets=(await api(p,'definitions',draft)).body;
+ ok(presets.definitions.length===1&&presets.definitions[0].id===row,'Native admin saves independent service preset');
+ ok((await api(p,'definitions',draft)).status===409,'Stale preset save returns conflict');
+ ok(JSON.stringify((await api(p,'definitions',undefined,query)).body.definitions)===JSON.stringify(old.definitions),'Service preset edit leaves pre-existing event definitions untouched');
+ const created=await api(p,'event',{title:'Current preset event',description:'',location:'',scheduledDate:new Date(Date.now()+86400000).toISOString(),opensAt:null,announcementMessage:'',phaseKind:'Hidden',managerIds:[],rowVersion:0});ok(created.status===200,'Event creation copies preset in existing event transaction');const createdQuery='?id='+created.body.id;let copied=(await api(p,'definitions',undefined,createdQuery)).body;
+ ok(copied.definitions.length===1&&copied.definitions[0].name==='New preset voice'&&copied.definitions[0].id!==row&&copied.definitions[0].sourcePresetId===row,'New event uses copied values and a new identity with provenance');
+ const w=await p.context().newPage();const errors=[];w.on('pageerror',e=>errors.push(e.message));try{
+  await w.goto('https://localhost:18443/events/'+created.body.id+'/definitions');await w.waitForSelector('#definition-edit');await w.waitForTimeout(3500);await w.locator('#definition-edit').click();await w.locator('[data-definition-name]').click();await w.locator('#definition-name').fill('Cancelled rename');await w.locator('#definition-apply').click();await w.locator('#definition-cancel').click();await w.waitForSelector('#definition-edit');
+  ok((await api(p,'definitions',undefined,createdQuery)).body.definitions[0].name==='New preset voice','Real Blazor definition cancellation does not persist draft');
+  await w.locator('#definition-edit').click();await w.locator('[data-definition-name]').click();await w.locator('#definition-name').fill('Event-only voice');await w.locator('#definition-apply').click();await w.locator('#definition-save').click();await w.waitForSelector('#definition-edit');copied=(await api(p,'definitions',undefined,createdQuery)).body;
+  ok(copied.definitions[0].name==='Event-only voice'&&copied.definitions[0].id!==row,'Real Blazor definition modal save retains event identity');
+  ok((await api(p,'definitions')).body.definitions[0].name==='New preset voice','Event rename does not mutate source preset');
+  if(process.env.SEM_PHASE_RESTART_COMMAND){require('child_process').execSync(process.env.SEM_PHASE_RESTART_COMMAND,{stdio:'inherit'});await new Promise(r=>setTimeout(r,3000));await p.goto('https://localhost:18443/');await p.waitForSelector('#issue');ok((await api(p,'definitions',undefined,createdQuery)).body.definitions[0].name==='Event-only voice','Restart retains event definitions and native session');}
+  await w.goto('https://localhost:18443/service/part-presets');await w.waitForSelector('#definition-edit');await w.waitForTimeout(2000);ok((await w.locator('h1').innerText()).includes('新規イベント用プリセット'),'Service route does not retain the preceding event scope');
+  ok(errors.length===0,'Definition management has no browser runtime errors');
+ }finally{await w.close();}
+};

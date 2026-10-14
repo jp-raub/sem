@@ -22,6 +22,9 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<SessionEvent> SessionEvents => Set<SessionEvent>();
     public DbSet<EventAdmin> EventAdmins => Set<EventAdmin>();
     public DbSet<EventPhase> Phases => Set<EventPhase>();
+    public DbSet<PartPresetState> PartPresetStates => Set<PartPresetState>();
+    public DbSet<PartPreset> PartPresets => Set<PartPreset>();
+    public DbSet<EventPartDefinition> EventPartDefinitions => Set<EventPartDefinition>();
     protected override void OnModelCreating(ModelBuilder b)
     {
         base.OnModelCreating(b);
@@ -44,6 +47,19 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         b.Entity<EventPhase>().HasOne<SessionEvent>().WithMany(e => e.Phases).HasForeignKey(p => p.EventId).OnDelete(DeleteBehavior.Cascade);
         b.Entity<EventPhase>().HasIndex(p => p.EventId).IsUnique().HasFilter("\"IsActive\"=1");
         b.Entity<EventPhase>().HasIndex(p => new { p.EventId, p.Kind }).IsUnique().HasFilter("\"Kind\" IN ('Hidden','View')");
+        b.Entity<PartPresetState>().ToTable("PartPresetStates", t => t.HasCheckConstraint("CK_PartPresetStates_Id", "\"Id\" = 1"));
+        b.Entity<PartPresetState>().Property(x => x.RowVersion).IsConcurrencyToken();
+        b.Entity<PartPreset>().ToTable("PartPresets", t => {
+            t.HasCheckConstraint("CK_PartPresets_Category", "\"Category\" IN ('Sing','Play')");
+            t.HasCheckConstraint("CK_PartPresets_Name", "length(\"Name\") BETWEEN 1 AND 40");
+        });
+        b.Entity<PartPreset>().HasIndex(x=>x.NormalizedName).IsUnique().HasFilter("\"DeletedAt\" IS NULL");
+        b.Entity<EventPartDefinition>().ToTable("EventPartDefinitions", t => {
+            t.HasCheckConstraint("CK_EventPartDefinitions_Category", "\"Category\" IN ('Sing','Play')");
+            t.HasCheckConstraint("CK_EventPartDefinitions_Name", "length(\"Name\") BETWEEN 1 AND 40");
+        });
+        b.Entity<EventPartDefinition>().HasOne<SessionEvent>().WithMany().HasForeignKey(x=>x.EventId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<EventPartDefinition>().HasIndex(x=>new {x.EventId,x.NormalizedName}).IsUnique().HasFilter("\"DeletedAt\" IS NULL");
         b.Entity<EventAdmin>().HasKey(x => new { x.EventId, x.UserId });
         b.Entity<EventAdmin>().HasOne<SessionEvent>().WithMany(x => x.Admins).HasForeignKey(x => x.EventId).OnDelete(DeleteBehavior.Cascade);
         b.Entity<EventAdmin>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);

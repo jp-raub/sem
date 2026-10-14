@@ -185,6 +185,50 @@ namespace Sem.Web.Data.Migrations
                     b.ToTable("EventAdmins");
                 });
 
+            modelBuilder.Entity("Sem.Web.Core.EventPartDefinition", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DeletedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EventId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SourcePresetId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EventId", "NormalizedName")
+                        .IsUnique()
+                        .HasFilter("\"DeletedAt\" IS NULL");
+
+                    b.ToTable("EventPartDefinitions", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_EventPartDefinitions_Category", "\"Category\" IN ('Sing','Play')");
+
+                            t.HasCheckConstraint("CK_EventPartDefinitions_Name", "length(\"Name\") BETWEEN 1 AND 40");
+                        });
+                });
+
             modelBuilder.Entity("Sem.Web.Core.EventPhase", b =>
                 {
                     b.Property<string>("Id")
@@ -239,6 +283,61 @@ namespace Sem.Web.Data.Migrations
                             t.HasCheckConstraint("CK_Phases_Kind", "\"Kind\" IN ('Hidden','View','Custom')");
 
                             t.HasCheckConstraint("CK_Phases_MaxPicks", "\"MaxPicks\" >= -1");
+                        });
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.PartPreset", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DeletedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NormalizedName")
+                        .IsUnique()
+                        .HasFilter("\"DeletedAt\" IS NULL");
+
+                    b.ToTable("PartPresets", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_PartPresets_Category", "\"Category\" IN ('Sing','Play')");
+
+                            t.HasCheckConstraint("CK_PartPresets_Name", "length(\"Name\") BETWEEN 1 AND 40");
+                        });
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.PartPresetState", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("RowVersion")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("PartPresetStates", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_PartPresetStates_Id", "\"Id\" = 1");
                         });
                 });
 
@@ -942,6 +1041,15 @@ namespace Sem.Web.Data.Migrations
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.EventPartDefinition", b =>
+                {
+                    b.HasOne("Sem.Web.Core.SessionEvent", null)
+                        .WithMany()
+                        .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 

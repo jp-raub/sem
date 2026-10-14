@@ -146,6 +146,7 @@ public sealed partial class CoreFoundationService(IDbContextFactory<ApplicationD
             item.Phases.Add(new() { EventId = item.Id, Kind = "Hidden", Name = "非表示", SortOrder = 0, IsActive = edit.PhaseKind == "Hidden" });
             item.Phases.Add(new() { EventId = item.Id, Kind = "View", Name = "閲覧", SortOrder = 1, IsActive = edit.PhaseKind == "View" });
             db.SessionEvents.Add(item);
+            await CopyPartPresetsAsync(db,item.Id,ct);
         } else if (item.PhaseKind != edit.PhaseKind) {
             foreach (var phase in item.Phases) phase.IsActive = false;
             await db.SaveChangesAsync(ct);
