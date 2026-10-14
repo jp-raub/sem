@@ -10,4 +10,5 @@ public sealed class SongPart {
  public string SongId {get;set;}=""; public string PartDefinitionId {get;set;}="";
  // Storage foundation only: management DTOs cannot set or clear registrations.
  public string? AssignedUserId {get;set;} public string? PhaseId {get;set;}
+ public long RowVersion {get;set;}
 }

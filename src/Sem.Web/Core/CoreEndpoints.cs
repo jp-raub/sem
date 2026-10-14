@@ -26,6 +26,12 @@ public static class CoreEndpoints
                 }
                 if (!post && action == "workspace") { await ctx.Response.WriteAsJsonAsync(await service.ReadAsync(ctx.User, ctx.RequestAborted)); return; }
                 if (!post && action == "profile") { await ctx.Response.WriteAsJsonAsync(await service.ReadProfileAsync(ctx.User, ctx.Request.Query["id"].ToString(), ctx.RequestAborted)); return; }
+                if (action == "participation") {
+                    var id=ctx.Request.Query["id"].ToString();
+                    if(post) await ctx.Response.WriteAsJsonAsync(await service.SubmitParticipationAsync(ctx.User,id,await ctx.Request.ReadFromJsonAsync<ParticipationEdit>()??throw new ValidationException("入力が必要です。"),ctx.RequestAborted));
+                    else await ctx.Response.WriteAsJsonAsync(await service.ReadParticipationAsync(ctx.User,id,ctx.RequestAborted,ctx.Request.Query["subject"].FirstOrDefault()));return;
+                }
+                if(post && action == "capacity") { await service.SetCapacityAsync(ctx.User,ctx.Request.Query["id"].ToString(),await ctx.Request.ReadFromJsonAsync<CapacityEdit>()??throw new ValidationException("入力が必要です。"),ctx.RequestAborted);await ctx.Response.WriteAsJsonAsync(new{message="保存しました。"});return;}
                 if (action == "songs") {
                     var id=ctx.Request.Query["id"].ToString();
                     if(post) await ctx.Response.WriteAsJsonAsync(await service.SaveSongsAsync(ctx.User,id,await ctx.Request.ReadFromJsonAsync<SongPlanEdit>()??throw new ValidationException("入力が必要です。"),ctx.RequestAborted));
