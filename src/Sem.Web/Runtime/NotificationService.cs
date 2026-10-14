@@ -41,6 +41,7 @@ public class NotificationService(IConfiguration cfg, IDataProtectionProvider dp)
         var details = new VapidDetails(cfg["Push:Subject"] ?? "mailto:misc@raub.jp", PublicKey, cfg["Push:PrivateKey"]!);
         foreach (var device in await db.PushDevices.Where(d => d.UserId == delivery.UserId).ToListAsync(ct))
         {
+            var owner=await db.Users.FindAsync([delivery.UserId],ct);if(owner is null||!await Sem.Web.Core.PushBinding.Valid(db,owner,device,ct))continue;
             try { await client.SendNotificationAsync(new PushSubscription(device.Endpoint, device.P256dh, device.Auth), JsonSerializer.Serialize(new { title = delivery.Subject, body = "新しいメッセージがあります", url = "/?messages=1" }), details, ct); }
             catch (WebPushException e) when ((int)e.StatusCode is 404 or 410) { db.PushDevices.Remove(device); }
         }

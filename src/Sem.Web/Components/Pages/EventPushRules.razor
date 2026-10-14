@@ -11,7 +11,9 @@
 <p id="event-push-rule-error" role="alert">@Error</p><p id="event-push-rule-message" role="status">@Message</p>
 @if(View is not null){
  <section id="event-push-rules" data-interactive="@Ready.ToString().ToLowerInvariant()" data-connected="@View.DeliveryConnected.ToString().ToLowerInvariant()">
- <p>現在はルール保存・送信可否判定までです。ONにしても、まだPushは送信されません。</p>
+ <p>開催前・曲準備の配信処理は接続済みです。ルールON・現在の対象／閲覧権限・有効な端末登録・期限内の条件を満たす場合に送信します。配信サービス受理と端末受信は別です。</p>
+ @if(!View.PushConfigured){<p role="status">ホストのPush配信鍵は未設定です。この状態では送信しません。</p>}
+ <p>旧版の端末登録は、ログイン中に「この端末でPushを許可」を再実行して認証との紐付けを更新してください。新しい登録は再起動後も維持します。</p>
  <button id="event-push-rule-refresh" disabled="@(Busy||!Ready)" @onclick="Load">最新状態を取得</button>
  @foreach(var rule in View.Rules){<p><button role="switch" aria-checked="@rule.Enabled.ToString().ToLowerInvariant()" aria-label="@(Name(rule.Kind)+"ルール")" data-push-rule="@rule.Kind" disabled="@(Busy||!Ready)" @onclick="()=>Toggle(rule)">@Name(rule.Kind)：@(rule.Enabled?"ON":"OFF")</button> 有効化基準：@(rule.ArmedAt?.ToOffset(TimeSpan.FromHours(9)).ToString("yyyy/MM/dd HH:mm:ss.fff zzz")??"—")</p>}
  @foreach(var entry in View.Entries){<p data-rule-entry="@entry.Id" data-state="@entry.State">@entry.Title：@State(entry.State) ／ 破棄期限：@(entry.ExpiresAt?.ToOffset(TimeSpan.FromHours(9)).ToString("yyyy/MM/dd HH:mm:ss zzz")??"未確定")</p>}
@@ -23,7 +25,7 @@
  protected override void OnAfterRender(bool firstRender){if(firstRender){Ready=true;StateHasChanged();}}
  protected override async Task OnParametersSetAsync(){View=null;Message="";await Load();}
  static string Name(string kind)=>kind=="OpeningReminder"?"開催120分前通知":"曲準備通知";
- static string State(string state)=>state switch{"Disabled"=>"無効","Planned"=>"予定","Eligible"=>"送信可能判定（未送信）","WaitingActual"=>"実績待ち","BeforeActivation"=>"有効化前のため対象外","TargetStarted"=>"開始済み・取消対象","Expired"=>"破棄期限超過",_=>"要確認・送信不可"};
+ static string State(string state)=>state switch{"Disabled"=>"無効","Planned"=>"予定","Eligible"=>"送信条件成立（配信結果ではない）","WaitingActual"=>"実績待ち","BeforeActivation"=>"有効化前のため対象外","TargetStarted"=>"開始済み・取消対象","Expired"=>"破棄期限超過",_=>"要確認・送信不可"};
  async Task Load(){try{View=await Core.ReadEventPushRulesAsync((await Authentication.GetAuthenticationStateAsync()).User,EventId);Error="";}catch{View=null;Error="ログイン状態・管理権限・予定データを確認してください。";}}
  async Task Toggle(EventPushRuleView rule){if(Busy||!Ready||View is null)return;Busy=true;Error=Message="";try{await Core.SaveEventPushRuleAsync((await Authentication.GetAuthenticationStateAsync()).User,EventId,new(rule.Kind,!rule.Enabled,rule.Version,View.EventVersion));await Load();if(View is not null)Message="通知ルールを保存しました。";}catch(CoreConflictException e){await Load();Error=e.Message;}catch(System.ComponentModel.DataAnnotations.ValidationException e){await Load();Error=e.Message;}catch(UnauthorizedAccessException){View=null;Error="再ログインと管理権限を確認してください。";}catch{View=null;Error="保存結果を確認できません。再読込して確認してください。";}finally{Busy=false;}}
 }

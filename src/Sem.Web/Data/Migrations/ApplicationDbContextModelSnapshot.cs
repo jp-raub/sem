@@ -474,6 +474,90 @@ namespace Sem.Web.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Sem.Web.Core.EventPushDelivery", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("AcceptedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Claim")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DeviceFingerprint")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DeviceId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Due")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("EntryId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Error")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EventId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Expires")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("LeaseUntil")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("RuleVersion")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SourceFingerprint")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("Status", "Due");
+
+                    b.HasIndex("EventId", "EntryId", "UserId", "DeviceId")
+                        .IsUnique();
+
+                    b.ToTable("EventPushDeliveries", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_EventPushDelivery_Accepted", "(\"Status\"='Accepted' AND \"AcceptedAt\" IS NOT NULL) OR (\"Status\"<>'Accepted' AND \"AcceptedAt\" IS NULL)");
+
+                            t.HasCheckConstraint("CK_EventPushDelivery_Claim", "(\"Status\"='Sending' AND \"Claim\" IS NOT NULL AND \"LeaseUntil\" IS NOT NULL) OR (\"Status\"<>'Sending' AND \"Claim\" IS NULL AND \"LeaseUntil\" IS NULL)");
+
+                            t.HasCheckConstraint("CK_EventPushDelivery_Kind", "\"Kind\" IN ('OpeningReminder','SongPreparation')");
+
+                            t.HasCheckConstraint("CK_EventPushDelivery_Status", "\"Status\" IN ('Pending','Sending','Accepted','Cancelled','Failed')");
+
+                            t.HasCheckConstraint("CK_EventPushDelivery_Version", "\"RuleVersion\">0 AND \"Attempts\" BETWEEN 0 AND 5");
+                        });
+                });
+
             modelBuilder.Entity("Sem.Web.Core.EventPushRule", b =>
                 {
                     b.Property<string>("EventId")
@@ -1712,6 +1796,12 @@ namespace Sem.Web.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("SecurityStamp")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SessionHash")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("UserId")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -1970,6 +2060,21 @@ namespace Sem.Web.Data.Migrations
                     b.HasOne("Sem.Web.Core.SessionEvent", null)
                         .WithMany()
                         .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.EventPushDelivery", b =>
+                {
+                    b.HasOne("Sem.Web.Core.SessionEvent", null)
+                        .WithMany()
+                        .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Sem.Web.Data.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
