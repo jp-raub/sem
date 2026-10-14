@@ -67,6 +67,13 @@ public sealed partial class CoreFoundationService {
    foreach(var q in questions){var answer=await db.EventQuestionAnswers.SingleOrDefaultAsync(x=>x.QuestionId==q.Id&&x.UserId==subject,ct);if(answer is null){answer=new(){QuestionId=q.Id,UserId=subject};db.EventQuestionAnswers.Add(answer);}answer.Value=answers[q.Id];answer.UpdatedAt=now;}
   }
   if(results.Any(x=>x.Success)){if(state is null){state=new(){EventId=id,UserId=subject};db.EventParticipantStates.Add(state);}state.RowVersion++;}
-  var result=new ParticipationResult(edit.RequestId,results.Count(x=>x.Success),results.ToArray());db.RegistrationOperations.Add(new(){Id=edit.RequestId,EventId=id,ActorId=actor.Id,SubjectId=subject,PhaseId=phase.Id,Kind=edit.Kind,Reason=reason,At=now,RequestHash=fingerprint,ResultJson=JsonSerializer.Serialize(result)});Audit(db,actor.Id,"Participation"+edit.Kind,edit.RequestId);await db.SaveChangesAsync(ct);await tx.CommitAsync(ct);return result;
+  var result=new ParticipationResult(edit.RequestId,results.Count(x=>x.Success),results.ToArray());db.RegistrationOperations.Add(new(){Id=edit.RequestId,EventId=id,ActorId=actor.Id,SubjectId=subject,PhaseId=phase.Id,Kind=edit.Kind,Reason=reason,At=now,RequestHash=fingerprint,ResultJson=JsonSerializer.Serialize(result)});Audit(db,actor.Id,"Participation"+edit.Kind,edit.RequestId);
+  if(edit.Kind is "Register" or "Release"&&results.Any(x=>x.Success)){
+   var successful=results.Where(x=>x.Success).Select(x=>x.Id).ToArray();
+   var snapshot=await(from p in db.SongParts join song in db.Songs on p.SongId equals song.Id join definition in db.EventPartDefinitions on p.PartDefinitionId equals definition.Id where p.EventId==id&&successful.Contains(p.Id) orderby song.SortOrder,song.Id,definition.SortOrder,p.Id select new BusinessSlot(p.Id,song.Id,song.Title,definition.Name)).ToArrayAsync(ct);
+   if(snapshot.Length!=successful.Length)throw new InvalidOperationException("Business notification snapshot incomplete");
+   businessNotifications.Enqueue(db,edit.RequestId,e,actor,subject,edit.Kind,reason,snapshot,clock.GetUtcNow());
+  }
+  await db.SaveChangesAsync(ct);await tx.CommitAsync(ct);return result;
  }
 }

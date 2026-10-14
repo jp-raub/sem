@@ -30,7 +30,7 @@ public sealed record EventEdit(string Title, string Description, string Location
     DateTimeOffset? OpensAt, string AnnouncementMessage, string PhaseKind, string[] ManagerIds, long RowVersion);
 
 public sealed partial class CoreFoundationService(IDbContextFactory<ApplicationDbContext> factory,
-    IOptions<IdentityOptions> identityOptions, TimeProvider clock)
+    IOptions<IdentityOptions> identityOptions, TimeProvider clock, BusinessNotificationStore businessNotifications)
 {
     private static string Utc(DateTimeOffset value) => value.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture);
     private static string Text(string? value, int max, string label, bool required = false)

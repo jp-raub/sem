@@ -10,6 +10,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<InvitationRequest> InvitationRequests => Set<InvitationRequest>();
     public DbSet<EmailTicket> EmailTickets => Set<EmailTicket>();
     public DbSet<Message> Messages => Set<Message>();
+    public DbSet<BusinessNotification> BusinessNotifications => Set<BusinessNotification>();
     public DbSet<Delivery> Deliveries => Set<Delivery>();
     public DbSet<PushDevice> PushDevices => Set<PushDevice>();
     public DbSet<TestEvent> Events => Set<TestEvent>();
@@ -42,6 +43,17 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     protected override void OnModelCreating(ModelBuilder b)
     {
         base.OnModelCreating(b);
+        b.Entity<BusinessNotification>().HasOne<RegistrationOperation>().WithOne().HasForeignKey<BusinessNotification>(x=>x.Id).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<BusinessNotification>().HasOne<SessionEvent>().WithMany().HasForeignKey(x=>x.EventId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<BusinessNotification>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x=>x.UserId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<BusinessNotification>().HasIndex(x=>new{x.Status,x.Due});
+        b.Entity<BusinessNotification>().ToTable("BusinessNotifications",t=>{
+            t.HasCheckConstraint("CK_BusinessNotifications_Kind","\"Kind\" IN ('Register','Release')");
+            t.HasCheckConstraint("CK_BusinessNotifications_Status","\"Status\" IN ('Pending','Sending','Sent','Failed','Cancelled')");
+            t.HasCheckConstraint("CK_BusinessNotifications_Attempts","\"Attempts\" BETWEEN 0 AND 5");
+            t.HasCheckConstraint("CK_BusinessNotifications_Claim","(\"Status\"='Sending' AND \"Claim\" IS NOT NULL AND \"LeaseUntil\" IS NOT NULL) OR (\"Status\"<>'Sending' AND \"Claim\" IS NULL AND \"LeaseUntil\" IS NULL)");
+            t.HasCheckConstraint("CK_BusinessNotifications_Sent","(\"Status\"='Sent' AND \"SentAt\" IS NOT NULL) OR (\"Status\"<>'Sent' AND \"SentAt\" IS NULL)");
+        });
         b.Entity<RevokedAuthSession>().HasKey(x => x.TokenHash);
         b.Entity<RevokedAuthSession>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<ServiceSettings>().ToTable("ServiceSettings", t => t.HasCheckConstraint("CK_ServiceSettings_Id", "\"Id\" = 1"));

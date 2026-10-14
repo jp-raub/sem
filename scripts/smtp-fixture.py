@@ -12,7 +12,7 @@ class SMTP(socketserver.StreamRequestHandler):
      m=email.message_from_bytes(b''.join(data)); body=''
      for part in m.walk():
       if part.get_content_type()=='text/plain': body+=(part.get_payload(decode=True) or b'').decode(part.get_content_charset() or 'utf-8')
-     messages.append({'to':m.get('To',''),'subject':str(make_header(decode_header(m.get('Subject','')))),'body':body});data=[];reading=False;self.wfile.write(b'250 accepted\r\n')
+     messages.append({'to':m.get('To',''),'from':m.get('From',''),'message_id':m.get('Message-Id',''),'subject':str(make_header(decode_header(m.get('Subject','')))),'body':body});data=[];reading=False;self.wfile.write(b'250 accepted\r\n')
     else:data.append(line)
    elif line.upper().startswith((b'EHLO',b'HELO')):self.wfile.write(b'250-local.test\r\n250 8BITMIME\r\n')
    elif line.upper().startswith(b'DATA'):reading=True;self.wfile.write(b'354 data\r\n')

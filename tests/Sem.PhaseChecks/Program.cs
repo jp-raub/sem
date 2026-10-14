@@ -13,7 +13,7 @@ var root=Path.Combine(Path.GetTempPath(),"sem-phase-"+Guid.NewGuid());Directory.
 var clock=new Clock(new DateTimeOffset(2026,11,1,0,0,0,TimeSpan.Zero));var services=new ServiceCollection();services.AddLogging();
 services.AddDbContextFactory<ApplicationDbContext>(o=>o.UseSqlite("Data Source="+Path.Combine(root,"phase.db")),ServiceLifetime.Scoped);
 services.AddIdentityCore<ApplicationUser>(o=>o.Stores.SchemaVersion=IdentitySchemaVersions.Version3).AddEntityFrameworkStores<ApplicationDbContext>();
-services.AddSingleton<TimeProvider>(clock);services.AddScoped<CoreFoundationService>();
+services.AddSingleton<TimeProvider>(clock);Microsoft.Extensions.DependencyInjection.DataProtectionServiceCollectionExtensions.AddDataProtection(services);services.AddSingleton<BusinessNotificationStore>();services.AddScoped<CoreFoundationService>();
 using var provider=services.BuildServiceProvider();using var scope=provider.CreateScope();var factory=scope.ServiceProvider.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();var core=scope.ServiceProvider.GetRequiredService<CoreFoundationService>();var passed=0;
 void Check(bool v,string label){if(!v)throw new Exception(label);passed++;Console.WriteLine("PASS "+label);}
 async Task Deny<T>(Func<Task> f,string label)where T:Exception{var denied=false;try{await f();}catch(T){denied=true;}Check(denied,label);}
