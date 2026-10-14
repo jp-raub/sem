@@ -1,0 +1,24 @@
+@page "/events/{EventId}"
+@rendermode InteractiveServer
+@using Sem.Web.Core
+@inject AuthenticationStateProvider Authentication
+@inject CoreFoundationService Core
+<PageTitle>@(View?.Title ?? "イベント")</PageTitle>
+<EventTabNavigation EventId="@EventId" Selected="main" />
+<section id="event-tab-panel" role="tabpanel" aria-label="イベント" aria-labelledby="event-tab-main" tabindex="0">
+<h1 id="event-overview-title">@(View?.Title ?? "イベント")</h1>
+<p role="alert">@Error</p>
+@if (View is not null) {
+    <p style="white-space:pre-wrap;overflow-wrap:anywhere">@View.Description</p>
+    <p>会場：@View.Location ／ 開催：@DateTimeOffset.Parse(View.ScheduledDate).ToOffset(TimeSpan.FromHours(9)).ToString("yyyy/MM/dd HH:mm")（日本時間）</p>
+    <p>現在のフェーズ：@View.PhaseName</p>
+    <p><a href="@Link("timetable")">タイムテーブル</a> ／ <a href="@Link("participation")">参加登録・観覧</a> ／ <a href="@Link("part-start-preferences")">自分のパート開始通知</a> ／ <a href="@Link("public-answers")">公開設問回答</a> ／ <a href="@Link("comments")">コメント</a> ／ <a href="@Link("qr")">自分の受付QR</a></p>
+}
+<p><a href="/workspace#core-events">イベント一覧へ戻る</a></p>
+</section>
+@code {
+    [Parameter] public string EventId { get; set; } = "";
+    EventTabsView? View; string Error = "";
+    string Link(string suffix) => "/events/" + Uri.EscapeDataString(EventId) + "/" + suffix;
+    protected override async Task OnParametersSetAsync() { View = null; Error = ""; try { View = await Core.ReadEventTabsAsync((await Authentication.GetAuthenticationStateAsync()).User, EventId); } catch { Error = "ログイン状態と現在のイベント閲覧権限を確認してください。"; } }
+}

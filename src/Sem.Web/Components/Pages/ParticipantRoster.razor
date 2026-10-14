@@ -4,6 +4,8 @@
 @using Sem.Web.Core
 @inject AuthenticationStateProvider Authentication
 @inject CoreFoundationService Core
+<EventTabNavigation EventId="@EventId" Selected="roster" />
+<section id="event-tab-panel" role="tabpanel" aria-label="参加者名簿" aria-labelledby="event-tab-roster" tabindex="0">
 <PageTitle>参加者名簿</PageTitle>
 <h1>参加者名簿：@View?.Title</h1>
 <p><a href="/workspace">イベント一覧</a> ／ <a href="@($"/events/{EventId}/participation")">参加登録・観覧</a></p>
@@ -32,6 +34,7 @@
 <style>
 .participant-roster-table{overflow-x:auto;max-width:100%}.participant-roster-table table{width:100%;border-collapse:collapse}.participant-roster-table th,.participant-roster-table td{padding:12px;border-bottom:1px solid #d8ded9;vertical-align:top;text-align:left;overflow-wrap:anywhere}.participant-roster-table ul{margin:0;padding-left:20px}.participant-roster-table td a{display:inline-flex;align-items:center;min-height:44px;min-width:44px}#participant-roster-refresh,#participant-roster-back,#participant-roster-next{min-height:44px;min-width:44px}.participant-roster-table:focus-visible{outline:3px solid #1767ad;outline-offset:2px}
 </style>
+</section>
 @code {
     [Parameter] public string EventId { get; set; } = "";
     ParticipantRosterView? View;

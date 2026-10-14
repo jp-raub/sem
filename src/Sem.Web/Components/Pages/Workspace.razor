@@ -64,7 +64,7 @@ else
         @if (View.IsAdmin) { <button id="event-new" disabled="@(Busy || Editing is not null)" @onclick="NewEvent">イベントを新規作成</button> }
         @foreach (var item in View.Events)
         {
-            <article data-core-event="@item.Id"><h3>@item.Title</h3><p>@item.Description</p><p>@item.Location ／ @Japan(item.ScheduledDate)</p>
+            <article data-core-event="@item.Id"><h3><a data-event-overview="@item.Id" href="@($"/events/{Uri.EscapeDataString(item.Id)}")">@item.Title</a></h3><p>@item.Description</p><p>@item.Location ／ @Japan(item.ScheduledDate)</p>
                 <p>開場：@(item.OpensAt is null ? "未指定" : Japan(item.OpensAt)) ／ @item.ActivePhaseName ／ @(item.ManualPhaseOverride ? "手動優先" : "自動")</p>
                 <p>@item.AnnouncementMessage</p>
                 <p>担当管理者：@string.Join("、", item.ManagerIds.Select(id => View.Members.FirstOrDefault(m => m.UserId == id)?.DisplayName ?? "不明"))</p>

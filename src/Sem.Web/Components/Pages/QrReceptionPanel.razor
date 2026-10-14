@@ -4,6 +4,7 @@
 @inject AuthenticationStateProvider Authentication
 @inject CoreFoundationService Core
 @inject IJSRuntime JS
+<NavigationLock ConfirmExternalNavigation="@NavigationBlocked" OnBeforeInternalNavigation="PreventNavigation" />
 <section id="qr-reception-panel" aria-label="QR読取と受付確認">
 <h2>QR読取と受付確認：@Title</h2>
 <p id="qr-reader-error" role="alert">@Error</p><p id="qr-reader-message" role="status">@Message</p>
@@ -13,6 +14,7 @@
 <button id="qr-camera-start" disabled="@(Busy||ExternalBusy||CameraActive||PendingRead is not null||PendingReceipt is not null)" @onclick="StartCamera">カメラを開始</button>
 <button id="qr-camera-stop" disabled="@(!CameraActive)" @onclick="StopCamera">カメラを停止</button>
 <fieldset disabled="@(CameraActive||Busy||ExternalBusy||PendingRead is not null||PendingReceipt is not null)"><legend>受付QRのコードまたはこのイベントのリンクを貼付</legend><input id="qr-reader-input" type="password" autocomplete="off" maxlength="2048" @bind="Input" @bind:event="oninput" /><p>秘密情報です。本文やチャットで共有しないでください。</p></fieldset>
+<button id="qr-reader-discard-draft" disabled="@(Busy||ExternalBusy||CameraActive||PendingRead is not null||PendingReceipt is not null)" @onclick="DiscardDraft">未送信のQR入力・受付確認を取り消す</button>
 <button id="qr-reader-read" disabled="@(CameraActive||Busy||ExternalBusy||PendingReceipt is not null||PendingRead is null&&string.IsNullOrWhiteSpace(Input))" @onclick="Read">@(PendingRead is null?"明示して1件の読取を記録":"同じ操作IDで読取結果を確認／再試行")</button>
 @if(PendingRead is not null||PendingReceipt is not null){<p>結果が未確認です。別の操作を始めず同じ操作IDで再試行してください。</p>}
 @if(Target is not null&&ReadResult is not null){<section id="qr-reader-target">
@@ -29,6 +31,9 @@ else{<p id="qr-reader-current">現在の受付：@Time(Target.Current.At) ／ @T
  readonly string CameraOwner=Guid.NewGuid().ToString();bool CameraActive;long CameraEpoch;string CameraSession="";
  IJSObjectReference?Module;EventQrReadEdit?PendingRead;QrReceptionEdit?PendingReceipt;EventQrReadResult?ReadResult;ReceptionTarget?Target;
  string Input="",Token="",Title="",Error="",Message="",Note="";bool Busy,Allowed,Ready,Done,Disposed;long Epoch;string RouteId="";
+ bool NavigationBlocked => Busy || CameraActive || PendingRead is not null || PendingReceipt is not null || Done || !string.IsNullOrEmpty(Note) || !string.IsNullOrEmpty(Input);
+ void PreventNavigation(LocationChangingContext c){if(NavigationBlocked){c.PreventNavigation();Error="QRの処理中・結果未確認、カメラ利用中、または未送信入力があります。結果確認・カメラ停止・入力取消後に移動してください。";}}
+ void DiscardDraft(){if(Busy||ExternalBusy||CameraActive||PendingRead is not null||PendingReceipt is not null)return;ClearPrivate();Error="";Message="未送信のQR入力と受付確認を取り消しました。読取・受付の履歴は変更していません。";}
  protected override void OnParametersSet(){if(RouteId==EventId)return;RouteId=EventId;Epoch++;Input=Token=Title=Error=Message=Note="";PendingRead=null;PendingReceipt=null;ReadResult=null;Target=null;Busy=Allowed=Ready=Done=false;}
  protected override async Task OnAfterRenderAsync(bool first){if(Ready||Disposed)return;Ready=true;var epoch=Epoch;var id=EventId;
   try{Module??=await JS.InvokeAsync<IJSObjectReference>("import","/qr-reception.js");var fragment=await Module.InvokeAsync<string?>("takeFragment",id);var roster=await Core.ReadReceptionRosterAsync((await Authentication.GetAuthenticationStateAsync()).User,id,"");if(epoch!=Epoch||Disposed)return;Title=roster.Title;Allowed=true;if(fragment is not null){Input=fragment;Message="リンクを取り込みました。まだ読取記録も受付確定もしていません。";}}

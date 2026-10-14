@@ -1,0 +1,2 @@
+#event-tab-panel a{display:inline-flex;align-items:center;min-height:44px;min-width:44px;padding:0 4px}
+#event-tab-panel:focus-visible{outline:3px solid #1265b3;outline-offset:4px}

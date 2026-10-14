@@ -1,0 +1,5 @@
+.event-tabs{display:flex;overflow-x:auto;gap:4px;border-bottom:2px solid var(--border,#c7d7ce);margin:0 0 16px;padding:4px 2px 0;scrollbar-width:thin}
+.event-tabs button{flex:0 0 auto;min-width:44px;min-height:44px;padding:10px 16px;border:1px solid var(--border,#c7d7ce);border-bottom:0;border-radius:10px 10px 0 0;background:var(--soft,#edf3ef);color:var(--ink,#193126)}
+.event-tabs button[aria-selected=true]{font-weight:700;border-top:3px solid var(--accent,#17683e);background:var(--panel,#fff);padding-top:8px}
+.event-tabs button:focus-visible{outline:3px solid #1265b3;outline-offset:-3px}
+@media(forced-colors:active){.event-tabs button[aria-selected=true]{border-top-color:Highlight}.event-tabs button:focus-visible{outline-color:Highlight}}
