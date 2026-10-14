@@ -90,6 +90,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             t.HasCheckConstraint("CK_ManualPushAdmission_Epoch", "\"Epoch\">0");
         });
         b.Entity<ManualNotificationOperation>().HasAlternateKey(x => new { x.EventId, x.Id });
+        b.Entity<ManualNotificationOperation>().HasIndex(x => new { x.EventId, x.ActorId, x.AcceptedAt, x.Id });
         b.Entity<ManualNotificationOperation>().HasOne<SessionEvent>().WithMany().HasForeignKey(x => x.EventId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<ManualNotificationOperation>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.ActorId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<ManualNotificationOperation>().ToTable("ManualNotificationOperations", t => {

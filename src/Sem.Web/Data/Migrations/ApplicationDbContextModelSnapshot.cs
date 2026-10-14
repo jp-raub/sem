@@ -1037,6 +1037,8 @@ namespace Sem.Web.Data.Migrations
 
                     b.HasIndex("ActorId");
 
+                    b.HasIndex("EventId", "ActorId", "AcceptedAt", "Id");
+
                     b.ToTable("ManualNotificationOperations", null, t =>
                         {
                             t.HasCheckConstraint("CK_ManualNotificationOperation_Count", "\"RecipientCount\">0");

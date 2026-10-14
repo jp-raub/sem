@@ -36,8 +36,14 @@ revocation, insertion stability, exact projection, no-write snapshots and SQLite
 integrity/foreign-key checks. CI builds Release with warnings as errors and runs
 all .NET regression projects.
 
+The sole additive migration creates a composite index on
+`(EventId, ActorId, AcceptedAt, Id)`; it changes no table columns or business rows.
+The populated previous schema is upgraded in the dedicated check, with an exact
+business-state snapshot preserved. SQLite EXPLAIN confirms index use without a
+temporary sort on the latest page. It is not a benchmark or constant-cost promise.
+
 No HTTP endpoint, screen, JS, browser persistence, retry/send button, queue
-preparation/sweep/claim, delivery, activation update, audit write, migration,
+preparation/sweep/claim, delivery, activation update, audit write,
 production inspection, deployment or merge is added here. HTTP/UI integration
 and reload entry routes are the next engineering step. Runtime worker composition
 is inherited unchanged: missing activation defaults OFF, while an existing

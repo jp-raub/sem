@@ -19,7 +19,7 @@ var clock = new TestClock(DateTimeOffset.Parse("2026-10-14T09:00:00Z"));
 var services = new ServiceCollection();
 services.AddLogging();
 services.AddDbContextFactory<ApplicationDbContext>(o => o.UseSqlite("Data Source=" + path), ServiceLifetime.Scoped);
-services.AddIdentityCore<ApplicationUser>().AddEntityFrameworkStores<ApplicationDbContext>();
+services.AddIdentityCore<ApplicationUser>(o => o.Stores.SchemaVersion = IdentitySchemaVersions.Version3).AddEntityFrameworkStores<ApplicationDbContext>();
 services.AddDataProtection();
 services.AddSingleton<TimeProvider>(clock);
 services.AddSingleton<BusinessNotificationStore>();
@@ -101,6 +101,22 @@ try
             RequestHash = new string('e',64), PreviewFingerprint = new string('f',64) });
         return Task.CompletedTask;
     });
+    var beforeIndex = await Snapshot();
+    await using (var db = await factory.CreateDbContextAsync())
+        await db.GetService<IMigrator>().MigrateAsync();
+    Check(beforeIndex == await Snapshot(), "additive index migration preserves populated operations and all business state");
+    await using (var db = await factory.CreateDbContextAsync()) {
+        await db.Database.OpenConnectionAsync();
+        await using var command = db.Database.GetDbConnection().CreateCommand();
+        command.CommandText = "PRAGMA index_info('IX_ManualNotificationOperations_EventId_ActorId_AcceptedAt_Id')";
+        var columns = new List<string>();
+        await using (var reader = await command.ExecuteReaderAsync()) while (await reader.ReadAsync()) columns.Add(reader.GetString(2));
+        Check(columns.SequenceEqual(new[]{"EventId","ActorId","AcceptedAt","Id"}), "composite index matches own-author event cursor order");
+        command.CommandText = "EXPLAIN QUERY PLAN SELECT Id, Subject, RecipientCount, AcceptedAt FROM ManualNotificationOperations WHERE EventId='event' AND ActorId='manager' ORDER BY AcceptedAt DESC, Id DESC LIMIT 101";
+        var plans = new List<string>();
+        await using (var reader = await command.ExecuteReaderAsync()) while (await reader.ReadAsync()) plans.Add(reader.GetString(3));
+        Check(plans.Any(x=>x.Contains("IX_ManualNotificationOperations_EventId_ActorId_AcceptedAt_Id",StringComparison.Ordinal)) && !plans.Any(x=>x.Contains("TEMP B-TREE",StringComparison.Ordinal)), "SQLite latest page uses supporting index without temporary sort");
+    }
     var first = await core.ReadEventManualNotificationHistoryAsync(manager, "event");
     Check(first.EventId == "event" && first.Operations.Length == 100 && first.Next is not null,
         "first page bounded at 100 with continuation");
