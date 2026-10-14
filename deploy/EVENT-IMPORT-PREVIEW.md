@@ -44,3 +44,7 @@ Remaining: atomic append/apply with confirmation and replay handling; authentica
 6. Test stale versions/definitions/phase/permission, concurrent identical and conflicting identities, process restart replay, fault-injected audit failure, mixed ordering, no overwrites, null-versus-zero prep, overrun acknowledgment and whole-database integrity. Add route/UI only after these invariants pass, with explicit preview/confirmation, no-store/CSRF, memory-only draft/operation state and stale-response/navigation protection.
 
 This is an implementation plan, not a claim that atomic apply, receipt storage or its UI already exists.
+
+## Subsequent Core apply stage
+
+The originally planned atomic append Core stage is now implemented separately in `EVENT-IMPORT-APPLY.md`. The preview itself remains read-only. The historical next-stage plan above describes its invariants; HTTP/UI and external retrieval remain unimplemented.

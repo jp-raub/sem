@@ -55,6 +55,14 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     protected override void OnModelCreating(ModelBuilder b)
     {
         base.OnModelCreating(b);
+        b.Entity<EventImportOperation>().HasOne<SessionEvent>().WithMany()
+            .HasForeignKey(x => x.EventId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<EventImportOperation>().HasOne<ApplicationUser>().WithMany()
+            .HasForeignKey(x => x.ActorId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<EventImportOperation>().ToTable("EventImportOperations", t => {
+            t.HasCheckConstraint("CK_EventImportOperation_Hash", "length(\"Id\")=36 AND length(\"RequestHash\")=64");
+            t.HasCheckConstraint("CK_EventImportOperation_Result", "\"ResultVersion\">0 AND \"NewSongs\">=0 AND \"NewTransitions\">=0 AND \"NewSongs\"+\"NewTransitions\">0 AND \"SkippedRows\">=0 AND \"AcceptedAt\">=0");
+        });
         b.Entity<ManualNotificationPushActivationOperation>().HasOne<ApplicationUser>().WithMany()
             .HasForeignKey(x => x.ActorId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<ManualNotificationPushActivationOperation>().ToTable("ManualNotificationPushActivationOperations", t => {
