@@ -40,6 +40,21 @@ public static class CoreEndpoints
                     await ctx.Response.WriteAsJsonAsync(await service.SetManualPushActivationAsync(ctx.User, edit, ctx.RequestAborted));
                     return;
                 }
+                if (action == "manual-notification-history") {
+                    if (post) { ctx.Response.StatusCode = 405; return; }
+                    var actor = ctx.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                    if (string.IsNullOrEmpty(actor) || ctx.Request.Query["actor"].Count != 1 || ctx.Request.Query["actor"].ToString() != actor) throw new UnauthorizedAccessException();
+                    if (ctx.Request.Query["id"].Count != 1) throw new ValidationException("イベントを確認してください。");
+                    ManualNotificationHistoryCursor? before = null;
+                    if (ctx.Request.Query.ContainsKey("beforeAt") || ctx.Request.Query.ContainsKey("beforeId")) {
+                        var at = ctx.Request.Query["beforeAt"]; var request = ctx.Request.Query["beforeId"];
+                        if (at.Count != 1 || request.Count != 1 || !long.TryParse(at.ToString(), System.Globalization.NumberStyles.None,
+                            System.Globalization.CultureInfo.InvariantCulture, out var seconds)) throw new ValidationException("履歴の続きを確認してください。");
+                        before = new(seconds, request.ToString());
+                    }
+                    await ctx.Response.WriteAsJsonAsync(await service.ReadEventManualNotificationHistoryAsync(ctx.User, ctx.Request.Query["id"].ToString(), before, ctx.RequestAborted));
+                    return;
+                }
                 if (action == "manual-notification-push-status") {
                     if (post) { ctx.Response.StatusCode = 405; return; }
                     var actor = ctx.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;

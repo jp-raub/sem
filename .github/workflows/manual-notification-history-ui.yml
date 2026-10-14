@@ -1,0 +1,66 @@
+name: Own-author manual notification history UI
+on:
+  push:
+    branches: [feat/manual-notification-history-ui]
+  pull_request:
+    branches: [feat/manual-notification-history]
+    paths:
+      - src/**
+      - tests/**
+      - scripts/**
+      - .github/workflows/manual-notification-history-ui.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: manual-history-ui-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Release warnings as errors and all .NET regressions
+        run: |
+          set -euo pipefail
+          mkdir -p verification
+          dotnet build src/Sem.Web -c Release -warnaserror 2>&1 | tee verification/manual-ui-build.log
+          suites=0
+          for project in tests/*/*.csproj; do
+            name=$(basename "$(dirname "$project")")
+            dotnet run --project "$project" -c Release 2>&1 | tee "verification/${name}.log"
+            suites=$((suites+1))
+          done
+          echo "::notice title=.NET regressions::All $suites suites passed."
+          node scripts/manual-notification-transport-checks.mjs | tee verification/manual-transport.log
+          node scripts/manual-push-control-transport-checks.mjs | tee verification/manual-push-control-transport.log
+          node scripts/manual-history-transport-checks.mjs | tee verification/manual-history-transport.log
+          node scripts/manual-push-status-transport-checks.mjs | tee verification/manual-push-status-transport.log
+          node scripts/event-tabs-state-checks.mjs | tee verification/event-tabs-state.log
+          node scripts/qr-reader-input-checks.mjs | tee verification/qr-reader-input.log
+          node scripts/qr-camera-lifecycle-checks.mjs | tee verification/qr-camera-lifecycle.log
+          node scripts/event-push-service-worker-checks.cjs | tee verification/event-push-service-worker.log
+      - name: Native passkey and real Blazor current-source acceptance
+        run: |
+          set -euo pipefail
+          npm install --prefix scripts --no-save playwright@1.56.0
+          scripts/node_modules/.bin/playwright install --with-deps chromium
+          timeout 15m bash scripts/manual-push-control-ui-check.sh
+          echo '::notice title=Verification boundary::Isolated current publish, synthetic accounts and native virtual passkeys. Not Docker/DXP, old-image upgrade, real devices or real external manual Push dispatch.'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: manual-history-ui-verification
+          path: |
+            verification/*.log
+            verification/e2e-result.json
+            verification/e2e-error.txt
+            verification/manual-notification-*.png
+            verification/manual-push-control-*.png
+            verification/manual-push-status-*.png
+            verification/manual-history-*.png
+          retention-days: 7
