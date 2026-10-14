@@ -22,7 +22,7 @@
     <h2>メッセージの受付済み</h2>
     <p>@accepted.RecipientCount 人分を保存しました。受付日時：@Time(accepted.AcceptedAt)。@(accepted.Replayed ? "同じ操作IDの保存済み結果を確認しました。" : "")</p>
     <p>操作ID：<code>@accepted.RequestId</code></p>
-    <p>手動Pushは未配信です。端末受信・既読・外部配信の完全な一回性を意味しません。</p>
+    <p>この受付結果だけでは手動Pushの配信結果は確認できません。端末受信・既読・外部配信の完全な一回性を意味しません。</p>
     <button id="manual-notification-new" @onclick="StartNew">別のメッセージを新しく作成</button>
     </section>
 }

@@ -54,7 +54,7 @@ try{
  var overlaps=await Task.WhenAll(Enumerable.Range(0,3).Select(_=>Task.Run(()=>engine.RunOnceAsync())));
  Check(spy.Calls-parallelBefore==2&&(await Rows(concurrentA)).Length==1&&(await Rows(concurrentB)).Length==1,"overlapping complete batches never duplicate devices or external calls");
  Check(overlaps.All(x=>x.FailedItems==0),"concurrent scans tolerate replay/claim races without abandoning independent work");
- // Explicit TEST composition of the actual BackgroundService. Production Program never registers it.
+ // Isolated direct worker test; actual reusable DI composition is verified separately.
  var workerId=await Accept();var workerBefore=spy.Calls;
  var workerServices=new ServiceCollection();workerServices.AddScoped<ManualNotificationPushEngine>(_=>engine);
  using(var workerProvider=workerServices.BuildServiceProvider())
