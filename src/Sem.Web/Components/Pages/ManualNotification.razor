@@ -169,7 +169,14 @@ else if (Ready)
         if (!Allowed || Disposed || PushStatus.Busy || State.Busy || State.Accepted is not { } accepted) return;
         var ticket=PushStatus.Begin(LoadedId,ActorId,accepted); var generation=Generation; StatusError="";
         try {
-            StatusModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "/manual-push-status.js");
+            if (StatusModule is null) {
+                var imported = await JS.InvokeAsync<IJSObjectReference>("import", "/manual-push-status.js");
+                if (Disposed || generation != Generation) {
+                    try { await imported.DisposeAsync(); } catch (JSDisconnectedException) { }
+                    return;
+                }
+                StatusModule = imported; // no await between lifetime check and assignment
+            }
             if(Disposed || generation!=Generation) return;
             var response=await StatusModule.InvokeAsync<Transport<ManualNotificationPushStatus>>("status", ticket.EventId,ticket.ActorId,ticket.Acceptance.RequestId);
             if(Disposed || generation!=Generation || State.Accepted?.RequestId!=ticket.Acceptance.RequestId) return;
