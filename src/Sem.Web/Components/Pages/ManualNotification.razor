@@ -23,7 +23,26 @@
     <p>@accepted.RecipientCount 人分を保存しました。受付日時：@Time(accepted.AcceptedAt)。@(accepted.Replayed ? "同じ操作IDの保存済み結果を確認しました。" : "")</p>
     <p>操作ID：<code>@accepted.RequestId</code></p>
     <p>この受付結果だけでは手動Pushの配信結果は確認できません。端末受信・既読・外部配信の完全な一回性を意味しません。</p>
-    <button id="manual-notification-new" @onclick="StartNew">別のメッセージを新しく作成</button>
+    <button id="manual-push-status-refresh" disabled="@PushStatus.Busy" @onclick="ReadPushStatus">保存済みPush状態を取得／再確認</button>
+    <p id="manual-push-status-error" role="alert">@StatusError</p>
+    @if (PushStatus.View is { } status) {
+    <section id="manual-push-status" aria-label="保存済みPush状態">
+    <h3>保存済みPush状態（取得時点）</h3>
+    <p>元の受付人数：@status.RecipientCount 人。@GateLabel(status.AdmissionGate)</p>
+    @if (status.ExpiresAt is { } expires) { <p>元の配信期限：@Time(expires)</p> }
+    <p>端末別キュー作成済み：@status.PreparedRecipients 人／未準備：@status.UnpreparedRecipients 人／対象端末なし：@status.NoEligibleDevices 人／その他の準備未成立：@status.OtherSuppressedPreparations 人。</p>
+    <p>以下は端末別の保存件数で、人数とは異なります。期限や現在の条件はワーカーが改めて確認し、整理前の保存状態が残る場合があります。配信基盤への受付は端末受信・既読の保証ではありません。自動更新や自動再送はしません。</p>
+    <dl class="manual-push-status-counts">
+    <dt>保存済み送信待ち（送信可能の保証なし）</dt><dd>@status.PersistedDeliveryCounts.Pending</dd>
+    <dt>処理権取得済み</dt><dd>@status.PersistedDeliveryCounts.Claimed</dd>
+    <dt>配信基盤への受付済み（端末受信ではない）</dt><dd>@status.PersistedDeliveryCounts.Accepted</dd>
+    <dt>結果不明（自動再送なし）</dt><dd>@status.PersistedDeliveryCounts.Unknown</dd>
+    <dt>期限切れ</dt><dd>@status.PersistedDeliveryCounts.Expired</dd>
+    <dt>配信抑止</dt><dd>@status.PersistedDeliveryCounts.Suppressed</dd>
+    <dt>確定失敗</dt><dd>@status.PersistedDeliveryCounts.Failed</dd>
+    </dl></section>
+    } else { <p id="manual-push-status-unavailable">@(PushStatus.Busy ? "現在の権限と保存状態を確認中です。" : "Push状態は未取得です。取得操作はメッセージ送信をしません。")</p> }
+    <button id="manual-notification-new" disabled="@PushStatus.Busy" @onclick="StartNew">別のメッセージを新しく作成</button>
     </section>
 }
 else
@@ -69,7 +88,8 @@ else if (Ready)
 @code {
     [Parameter] public string EventId { get; set; } = "";
     ManualNotificationComposerState State = new();
-    IJSObjectReference? Module;
+    IJSObjectReference? Module, StatusModule;
+    ManualNotificationPushStatusViewState PushStatus = new(); string StatusError = "";
     string LoadedId = "", ActorId = "", Title = "", Error = "", Message = "";
     bool Ready, Allowed, Disposed, Initializing;
     long Generation;
@@ -78,7 +98,7 @@ else if (Ready)
         if (LoadedId == EventId) return;
         // NavigationLock normally prevents this; never silently replace a pending operation on parameter reuse.
         if (State.NavigationBlocked) { Allowed = false; Error = "未送信または結果未確認の操作が残っています。元の画面で結果を確認してください。"; return; }
-        LoadedId = EventId; Generation++; State = new(); ActorId = Title = Error = Message = ""; Ready = Allowed = false;
+        LoadedId = EventId; Generation++; PushStatus.Reset(); StatusError = ""; State = new(); ActorId = Title = Error = Message = ""; Ready = Allowed = false;
     }
     protected override async Task OnAfterRenderAsync(bool first)
     {
@@ -108,7 +128,7 @@ else if (Ready)
         if (State.NavigationBlocked) { context.PreventNavigation(); Error = "未送信・処理中・結果未確認の操作があります。結果確認または未送信入力の取消後に移動してください。"; }
     }
     void Discard() { if (!State.CanEdit) return; State.DiscardDraft(); Error = ""; Message = "未送信の入力だけを取り消しました。保存済みのメッセージは変更していません。"; }
-    void StartNew() { if (State.Busy || State.Pending is not null) return; State.StartNew(); Message = Error = ""; }
+    void StartNew() { if (State.Busy || State.Pending is not null) return; if (PushStatus.Busy) return; PushStatus.Reset(); StatusError = ""; State.StartNew(); Message = Error = ""; }
     sealed record Transport<T>(int Status, T? Value);
     async Task Preview()
     {
@@ -144,10 +164,31 @@ else if (Ready)
             } else { throw new InvalidOperationException("Unclassified acceptance response"); }
         } catch { if (!Disposed && generation == Generation) { State.SubmissionUnknown(); Error = "保存されたか確認できません。同じ操作IDで結果を確認／再試行してください。新しい操作IDでは送信しないでください。"; } }
     }
+    async Task ReadPushStatus()
+    {
+        if (!Allowed || Disposed || PushStatus.Busy || State.Busy || State.Accepted is not { } accepted) return;
+        var ticket=PushStatus.Begin(LoadedId,ActorId,accepted); var generation=Generation; StatusError="";
+        try {
+            StatusModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "/manual-push-status.js");
+            if(Disposed || generation!=Generation) return;
+            var response=await StatusModule.InvokeAsync<Transport<ManualNotificationPushStatus>>("status", ticket.EventId,ticket.ActorId,ticket.Acceptance.RequestId);
+            if(Disposed || generation!=Generation || State.Accepted?.RequestId!=ticket.Acceptance.RequestId) return;
+            if(response.Status==200 && response.Value is { } view) PushStatus.Complete(ticket,view);
+            else { PushStatus.Failed(ticket); if(response.Status==403){Allowed=false;Title="";} StatusError="現在の権限と操作Idを確認してください。保存済みメッセージは変更していません。"; }
+        } catch { if(!Disposed && generation==Generation){PushStatus.Failed(ticket);StatusError="Push状態を取得できませんでした。送信や再送はしていません。必要な場合だけ再確認してください。";} }
+    }
+    static string GateLabel(string gate)=>gate switch {
+        "NotAdmitted"=>"元の受付はPush対象へ登録されていません（後付け配信なし）。",
+        "Stopped"=>"現在の受付方針・世代などの条件では配信対象外です。",
+        "Expired"=>"元の配信期限を経過しています。",
+        "Eligible"=>"現在世代・期限の条件内です（個別端末の送信可否は別途再確認）。",
+        _=>"状態は確認できません。"
+    };
     static string Time(long at) => DateTimeOffset.FromUnixTimeSeconds(at).ToOffset(TimeSpan.FromHours(9)).ToString("yyyy/MM/dd HH:mm:ss") + "（日本時間）";
     public async ValueTask DisposeAsync()
     {
-        Disposed = true; Generation++;
+        Disposed = true; Generation++; PushStatus.Reset();
+        if (StatusModule is not null) { try { await StatusModule.DisposeAsync(); } catch (JSDisconnectedException) { } }
         if (Module is not null) try { await Module.DisposeAsync(); } catch (JSDisconnectedException) { }
     }
 }
