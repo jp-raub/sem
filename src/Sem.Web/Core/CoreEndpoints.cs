@@ -24,6 +24,31 @@ public static class CoreEndpoints
                     if (size is { IsReadOnly: false }) size.MaxRequestBodySize = 65536;
                     await csrf.ValidateRequestAsync(ctx);
                 }
+                if (action == "manual-notification-context")
+                {
+                    if (post) { ctx.Response.StatusCode = 405; return; }
+                    var view = await service.ReadEventTabsAsync(ctx.User, ctx.Request.Query["id"].ToString(), ctx.RequestAborted);
+                    if (!view.Available.Contains("notifications")) throw new UnauthorizedAccessException();
+                    await ctx.Response.WriteAsJsonAsync(new ManualNotificationComposerContext(view.UserId, view.EventId, view.Title));
+                    return;
+                }
+                if (action is "manual-notification-preview" or "manual-notification-accept")
+                {
+                    if (!post) { ctx.Response.StatusCode = 405; return; }
+                    // Bind this browser request to the actor that opened the composer. Not an auth token.
+                    var actor = ctx.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                    if (string.IsNullOrEmpty(actor) || ctx.Request.Query["actor"].ToString() != actor)
+                        throw new UnauthorizedAccessException();
+                    var id = ctx.Request.Query["id"].ToString();
+                    if (action == "manual-notification-preview") {
+                        var draft = await ctx.Request.ReadFromJsonAsync<ManualNotificationDraft>() ?? throw new ValidationException("入力が必要です。");
+                        await ctx.Response.WriteAsJsonAsync(await service.PreviewEventManualNotificationAsync(ctx.User, id, draft.Subject, draft.Body, ctx.RequestAborted));
+                    } else {
+                        var edit = await ctx.Request.ReadFromJsonAsync<ManualNotificationSubmit>() ?? throw new ValidationException("入力が必要です。");
+                        await ctx.Response.WriteAsJsonAsync(await service.AcceptEventManualNotificationAsync(ctx.User, id, edit, ctx.RequestAborted));
+                    }
+                    return;
+                }
                 if (!post && action == "digest-preview") { await ctx.Response.WriteAsJsonAsync(await service.ReadDigestPreviewAsync(ctx.User, ctx.Request.Query.ContainsKey("day") ? ctx.Request.Query["day"].ToString() : null, ctx.RequestAborted)); return; }
                 if (action == "participant-roster") { if (post) { ctx.Response.StatusCode = 405; return; } await ctx.Response.WriteAsJsonAsync(await service.ReadParticipantRosterAsync(ctx.User, ctx.Request.Query["id"].ToString(), ctx.Request.Query["afterUserId"].FirstOrDefault(), ctx.RequestAborted)); return; }
                 if (action == "navigation") { if (post) { ctx.Response.StatusCode = 405; return; } await ctx.Response.WriteAsJsonAsync(await service.ReadNavigationAsync(ctx.User, ctx.RequestAborted)); return; }
