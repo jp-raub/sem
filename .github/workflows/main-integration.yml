@@ -1,0 +1,38 @@
+name: Main integration verification
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main, ci/main-integration]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: main-integration-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  integration-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Record source and validate scripts
+        run: |
+          set -euo pipefail
+          bash -n scripts/integration-checks.sh
+          mkdir -p verification
+          printf 'event=%s\nref=%s\nsha=%s\n' "$GITHUB_EVENT_NAME" "$GITHUB_REF" "$GITHUB_SHA" > verification/event.txt
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Verify exact merged tree without deployment
+        run: bash scripts/integration-checks.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: main-integration-verification
+          path: verification/
+          retention-days: 7
