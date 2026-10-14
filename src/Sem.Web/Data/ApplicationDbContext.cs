@@ -14,6 +14,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<TestEvent> Events => Set<TestEvent>();
     public DbSet<Participation> Participations => Set<Participation>();
     public DbSet<Audit> Audits => Set<Audit>();
+    public DbSet<PasskeyAddition> PasskeyAdditions => Set<PasskeyAddition>();
     protected override void OnModelCreating(ModelBuilder b)
     {
         base.OnModelCreating(b);
@@ -21,5 +22,8 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         b.Entity<EmailTicket>().HasIndex(t => t.Hash).IsUnique();
         b.Entity<PushDevice>().HasIndex(d => d.Endpoint).IsUnique();
         b.Entity<Participation>().HasIndex(p => new { p.EventId, p.UserId }).IsUnique();
+        b.Entity<PasskeyAddition>().HasIndex(p => p.EmailTokenHash).IsUnique();
+        b.Entity<PasskeyAddition>().HasIndex(p => new { p.UserId, p.SessionHash })
+            .IsUnique().HasFilter("\"Cancelled\" = 0 AND \"CompletedAt\" IS NULL");
     }
 }

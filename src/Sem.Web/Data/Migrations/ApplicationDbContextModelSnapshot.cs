@@ -479,6 +479,69 @@ namespace Sem.Web.Data.Migrations
                     b.ToTable("Participations");
                 });
 
+            modelBuilder.Entity("Sem.Web.Runtime.PasskeyAddition", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Cancelled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("CompletedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Created")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("CreationChallengeHash")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EmailTokenHash")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("EmailVerifiedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Expires")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("ReauthenticatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ReauthenticationChallengeHash")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("RegistrationUntil")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SecurityStamp")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SessionHash")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EmailTokenHash")
+                        .IsUnique();
+
+                    b.HasIndex("UserId", "SessionHash")
+                        .IsUnique()
+                        .HasFilter("\"Cancelled\" = 0 AND \"CompletedAt\" IS NULL");
+
+                    b.ToTable("PasskeyAdditions");
+                });
+
             modelBuilder.Entity("Sem.Web.Runtime.PushDevice", b =>
                 {
                     b.Property<string>("Id")

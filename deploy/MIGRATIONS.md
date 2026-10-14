@@ -2,7 +2,7 @@
 
 English reference; [Japanese version](MIGRATIONS.ja.md).
 
-This candidate changes **storage initialization**, not the formal business schema or authentication policy. It does not deploy itself to DXP. Review the feature PR and its exact CI commit before applying an image.
+The baseline foundation changes **storage initialization**, not the formal business schema or authentication policy. The stacked [verified passkey-addition feature](PASSKEY-ADDITION.md) adds its own migration and authentication policy. It does not deploy itself to DXP. Review the feature PR and its exact CI commit before applying an image.
 
 ## Supported starting states
 
@@ -22,7 +22,7 @@ The original `00000000000000_CreateIdentitySchema` files were unused template sc
 
 Unknown migration IDs, incomplete schemas, extra tables/views/triggers, missing/altered indexes and integrity violations fail startup instead of guessing. Do not use `EnsureCreated`, delete/recreate the DB, insert history manually, or disable checks to make an unknown DB pass. Preserve the backup and investigate. No multiple live application instances are supported by the external-test deployment. Stop the old instance before an update.
 
-The baseline retains the **current simplified test model**. PostgreSQL, formal event/song/timetable models, extra constraints and hardened passkey addition remain separate work. Initial registration and login behavior are unchanged.
+The baseline retains the **current simplified test model**. PostgreSQL, formal event/song/timetable models, extra constraints and other authentication lifecycle work remain separate. For passkey-addition changes, see PASSKEY-ADDITION.md.
 
 ## Candidate validation
 
@@ -31,7 +31,7 @@ dotnet build src/Sem.Web -c Release
 dotnet run --project tests/Sem.StorageChecks -c Release
 ```
 
-Storage checks use synthetic users, opaque passkey bytes, invitations, inbox/delivery/device records and events. They test empty initialization, adoption, repeat startup, copying/restoring a migrated DB, and byte-for-byte unchanged DB files on rejection. The reference fixture still uses `EnsureCreated` **in tests only**, to reproduce the old deployment.
+Storage checks use synthetic users, opaque passkey bytes, invitations, inbox/delivery/device records and events. They test empty initialization, adoption, repeat startup, copying/restoring a migrated DB, and byte-for-byte unchanged DB files on rejection. The legacy fixture is generated from the frozen baseline migration DDL (without migration history), reproducing the old deployment schema rather than the current evolving model.
 
 The independent `SQLite migration foundation` workflow additionally builds the fixed legacy and candidate linux/amd64 images. It runs the existing HTTPS/CSRF/virtual-passkey/isolated-SMTP integration, swaps the running legacy application for the candidate against the same synthetic volume, and verifies retained protection-key sessions, invitations, inbox, existing administrator/member passkey logins and scheduled processing. This workflow does not push adjusted source back or merge the PR. Real Apple hardware and real SMTP/Push delivery are not proven by the virtual fixture.
 

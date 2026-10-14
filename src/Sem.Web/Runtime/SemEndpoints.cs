@@ -18,10 +18,10 @@ public static class SemEndpoints
     public static string Secret() => Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
     public static void MapSem(this WebApplication app)
     {
-        app.MapMethods("/api/{**action}", ["GET", "POST"], async (HttpContext ctx, ApplicationDbContext db, UserManager<ApplicationUser> users, SignInManager<ApplicationUser> signin, IAntiforgery csrf, IDataProtectionProvider dp, DeploymentSettings settings, NotificationService notifications) =>
+        app.MapMethods("/api/{**action}", ["GET", "POST"], async (HttpContext ctx, ApplicationDbContext db, UserManager<ApplicationUser> users, SignInManager<ApplicationUser> signin, IAntiforgery csrf, IDataProtectionProvider dp, DeploymentSettings settings, NotificationService notifications, PasskeyAdditionService additions) =>
         {
             ctx.Response.Headers.CacheControl = "no-store";
-            try { await Handle(ctx, db, users, signin, csrf, dp.CreateProtector("SEM.Tokens.v1"), settings, notifications); }
+            try { await Handle(ctx, db, users, signin, csrf, dp.CreateProtector("SEM.Tokens.v1"), settings, notifications, additions); }
             catch (ValidationException e) { ctx.Response.StatusCode = 400; await ctx.Response.WriteAsJsonAsync(new { error = e.Message }); }
             catch (AntiforgeryValidationException) { ctx.Response.StatusCode = 400; await ctx.Response.WriteAsJsonAsync(new { error = "ページを再読み込みしてください。" }); }
             catch (JsonException) { ctx.Response.StatusCode = 400; await ctx.Response.WriteAsJsonAsync(new { error = "入力形式を確認してください。" }); }
@@ -44,7 +44,7 @@ public static class SemEndpoints
             return Results.Redirect("/?enroll=1");
         });
     }
-    static async Task Handle(HttpContext c, ApplicationDbContext db, UserManager<ApplicationUser> users, SignInManager<ApplicationUser> signin, IAntiforgery csrf, IDataProtector protector, DeploymentSettings cfg, NotificationService notify)
+    static async Task Handle(HttpContext c, ApplicationDbContext db, UserManager<ApplicationUser> users, SignInManager<ApplicationUser> signin, IAntiforgery csrf, IDataProtector protector, DeploymentSettings cfg, NotificationService notify, PasskeyAdditionService additions)
     {
         var action = c.Request.RouteValues["action"]?.ToString() ?? "";
         var post = HttpMethods.IsPost(c.Request.Method);
@@ -70,7 +70,29 @@ public static class SemEndpoints
         if (action == "status" && !post)
         {
             var pending = await c.AuthenticateAsync("SEM.Enrollment");
-            await Reply(new { initialized = site?.Initialized ?? false, siteName = site?.Name ?? "SEM", emailConfigured = notify.EmailConfigured, pushConfigured = notify.PushConfigured, pushPublicKey = notify.PublicKey, user = user is null ? null : new { user.Id, user.DisplayName, user.Email, isAdmin = user.IsAdmin }, enrolling = pending.Succeeded }); return;
+            await Reply(new { initialized = site?.Initialized ?? false, siteName = site?.Name ?? "SEM", emailConfigured = notify.EmailConfigured, pushConfigured = notify.PushConfigured, pushPublicKey = notify.PublicKey, user = user is null ? null : new { user.Id, user.DisplayName, user.Email, isAdmin = user.IsAdmin }, enrolling = pending.Succeeded, passkeyAddition = await additions.StatusAsync(c, user) }); return;
+        }
+        if (action.StartsWith("passkey-add-", StringComparison.Ordinal) && post)
+        {
+            if (user is null) throw new UnauthorizedAccessException();
+            switch (action)
+            {
+                case "passkey-add-begin":
+                    await Reply(await additions.BeginAsync(c, user)); return;
+                case "passkey-add-reauth":
+                    await additions.ReauthenticateAsync(c, user, Text("id", 64), Text("credential", 50000));
+                    await Reply(new { message = "再認証しました。保存済みメールへ確認リンクを送ります。" }); return;
+                case "passkey-add-resend":
+                    await additions.ResendAsync(c, user, Text("id", 64));
+                    await Reply(new { message = "確認メールを再送します。以前のリンクは無効になりました。" }); return;
+                case "passkey-add-confirm":
+                    await additions.ConfirmEmailAsync(c, user, Text("token", 128));
+                    await Reply(new { message = "メールを再確認しました。期限内に新しいパスキーを登録してください。" }); return;
+                case "passkey-add-cancel":
+                    await additions.CancelAsync(c, user, Text("id", 64));
+                    await Reply(new { message = "パスキー追加を取り消しました。" }); return;
+                default: throw new ValidationException("追加操作を確認してください。");
+            }
         }
         if ((action == "setup" || action == "register") && post)
         {
@@ -118,19 +140,29 @@ public static class SemEndpoints
         }
         if (action == "passkey-options" && post)
         {
+            if (user is not null)
+            {
+                c.Response.ContentType = "application/json";
+                await c.Response.WriteAsync(await additions.CreationOptionsAsync(c, user)); return;
+            }
             var pending = await c.AuthenticateAsync("SEM.Enrollment");
             var id = user?.Id ?? (pending.Succeeded ? pending.Principal?.FindFirstValue(ClaimTypes.NameIdentifier) : null);
             var owner = id is null ? null : await users.FindByIdAsync(id);
-            if (owner is null || !owner.EmailConfirmed) throw new UnauthorizedAccessException();
+            if (owner is null || owner.Enabled || !owner.EmailConfirmed) throw new UnauthorizedAccessException();
             var options = await signin.MakePasskeyCreationOptionsAsync(new() { Id = owner.Id, Name = owner.UserName!, DisplayName = owner.DisplayName });
             c.Response.ContentType = "application/json"; await c.Response.WriteAsync(options); return;
         }
         if (action == "passkey-complete" && post)
         {
+            if (user is not null)
+            {
+                await additions.CompleteAsync(c, user, Text("credential", 50000));
+                await Reply(new { message = "本人確認を完了し、パスキーを追加しました。" }); return;
+            }
             var pending = await c.AuthenticateAsync("SEM.Enrollment");
             var id = user?.Id ?? (pending.Succeeded ? pending.Principal?.FindFirstValue(ClaimTypes.NameIdentifier) : null);
             var owner = id is null ? null : await users.FindByIdAsync(id);
-            if (owner is null || !owner.EmailConfirmed) throw new UnauthorizedAccessException();
+            if (owner is null || owner.Enabled || !owner.EmailConfirmed) throw new UnauthorizedAccessException();
             var result = await signin.PerformPasskeyAttestationAsync(Text("credential", 50000));
             if (!result.Succeeded || result.UserEntity.Id != owner.Id) throw new ValidationException("パスキー登録を確認できませんでした。");
             await using var tx = await db.Database.BeginTransactionAsync();
@@ -153,7 +185,8 @@ public static class SemEndpoints
             if (!added.Succeeded) throw new ValidationException("パスキーを保存できませんでした。");
             await db.SaveChangesAsync(); await tx.CommitAsync();
             await c.SignOutAsync("SEM.Enrollment");
-            await signin.SignInAsync(owner, false);
+            await signin.SignInWithClaimsAsync(owner, false,
+                [new Claim(PasskeyAdditionService.SessionClaim, Secret())]);
             await Reply(new { message = "パスキーを登録しました。" }); return;
         }
         if (action == "login-options" && post)
@@ -166,12 +199,32 @@ public static class SemEndpoints
         {
             var result = await signin.PasskeySignInAsync(Text("credential", 50000));
             if (!result.Succeeded) throw new ValidationException("パスキーでログインできませんでした。");
+            var authenticated = await users.GetUserAsync(c.User);
+            if (authenticated is not { Enabled: true })
+            {
+                await signin.SignOutAsync();
+                throw new UnauthorizedAccessException();
+            }
+            await signin.SignInWithClaimsAsync(authenticated, false,
+                [new Claim(PasskeyAdditionService.SessionClaim, Secret())]);
             await Reply(new { message = "ログインしました。" }); return;
         }
         if (user is null) throw new UnauthorizedAccessException();
         void Admin() { if (!user.IsAdmin) throw new UnauthorizedAccessException(); }
         void Audit(string operation, string entity) => db.Audits.Add(new Audit { ActorId = user.Id, Action = operation, EntityId = entity, At = Now });
-        if (action == "logout" && post) { await signin.SignOutAsync(); await Reply(new { message = "ログアウトしました。" }); return; }
+        if (action == "logout" && post)
+        {
+            var session = c.User.FindFirstValue(PasskeyAdditionService.SessionClaim);
+            if (!string.IsNullOrEmpty(session))
+            {
+                var hash = Hash(session);
+                await db.PasskeyAdditions.Where(p => p.UserId == user.Id && p.SessionHash == hash &&
+                    !p.Cancelled && p.CompletedAt == null)
+                    .ExecuteUpdateAsync(s => s.SetProperty(p => p.Cancelled, true)
+                        .SetProperty(p => p.EmailTokenHash, (string?)null));
+            }
+            await signin.SignOutAsync(); await Reply(new { message = "ログアウトしました。" }); return;
+        }
         if (action == "snapshot" && !post)
         {
             var invites = await db.Invitations.Where(i => user.IsAdmin || i.OwnerId == user.Id).ToListAsync();

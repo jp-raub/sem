@@ -31,6 +31,8 @@ builder.Services.AddAntiforgery(o => { o.HeaderName = "X-CSRF-TOKEN"; o.Cookie.N
 builder.Services.AddDbContext<ApplicationDbContext>(o => o.UseSqlite($"Data Source={Path.Combine(deployment.DataDirectory, "sem.db")}"));
 builder.Services.AddIdentityCore<ApplicationUser>(o => { o.SignIn.RequireConfirmedAccount = true; o.User.RequireUniqueEmail = true; o.Stores.SchemaVersion = IdentitySchemaVersions.Version3; }).AddEntityFrameworkStores<ApplicationDbContext>().AddSignInManager().AddDefaultTokenProviders().AddUserConfirmation<SemUserConfirmation>();
 builder.Services.AddSingleton<NotificationService>();
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddScoped<PasskeyAdditionService>();
 builder.Services.AddHostedService<NotificationWorker>();
 builder.Services.AddRateLimiter(o =>
 {
