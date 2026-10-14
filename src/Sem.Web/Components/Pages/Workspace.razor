@@ -1,0 +1,169 @@
+@page "/workspace"
+@rendermode InteractiveServer
+@using Sem.Web.Core
+@using System.Globalization
+@inject AuthenticationStateProvider Authentication
+@inject CoreFoundationService Core
+<PageTitle>@Title — 業務基盤</PageTitle>
+<h1 id="core-title">@Title</h1>
+@if (View is not null) { <p>@(Editing == "service" ? ServiceDescription : View.Service.Description)</p> }
+<p>サービス・プロフィール・イベント概要の実DB基盤です。曲／参加受付／カスタムフェーズ／当日進行はまだ移植していません。</p>
+<p><a href="/">認証・招待・通知の画面へ</a></p>
+<p id="core-error" role="alert">@Error</p><p id="core-message" role="status">@Message</p>
+@if (View is null)
+{
+    <p>通常のパスキー認証が必要です。上のリンクからログインしてください。</p>
+}
+else
+{
+    <button id="core-refresh" disabled="@(Busy || Editing is not null)" @onclick="Load">最新状態を取得</button>
+    <section class="panel" id="core-account"><h2>自分のアカウント</h2>
+        <p>@View.Profile.DisplayName ／ @(View.IsAdmin ? "全体管理者" : "一般ユーザー・担当イベント管理")</p>
+        <p>認証メール：@View.Email（読取専用）</p><p>メール変更・認証復旧は後続実装です。パスキー追加は認証画面で行います。</p>
+    </section>
+    <section class="panel" id="core-profile"><h2>本人の基本プロフィール</h2>
+    @if (Editing == "profile")
+    {
+        <form @onsubmit="SaveProfile" @onsubmit:preventDefault>
+            <label>表示名<input id="profile-name" @bind="ProfileName" maxlength="60" required /></label>
+            <label>読み（カタカナは保存時にひらがなへ）<input id="profile-reading" @bind="Reading" maxlength="80" /></label>
+            <label>対面での呼び<input id="profile-call" @bind="CallName" maxlength="60" /></label>
+            <h3>SNS</h3>
+            @foreach (var link in Social)
+            {
+                <div @key="link"><label>サービス名<input @bind="link.Service" maxlength="60" /></label><label>URL<input type="url" @bind="link.Url" maxlength="500" /></label>
+                    <button type="button" @onclick="() => Social.Remove(link)">削除</button></div>
+            }
+            <button type="button" @onclick="() => Social.Add(new())">SNSを追加</button>
+            <button id="profile-save" disabled="@Busy">保存</button><button type="button" disabled="@Busy" @onclick="Cancel">取消</button>
+        </form>
+    }
+    else
+    {
+        <p>@View.Profile.DisplayName ／ @View.Profile.Reading ／ @View.Profile.CallName</p>
+        @foreach (var link in View.Profile.Social) { <p><a href="@link.Url" target="_blank" rel="noopener noreferrer">@link.Service</a></p> }
+        <button id="profile-edit" disabled="@(Busy || Editing is not null)" @onclick="EditProfile">編集</button>
+    }
+    <p>基本プロフィールはログイン済みメンバーに公開されます。メールは公開しません。アイコン・追加設問・登録履歴は後続実装です。</p></section>
+    @if (View.IsAdmin)
+    {
+        <section class="panel" id="core-service"><h2>サービス管理</h2>
+        @if (Editing == "service")
+        {
+            <form @onsubmit="SaveService" @onsubmit:preventDefault>
+                <label>サービス名<input id="service-name" @bind="ServiceName" @bind:event="oninput" maxlength="60" required /></label>
+                <label>表示説明<input id="service-description" @bind="ServiceDescription" @bind:event="oninput" maxlength="80" /></label>
+                <p>表示は下書きプレビューです。保存するまで共有設定は変わりません。</p>
+                <button id="service-save" disabled="@Busy">保存</button><button type="button" disabled="@Busy" @onclick="Cancel">取消</button>
+            </form>
+        }
+        else { <button id="service-edit" disabled="@(Busy || Editing is not null)" @onclick="EditService">編集</button> }
+        </section>
+    }
+    <section class="panel" id="core-events"><h2>正式イベント</h2>
+        @if (View.IsAdmin) { <button id="event-new" disabled="@(Busy || Editing is not null)" @onclick="NewEvent">イベントを新規作成</button> }
+        @foreach (var item in View.Events)
+        {
+            <article data-core-event="@item.Id"><h3>@item.Title</h3><p>@item.Description</p><p>@item.Location ／ @Japan(item.ScheduledDate)</p>
+                <p>開場：@(item.OpensAt is null ? "未指定" : Japan(item.OpensAt)) ／ @(item.PhaseKind == "Hidden" ? "非表示" : "閲覧公開")</p>
+                <p>@item.AnnouncementMessage</p>
+                <p>担当管理者：@string.Join("、", item.ManagerIds.Select(id => View.Members.FirstOrDefault(m => m.UserId == id)?.DisplayName ?? "不明"))</p>
+                @if (item.CanManage) { <button disabled="@(Busy || Editing is not null)" @onclick="() => EditEvent(item)">概要・管理者を編集</button> }
+            </article>
+        }
+        @if (View.Events.Length == 0) { <p>閲覧できるイベントはありません。</p> }
+        @if (Editing == "event")
+        {
+            <form id="event-core-form" @onsubmit="SaveEvent" @onsubmit:preventDefault>
+                <label>イベント名<input id="event-title" @bind="EventTitle" maxlength="100" required /></label>
+                <label>概要<textarea @bind="EventDescription" maxlength="2000"></textarea></label>
+                <label>会場・URL<input @bind="EventLocation" maxlength="500" /></label>
+                <label>開始（日本時間）<input id="event-starts" type="datetime-local" step="1" value="@Starts" @onchange="e => Starts = e.Value?.ToString() ?? string.Empty" required /></label>
+                <label>開場（日本時間・任意）<input id="event-opens" type="datetime-local" step="1" value="@Opens" @onchange="e => Opens = e.Value?.ToString() ?? string.Empty" /></label>
+                <label>お知らせ<textarea @bind="Announcement" maxlength="2000"></textarea></label>
+                <label>表示<select id="event-phase" @bind="Phase"><option value="Hidden">非表示</option><option value="View">閲覧公開</option></select></label>
+                <fieldset><legend>担当管理者（0名以上・複数選択可）</legend>
+                @foreach (var member in View.Members)
+                {
+                    <label><input type="checkbox" checked="@Managers.Contains(member.UserId)" @onchange="e => ToggleManager(member.UserId, e.Value is true)" />@member.DisplayName</label>
+                }
+                </fieldset>
+                <p>閲覧公開は参加受付ではありません。曲・枠・フェーズ別の受付は後続実装です。</p>
+                <button id="event-core-save" disabled="@Busy">保存</button><button type="button" disabled="@Busy" @onclick="Cancel">取消</button>
+            </form>
+        }
+    </section>
+    <section class="panel"><h2>メンバープロフィールの閲覧</h2>
+        @foreach (var member in View.Members) { <button disabled="@Busy" @onclick="() => PreviewProfile(member.UserId)">@member.DisplayName</button> }
+        @if (Preview is not null)
+        {
+            <article id="core-profile-preview"><h3>@Preview.DisplayName</h3><p>@Preview.Reading ／ @Preview.CallName</p>
+                @foreach (var link in Preview.Social) { <p><a href="@link.Url" target="_blank" rel="noopener noreferrer">@link.Service</a></p> }
+                <button @onclick="() => Preview = null">閉じる</button><p>閲覧専用です。他人のプロフィールは編集できません。</p>
+            </article>
+        }
+    </section>
+}
+@code {
+    WorkspaceView? View;
+    ProfileView? Preview;
+    string Error = "", Message = "";
+    string? Editing, EventId;
+    bool Busy;
+    string ServiceName = "", ServiceDescription = "", ProfileName = "", Reading = "", CallName = "";
+    string EventTitle = "", EventDescription = "", EventLocation = "", Starts = "", Opens = "", Announcement = "", Phase = "Hidden";
+    long Version;
+    List<SocialDraft> Social = [];
+    HashSet<string> Managers = [];
+    string Title => Editing == "service" ? ServiceName : View?.Service.Name ?? "SEM";
+    static TimeZoneInfo JapanZone => TimeZoneInfo.FindSystemTimeZoneById("Asia/Tokyo");
+    static string Japan(string value) => TimeZoneInfo.ConvertTime(DateTimeOffset.Parse(value, CultureInfo.InvariantCulture), JapanZone).ToString("yyyy/MM/dd HH:mm:ss");
+    static string Local(string value) => TimeZoneInfo.ConvertTime(DateTimeOffset.Parse(value, CultureInfo.InvariantCulture), JapanZone).ToString("yyyy-MM-ddTHH:mm:ss");
+    static DateTimeOffset ParseLocal(string value)
+    {
+        if (!DateTime.TryParseExact(value, ["yyyy-MM-ddTHH:mm", "yyyy-MM-ddTHH:mm:ss"], CultureInfo.InvariantCulture, DateTimeStyles.None, out var result))
+            throw new System.ComponentModel.DataAnnotations.ValidationException("日時を入力してください。");
+        return new(DateTime.SpecifyKind(result, DateTimeKind.Unspecified), JapanZone.GetUtcOffset(result));
+    }
+    protected override Task OnInitializedAsync() => Load();
+    async Task Load()
+    {
+        Busy = true; Error = "";
+        try { View = await Core.ReadAsync((await Authentication.GetAuthenticationStateAsync()).User); }
+        catch (UnauthorizedAccessException) { View = null; Preview = null; Editing = null; Error = "再ログインしてください。"; }
+        catch { Error = "状態を取得できませんでした。保存せず再読み込みしてください。"; }
+        finally { Busy = false; }
+    }
+    void Cancel() { Editing = null; Error = ""; Message = "下書きを取り消しました。"; }
+    void EditService() { Editing = "service"; ServiceName = View!.Service.Name; ServiceDescription = View.Service.Description; Version = View.Service.RowVersion; }
+    void EditProfile()
+    {
+        Editing = "profile"; var p = View!.Profile; ProfileName = p.DisplayName; Reading = p.Reading; CallName = p.CallName; Version = p.RowVersion;
+        Social = p.Social.Select(s => new SocialDraft { Service = s.Service, Url = s.Url }).ToList();
+    }
+    void NewEvent() { Editing = "event"; EventId = null; Version = 0; EventTitle = EventDescription = EventLocation = Starts = Opens = Announcement = ""; Phase = "Hidden"; Managers = []; }
+    void EditEvent(EventView e)
+    {
+        Editing = "event"; EventId = e.Id; Version = e.RowVersion; EventTitle = e.Title; EventDescription = e.Description; EventLocation = e.Location;
+        Starts = Local(e.ScheduledDate); Opens = e.OpensAt is null ? "" : Local(e.OpensAt); Announcement = e.AnnouncementMessage; Phase = e.PhaseKind; Managers = e.ManagerIds.ToHashSet();
+    }
+    void ToggleManager(string id, bool selected) { if (selected) Managers.Add(id); else Managers.Remove(id); }
+    async Task SaveService() => await Save(p => Core.SaveServiceAsync(p, new(ServiceName, ServiceDescription, Version)));
+    async Task SaveProfile() => await Save(p => Core.SaveProfileAsync(p, new(ProfileName, Reading, CallName, Social.Select(s => new SocialLink(s.Service, s.Url)).ToArray(), Version)));
+    async Task SaveEvent() => await Save(async p => { await Core.SaveEventAsync(p, EventId, new(EventTitle, EventDescription, EventLocation, ParseLocal(Starts), string.IsNullOrWhiteSpace(Opens) ? null : ParseLocal(Opens), Announcement, Phase, Managers.ToArray(), Version)); });
+    async Task Save(Func<System.Security.Claims.ClaimsPrincipal, Task> action)
+    {
+        Busy = true; Error = ""; Message = "";
+        try { await action((await Authentication.GetAuthenticationStateAsync()).User); Editing = null; Message = "保存しました。"; await Load(); }
+        catch (UnauthorizedAccessException) { View = null; Preview = null; Editing = null; Error = "ログイン状態と権限を確認し、再ログインしてください。"; }
+        catch (Exception e) when (e is System.ComponentModel.DataAnnotations.ValidationException or CoreConflictException) { Error = e.Message; }
+        catch { Error = "保存できませんでした。下書きを確認し、最新状態を取得してください。"; }
+        finally { Busy = false; }
+    }
+    async Task PreviewProfile(string id)
+    {
+        try { Preview = await Core.ReadProfileAsync((await Authentication.GetAuthenticationStateAsync()).User, id); }
+        catch { Preview = null; Error = "プロフィールを閲覧できません。"; }
+    }
+    sealed class SocialDraft { public string Service { get; set; } = "その他"; public string Url { get; set; } = ""; }
+}

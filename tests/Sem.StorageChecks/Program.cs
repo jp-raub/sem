@@ -34,7 +34,7 @@ try
         await SqliteStorageInitializer.InitializeAsync(fixture.Db);
         Check(await fixture.Db.Users.AnyAsync(u => u.Id == "baseline-user" && u.SecurityStamp == "baseline-stamp") &&
             (await fixture.Db.Database.GetAppliedMigrationsAsync()).SequenceEqual(fixture.Db.Database.GetMigrations()),
-            "Managed baseline DB receives the pending proof migration without losing its user");
+            "Managed baseline DB receives the pending migrations without losing its user");
     }
 
     var legacy = Path.Combine(root, "legacy.db");
@@ -60,8 +60,6 @@ try
             ProtectedBody = "synthetic-protected-body", Attempts = 2 });
         fixture.Db.PushDevices.Add(new PushDevice { UserId = "fixture-user",
             Endpoint = "https://web.push.apple.com/synthetic", P256dh = "fixture-key", Auth = "fixture-auth" });
-        fixture.Db.Events.Add(new TestEvent { Id = "fixture-event", ManagerId = "fixture-user", Phase = "Custom" });
-        fixture.Db.Participations.Add(new Participation { EventId = "fixture-event", UserId = "fixture-user" });
         fixture.Db.Audits.Add(new Audit { ActorId = "fixture-user", Action = "Synthetic" });
         await fixture.Db.SaveChangesAsync();
         await fixture.Db.Database.ExecuteSqlRawAsync("""
@@ -144,6 +142,26 @@ try
         Check(rejected && bytes.SequenceEqual(afterBytes),
             name + " is rejected without changing the DB file");
     }
+    var needsReset = Path.Combine(root, "needs-reset.db");
+    using (var fixture = new Fixture(needsReset))
+    {
+        await CreateLegacyAsync(fixture.Db);
+        fixture.Db.Events.Add(new TestEvent { Id = "disposable-event", ManagerId = "fixture-user" });
+        fixture.Db.Participations.Add(new Participation { EventId = "disposable-event", UserId = "fixture-user" });
+        await fixture.Db.SaveChangesAsync();
+    }
+    SqliteConnection.ClearAllPools();
+    var resetBefore = SHA256.HashData(await File.ReadAllBytesAsync(needsReset));
+    bool resetRequired = false;
+    using (var fixture = new Fixture(needsReset))
+    {
+        try { await SqliteStorageInitializer.InitializeAsync(fixture.Db); }
+        catch (InvalidOperationException e) { resetRequired = e.Message.Contains("Legacy test events remain"); }
+    }
+    SqliteConnection.ClearAllPools();
+    var resetAfter = SHA256.HashData(await File.ReadAllBytesAsync(needsReset));
+    Check(resetRequired && resetBefore.SequenceEqual(resetAfter),
+        "Remaining legacy test events reject the core upgrade without deletion or history writes");
     Console.WriteLine($"Storage checks passed: {passed.Count}");
 }
 finally

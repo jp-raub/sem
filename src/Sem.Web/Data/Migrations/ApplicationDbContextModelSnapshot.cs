@@ -166,6 +166,148 @@ namespace Sem.Web.Data.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("Sem.Web.Core.EventAdmin", b =>
+                {
+                    b.Property<string>("EventId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("GrantedAt")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("EventId", "UserId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("EventAdmins");
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.RevokedAuthSession", b =>
+                {
+                    b.Property<string>("TokenHash")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RevokedAt")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("TokenHash");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("RevokedAuthSessions");
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.ServiceSettings", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("RowVersion")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("ServiceSettings", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ServiceSettings_Id", "\"Id\" = 1");
+                        });
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.SessionEvent", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AnnouncementMessage")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedAt")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Location")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OpensAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PhaseKind")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("RowVersion")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ScheduledDate")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("SessionEvents", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_SessionEvents_PhaseKind", "\"PhaseKind\" IN ('Hidden','View')");
+                        });
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.UserProfile", b =>
+                {
+                    b.Property<string>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CallName")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Reading")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("RowVersion")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SocialJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("UserId");
+
+                    b.ToTable("UserProfiles", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_UserProfiles_SocialJson", "json_valid(\"SocialJson\")");
+                        });
+                });
+
             modelBuilder.Entity("Sem.Web.Data.ApplicationUser", b =>
                 {
                     b.Property<string>("Id")
@@ -726,6 +868,44 @@ namespace Sem.Web.Data.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.EventAdmin", b =>
+                {
+                    b.HasOne("Sem.Web.Core.SessionEvent", null)
+                        .WithMany("Admins")
+                        .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Sem.Web.Data.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.RevokedAuthSession", b =>
+                {
+                    b.HasOne("Sem.Web.Data.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.UserProfile", b =>
+                {
+                    b.HasOne("Sem.Web.Data.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.SessionEvent", b =>
+                {
+                    b.Navigation("Admins");
                 });
 #pragma warning restore 612, 618
         }

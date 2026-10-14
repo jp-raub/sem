@@ -255,8 +255,8 @@ public static class LegacyEventResetMaintenance
             .AddEntityFrameworkStores<ApplicationDbContext>();
         using var provider = services.BuildServiceProvider();
         var db = provider.GetRequiredService<ApplicationDbContext>();
-        if (!db.Database.GetMigrations().SequenceEqual(SupportedMigrations))
-            throw new InvalidOperationException("Use the fixed legacy-reset build before introducing formal event migrations.");
+        if (!db.Database.GetMigrations().Take(SupportedMigrations.Length).SequenceEqual(SupportedMigrations))
+            throw new InvalidOperationException("The frozen legacy-reset migrations are unavailable.");
         var script = db.GetService<IMigrator>().GenerateScript(Migration.InitialDatabase,
             applied.Count == 0 ? SupportedMigrations[0] : applied[^1], MigrationsSqlGenerationOptions.NoTransactions);
         using var reference = new SqliteConnection("Data Source=:memory:");

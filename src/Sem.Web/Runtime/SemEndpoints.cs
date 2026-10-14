@@ -218,6 +218,8 @@ public static class SemEndpoints
             if (!string.IsNullOrEmpty(session))
             {
                 var hash = Hash(session);
+                await db.Database.ExecuteSqlRawAsync("INSERT OR IGNORE INTO RevokedAuthSessions(TokenHash,UserId,RevokedAt) VALUES ({0},{1},{2})",
+                    hash, user.Id, DateTimeOffset.UtcNow.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", System.Globalization.CultureInfo.InvariantCulture));
                 await db.PasskeyAdditions.Where(p => p.UserId == user.Id && p.SessionHash == hash &&
                     !p.Cancelled && p.CompletedAt == null)
                     .ExecuteUpdateAsync(s => s.SetProperty(p => p.Cancelled, true)
@@ -276,17 +278,10 @@ public static class SemEndpoints
         }
         if (action == "unsubscribe" && post) { var endpoint = Text("endpoint", 2048); await db.PushDevices.Where(d => d.UserId == user.Id && d.Endpoint == endpoint).ExecuteDeleteAsync(); await Reply(new { message = "端末の通知を解除しました。" }); return; }
         if (action == "test-push" && post) { if (!notify.PushConfigured) throw new ValidationException("Push未設定です。"); notify.Message(db, user.Id, "SEM テスト通知", "Pushをタップしてメッセージボックスへ戻ることを確認してください。"); await db.SaveChangesAsync(); await Reply(new { message = "通知を送信待ちに登録しました。" }); return; }
-        if (action == "create-event" && post) { Admin(); var e = new TestEvent { Title = Text("title", 100), ManagerId = Text("managerId", 64), Starts = json.GetProperty("starts").GetInt64(), Capacity = Number("capacity", 1, 500, 20) }; if (!await db.Users.AnyAsync(u => u.Id == e.ManagerId && u.Enabled)) throw new ValidationException("管理者を確認してください。"); if (json.TryGetProperty("opens", out var op) && op.ValueKind == JsonValueKind.Number) e.Opens = op.GetInt64(); if (e.Opens >= e.Starts) throw new ValidationException("開場は開始より前に指定してください。"); db.Events.Add(e); Audit("EventCreated", e.Id); await db.SaveChangesAsync(); await Reply(new { message = "イベントを作成しました。" }); return; }
-        if (action == "publish-event" && post) { var e = await db.Events.FindAsync(Text("id", 64)); if (e is null || !user.IsAdmin && e.ManagerId != user.Id) throw new UnauthorizedAccessException(); e.Phase = "Custom"; await db.SaveChangesAsync(); await Reply(new { message = "参加受付を開始しました。" }); return; }
-        if (action == "join-event" && post)
+        if (post && action is "create-event" or "publish-event" or "join-event")
         {
-            var e = await db.Events.FindAsync(Text("id", 64)); if (e is null || e.Phase != "Custom") throw new ValidationException("参加受付中ではありません。");
-            await using var tx = await db.Database.BeginTransactionAsync();
-            if (await db.Participations.AnyAsync(p => p.EventId == e.Id && p.UserId == user.Id) || await db.Participations.CountAsync(p => p.EventId == e.Id) >= e.Capacity) throw new ValidationException("登録済み、または定員に達しています。");
-            db.Participations.Add(new Participation { EventId = e.Id, UserId = user.Id });
-            notify.Message(db, user.Id, "イベント参加登録", e.Title + "に登録しました。");
-            db.Deliveries.Add(new Delivery { UserId = user.Id, Kind = "Reminder", Subject = e.Id, Due = (e.Opens ?? e.Starts) - 7200 });
-            await db.SaveChangesAsync(); await tx.CommitAsync(); await Reply(new { message = "参加登録しました。" }); return;
+            c.Response.StatusCode = 410;
+            await Reply(new { error = "旧テストイベント操作は終了しました。正式イベント基盤を利用してください。" }); return;
         }
         if (action == "schedule-test" && post) { var seconds = Number("seconds", 10, 600, 30); db.Deliveries.Add(new Delivery { UserId = user.Id, Kind = "ScheduledTest", Subject = "予約通知テスト", Due = Now + seconds }); await db.SaveChangesAsync(); await Reply(new { message = seconds + "秒後の通知を予約しました。画面を閉じて受信を確認してください。" }); return; }
         c.Response.StatusCode = 404; await Reply(new { error = "操作が見つかりません。" });

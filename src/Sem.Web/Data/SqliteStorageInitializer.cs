@@ -65,6 +65,15 @@ public static class SqliteStorageInitializer
                         "SQLite schema does not match the supported baseline/history. Keep the backup and review the DB; no upgrade was applied.");
 
                 await CheckIntegrityAsync(connection, transaction, ct);
+                // Do not silently import or erase ambiguous old test events.
+                if (!empty && known.Any(m => m.EndsWith("_AddCoreFoundation", StringComparison.Ordinal)))
+                {
+                    using var legacyEvents = connection.CreateCommand();
+                    legacyEvents.Transaction = transaction;
+                    legacyEvents.CommandText = "SELECT COUNT(*) FROM Events;";
+                    if (Convert.ToInt64(await legacyEvents.ExecuteScalarAsync(ct)) != 0)
+                        throw new InvalidOperationException("Legacy test events remain. Prepare and explicitly reset a stopped copy before the core upgrade; no upgrade was applied.");
+                }
                 if (!empty && applied.Length == 0)
                 {
                     var history = db.GetService<IHistoryRepository>();
