@@ -29,11 +29,11 @@ module.exports=async({p,g,ok})=>{
   ok(html.headers()['cache-control']?.includes('no-store'),'Operational HTML is private no-store');
   ok(await a.locator('#manual-push-submit').isDisabled(),'Operational view alone does not authorize change');
   // Hold a previously read context: no mutation may run while this read is outstanding.
-  let releaseRead,readCaptured;const readHeld=new Promise(r=>releaseRead=r),readSeen=new Promise(r=>readCaptured=r);
-  await a.route('**/api/core/manual-push-control',async route=>{const response=await route.fetch();readCaptured();await readHeld;await route.fulfill({response})});
+  let releaseRead,readCaptured,readCompleted;const readHeld=new Promise(r=>releaseRead=r),readSeen=new Promise(r=>readCaptured=r),readFinished=new Promise(r=>readCompleted=r);
+  await a.route('**/api/core/manual-push-control',async route=>{const response=await route.fetch();readCaptured();await readHeld;await route.fulfill({response});readCompleted()});
   await a.locator('#manual-push-refresh').click();await readSeen;
   ok(await a.locator('#manual-push-stage').isDisabled()&&await a.locator('#manual-push-submit').isDisabled(),'Outstanding context read disables stage and submission before stale response can race a write');
-  releaseRead();await a.unroute('**/api/core/manual-push-control');await a.locator('#manual-push-stage').waitFor({state:'visible'});await a.waitForFunction(()=>!document.getElementById('manual-push-stage').disabled);
+  releaseRead();await readFinished;await a.unroute('**/api/core/manual-push-control');await a.locator('#manual-push-stage').waitFor({state:'visible'});await a.waitForFunction(()=>!document.getElementById('manual-push-stage').disabled);
   ok(!(await api(p,'manual-push-control')).body.enabled,'Held context refresh cannot cause activation or issue a POST');
   await a.locator('#manual-push-stage').click();await a.locator('#manual-push-confirmation').waitFor();ok(await a.locator('#manual-push-submit').isDisabled(),'Staged target still requires separate confirmation');
   await a.getByRole('link',{name:'サービス管理へ戻る',exact:true}).click();await a.waitForFunction(()=>document.getElementById('manual-push-control-error')?.textContent.includes('未送信'));
