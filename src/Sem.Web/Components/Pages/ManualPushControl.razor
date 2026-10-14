@@ -17,7 +17,7 @@
 <section id="manual-push-control" data-ready="true" data-busy="@State.Busy.ToString().ToLowerInvariant()" data-uncertain="@State.Uncertain.ToString().ToLowerInvariant()">
 <h2>現在の状態（取得時点）</h2>
 <p id="manual-push-current">受付方針：@(view.Enabled ? "ON" : "OFF") ／ 世代：@view.Epoch</p>
-<p id="manual-push-runtime">@(view.DeliveryConnected ? "配信ワーカーは接続済みです。現在の送信条件と期限を再確認して処理します。" : "配信ワーカーは未接続です。ONにしてもこの版では実Pushを送りません。")</p>
+<p id="manual-push-runtime">@(view.DeliveryConnected ? "配信ワーカーは登録済みです（稼働監視ではありません）。現在の送信条件と期限を再確認して処理します。" : "配信ワーカーは未登録です。ONにしてもこの版では実Pushを送りません。")</p>
 @if (!view.PushConfigured) { <p>ホストのPush鍵は未設定です。この状態では実Pushを送りません。</p> }
 <button id="manual-push-refresh" disabled="@(State.Busy || Initializing)" @onclick="Initialize">現在の状態と権限を再取得</button>
 @if (State.CanEdit) {

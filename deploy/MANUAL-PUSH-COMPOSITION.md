@@ -15,3 +15,7 @@ OFF prevents new preparation/sending; bounded housekeeping can terminalize expir
 Exact-source Release/all.NET/client regressions and virtual-native-passkey/Blazor acceptance are recorded only after completion. The actual operational page reports worker registration separately from activation and host-key configuration; the composer no longer falsely says transport is unconnected. Per-operation delivery outcome UI is a later step, not implemented here.
 
 No new schema, production activation, DXP/.env/real data/keys/public deployment, new distribution or merge. User approval covers code registration and isolated testing only. Docker/physical-device/public-origin acceptance and deployment remain separate.
+
+## Future rollout caution
+
+Registration deliberately does not force an existing persisted ON state OFF. If this code is later deployed to an already-ON database, valid current-epoch admissions can be processed. Before any future rollout, verify/explicitly stop the existing durable activation as a separately approved operation. No production state was inspected or modified during this implementation.

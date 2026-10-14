@@ -136,7 +136,7 @@ else if (Ready)
         try {
             var result = await Module.InvokeAsync<Transport<ManualNotificationAcceptance>>("post", "manual-notification-accept", LoadedId, ActorId, request);
             if (Disposed || generation != Generation) return;
-            if (result.Status == 200 && result.Value is { } acceptance) { State.SubmissionAccepted(acceptance); Message = "受付結果を確認しました。メッセージボックスへの保存完了です。手動Pushは未配信です。"; }
+            if (result.Status == 200 && result.Value is { } acceptance) { State.SubmissionAccepted(acceptance); Message = "受付結果を確認しました。メッセージボックスへの保存完了です。この応答では手動Pushの配信結果は確認できません。"; }
             else if (result.Status is 400 or 403 or 409) {
                 State.SubmissionRejected();
                 if (result.Status == 403) { Allowed = false; Title = ""; }
