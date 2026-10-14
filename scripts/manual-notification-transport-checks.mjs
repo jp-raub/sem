@@ -35,7 +35,7 @@ try {
  const reads=[];globalThis.fetch=async(url,options)=>{reads.push({url,options});return new Response('{"userId":"current-cookie-actor","eventId":"event"}')};
  const current=await context('event');
  check(current.status===200&&current.value.userId==='current-cookie-actor'&&reads.length===1,'reauthorization reads current browser cookie context independently of circuit');
- check(reads[0].url.startsWith('/api/core/event-tabs?')&&reads[0].options.cache==='no-store'&&reads[0].options.redirect==='error','context uses existing authorized no-store GET and refuses redirects');
+ check(reads[0].url.startsWith('/api/core/manual-notification-context?')&&reads[0].options.cache==='no-store'&&reads[0].options.redirect==='error','context uses minimal authorized no-store GET and refuses redirects');
  globalThis.fetch=async()=>new Response('{}',{status:403});
  check((await context('event')).status===403,'current-cookie denial remains explicit');
  globalThis.fetch=async()=>new Response('{}',{status:500});

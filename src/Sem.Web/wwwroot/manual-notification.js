@@ -25,7 +25,7 @@ export async function context(eventId) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 25000);
     try {
-        const response = await fetch('/api/core/event-tabs?' + new URLSearchParams({ id: eventId }), {
+        const response = await fetch('/api/core/manual-notification-context?' + new URLSearchParams({ id: eventId }), {
             cache: 'no-store', redirect: 'error', signal: controller.signal
         });
         if (response.status === 403) return { status: 403, value: null };

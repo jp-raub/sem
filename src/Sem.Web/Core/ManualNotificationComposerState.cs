@@ -1,5 +1,7 @@
 namespace Sem.Web.Core;
 
+public sealed record ManualNotificationComposerContext(string UserId, string EventId, string Title);
+
 // Circuit-memory only. Never serialise this draft or pending request into browser storage.
 public sealed class ManualNotificationComposerState
 {
