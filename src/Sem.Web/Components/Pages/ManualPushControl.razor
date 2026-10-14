@@ -1,0 +1,86 @@
+@page "/service/manual-push"
+@rendermode InteractiveServer
+@implements IAsyncDisposable
+@using Sem.Web.Core
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+<NavigationLock ConfirmExternalNavigation="@State.NavigationBlocked" OnBeforeInternalNavigation="BeforeNavigation" />
+<PageTitle>手動Pushの運用制御</PageTitle>
+<h1>手動Pushの運用制御</h1>
+<p><button type="button" id="manual-push-return" @onclick="ReturnToService">サービス管理へ戻る</button></p>
+<p>全体管理者専用です。有効化後に新しく受付した通知だけが対象で、有効化前の受付は後付け配信しません。期限は元の受付から10分。参加解除後も保存済みメッセージは残しますが、以後のPushは抑止します。</p>
+<p>停止・再有効化は世代を変更します。以前の世代の通知は再開しません。配信基盤への受付は端末受信・既読の保証ではありません。</p>
+<p>下書きと結果未確認の操作はこの画面のメモリだけです。処理中・結果不明では再読込や画面を閉じる操作を避け、同じ操作IDで結果を確認してください。</p>
+<p id="manual-push-control-error" role="alert">@Error</p>
+<p id="manual-push-control-message" role="status">@Message</p>
+@if (State.View is { } view) {
+<section id="manual-push-control" data-ready="true" data-busy="@State.Busy.ToString().ToLowerInvariant()" data-uncertain="@State.Uncertain.ToString().ToLowerInvariant()">
+<h2>現在の状態（取得時点）</h2>
+<p id="manual-push-current">受付方針：@(view.Enabled ? "ON" : "OFF") ／ 世代：@view.Epoch</p>
+<p id="manual-push-runtime">@(view.DeliveryConnected ? "配信ワーカーは接続済みです。現在の送信条件と期限を再確認して処理します。" : "配信ワーカーは未接続です。ONにしてもこの版では実Pushを送りません。")</p>
+@if (!view.PushConfigured) { <p>ホストのPush鍵は未設定です。この状態では実Pushを送りません。</p> }
+<button id="manual-push-refresh" disabled="@(State.Busy || Initializing)" @onclick="Initialize">現在の状態と権限を再取得</button>
+@if (State.CanEdit) {
+<button id="manual-push-stage" disabled="@Initializing" @onclick="()=>Stage(!view.Enabled)">@(view.Enabled ? "OFFへの変更を準備" : "ONへの変更を準備")</button>
+}
+@if (State.Target is { } target && State.Pending is null) {
+<section class="panel" id="manual-push-confirmation">
+<h2>@(target ? "ON" : "OFF")への変更を確認</h2>
+<p>期待世代：@view.Epoch。表示後に別の管理者が変更した場合は拒否されます。表示だけでは変更しません。</p>
+<label class="confirmation" for="manual-push-confirm"><input id="manual-push-confirm" type="checkbox" checked="@State.Confirmed" disabled="@(!State.CanEdit || Initializing)" @onchange="ConfirmChanged" />受付から10分・有効化前分は非配信・参加解除後Push抑止の方針と、変更先を確認しました</label>
+<button id="manual-push-discard" disabled="@(!State.CanEdit || Initializing)" @onclick="Discard">未送信の変更を取り消す</button>
+</section>
+}
+<button id="manual-push-submit" disabled="@(State.Busy || Initializing || State.Pending is null && (!State.Confirmed || State.Target is null))" @onclick="Submit">@(State.Pending is null ? "確認した方針変更を保存" : "同じ操作IDで結果を確認／再試行")</button>
+</section>
+} else if (Ready) {
+<p>通常ログインと現在の全体管理者権限が必要です。</p>
+<button id="manual-push-reauthorize" disabled="@(State.Busy || Initializing)" @onclick="Initialize">現在の権限を再確認</button>
+@if (State.Pending is null && State.NavigationBlocked) { <button @onclick="Discard">非表示の未送信変更を取り消す</button> }
+}
+@if (State.Pending is { } pending) { <p id="manual-push-pending">@(State.Busy ? "処理中" : "結果未確認")：操作ID <code>@pending.RequestId</code>。別の操作は始めず、このIDの結果を確認してください。</p> }
+@if (State.View is not null && State.Result is { } result) { <p id="manual-push-operation-result">操作結果：@(result.Enabled ? "ON" : "OFF")・世代@result.Epoch @(result.Replayed ? "（保存済みの結果を再取得）" : "")。これは操作当時の結果で、現在の状態とは別です。</p> }
+@code {
+    ManualPushControlState State = new(); IJSObjectReference? Module;
+    bool Ready, Initializing, Disposed; long Generation; string Error = "", Message = "";
+    sealed record Transport<T>(int Status, T? Value);
+    protected override async Task OnAfterRenderAsync(bool first) { if (!Ready && !Initializing && !Disposed) { await Initialize(); if (!Disposed) StateHasChanged(); } }
+    async Task Initialize() {
+        if (Initializing || State.Busy || Disposed) return;
+        Initializing = true; var generation = Generation;
+        try {
+            Module ??= await JS.InvokeAsync<IJSObjectReference>("import", "/manual-push-control.js");
+            if (Disposed || generation != Generation) return;
+            var response = await Module.InvokeAsync<Transport<ManualPushControlContext>>("context");
+            if (Disposed || generation != Generation) return;
+            if (response.Status != 200 || response.Value is not { } view) throw new UnauthorizedAccessException();
+            State.Context(view); Error = "";
+        } catch { if (!Disposed && generation == Generation) { State.Denied(); Error = "ログイン状態と現在の全体管理者権限を確認してください。"; } }
+        finally { if (!Disposed && generation == Generation) { Ready = true; Initializing = false; } }
+    }
+    void Stage(bool enabled) { if (!Initializing && State.CanEdit) State.Stage(enabled); }
+    void ConfirmChanged(ChangeEventArgs e) { if (!Initializing && State.CanEdit && State.Target is not null) State.Confirm(e.Value is true); }
+    void Discard() { if (Initializing) return; State.Discard(); Error = ""; Message = "未送信の変更だけを取り消しました。保存済み方針は変更していません。"; }
+    void ReturnToService()
+    {
+        // Static-SSR enhanced links can bypass the circuit's internal NavigationLock.
+        if (State.NavigationBlocked) { Error = "未送信・処理中・結果未確認の変更があります。結果確認または未送信変更の取消後に移動してください。"; return; }
+        Navigation.NavigateTo("/workspace#core-service");
+    }
+    void BeforeNavigation(LocationChangingContext c) { if (State.NavigationBlocked) { c.PreventNavigation(); Error = "未送信・処理中・結果未確認の変更があります。結果確認または未送信変更の取消後に移動してください。"; } }
+    async Task Submit() {
+        if (Module is null || State.Busy || Initializing || State.View is null || State.Pending is null && (!State.Confirmed || State.Target is null)) return;
+        var request = State.Begin(); var generation = Generation; Error = Message = "";
+        try {
+            var response = await Module.InvokeAsync<Transport<ManualNotificationPushActivationResult>>("change", State.ActorId, request);
+            if (Disposed || generation != Generation) return;
+            if (response.Status == 200 && response.Value is { } result) {
+                State.Accepted(result); Message = "操作の保存結果を確認しました。現在の状態を別に再取得します。"; await Initialize();
+            } else if (response.Status is 400 or 403 or 409) {
+                State.Rejected(); if (response.Status == 403) State.Denied();
+                Error = State.Pending is null ? "この変更は受付されませんでした。現在の状態を再取得して確認してください。" : "以前の結果は依然不明です。同じ操作IDで結果を確認してください。";
+            } else throw new InvalidOperationException();
+        } catch { if (!Disposed && generation == Generation) { State.Unknown(); Error = "保存結果を確認できません。同じ操作IDで結果を確認／再試行してください。"; } }
+    }
+    public async ValueTask DisposeAsync() { Disposed = true; Generation++; if (Module is not null) try { await Module.DisposeAsync(); } catch (JSDisconnectedException) { } }
+}

@@ -16,13 +16,14 @@ public sealed class ManualNotificationPushActivationOperation
 }
 public sealed record ManualNotificationPushActivationView(bool Enabled, long Epoch);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record ManualNotificationPushActivationEdit(string RequestId, bool Enabled, long ExpectedEpoch, bool Confirmed);
+public sealed record ManualNotificationPushActivationEdit([property: JsonRequired] string RequestId, [property: JsonRequired] bool Enabled,
+    [property: JsonRequired] long ExpectedEpoch, [property: JsonRequired] bool Confirmed);
 public sealed record ManualNotificationPushActivationResult(string RequestId, bool Enabled, long Epoch, bool Changed, bool Replayed = false);
 
 public sealed partial class CoreFoundationService
 {
-    // Internal application API only. No HTTP/DI/worker registration or actual activation
-    // is performed by startup/migration. A future route must add Origin/CSRF/no-store.
+    // Current-cookie operational routes add Origin/CSRF/no-store and frozen actor binding.
+    // Startup/migrations never enable activation; no manual Push worker is registered here.
     public async Task<ManualNotificationPushActivationView> ReadManualPushActivationAsync(ClaimsPrincipal principal, CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);

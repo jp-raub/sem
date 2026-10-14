@@ -10,7 +10,7 @@ namespace Sem.Web.Core;
 public static class CoreEndpoints
 {
     public static void MapCoreFoundation(this WebApplication app) => app.MapMethods("/api/core/{action}", ["GET", "POST"],
-        async (HttpContext ctx, CoreFoundationService service, IAntiforgery csrf, DeploymentSettings deployment) =>
+        async (HttpContext ctx, CoreFoundationService service, IAntiforgery csrf, DeploymentSettings deployment, ManualPushRuntime manualRuntime, IEventPushTransport pushTransport) =>
         {
             ctx.Response.Headers.CacheControl = "no-store";
             try
@@ -23,6 +23,22 @@ public static class CoreEndpoints
                     var size = ctx.Features.Get<IHttpMaxRequestBodySizeFeature>();
                     if (size is { IsReadOnly: false }) size.MaxRequestBodySize = 65536;
                     await csrf.ValidateRequestAsync(ctx);
+                }
+                if (action == "manual-push-control") {
+                    if (post) { ctx.Response.StatusCode = 405; return; }
+                    var view = await service.ReadManualPushActivationAsync(ctx.User, ctx.RequestAborted);
+                    var actorId = ctx.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                    if (string.IsNullOrEmpty(actorId)) throw new UnauthorizedAccessException();
+                    await ctx.Response.WriteAsJsonAsync(new ManualPushControlContext(actorId, view.Enabled, view.Epoch, manualRuntime.DeliveryConnected, pushTransport.Configured));
+                    return;
+                }
+                if (action == "manual-push-control-change") {
+                    if (!post) { ctx.Response.StatusCode = 405; return; }
+                    var actorId = ctx.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                    if (string.IsNullOrEmpty(actorId) || ctx.Request.Query["actor"].Count != 1 || ctx.Request.Query["actor"].ToString() != actorId) throw new UnauthorizedAccessException();
+                    var edit = await ctx.Request.ReadFromJsonAsync<ManualNotificationPushActivationEdit>() ?? throw new ValidationException("入力が必要です。");
+                    await ctx.Response.WriteAsJsonAsync(await service.SetManualPushActivationAsync(ctx.User, edit, ctx.RequestAborted));
+                    return;
                 }
                 if (action == "manual-notification-context")
                 {
