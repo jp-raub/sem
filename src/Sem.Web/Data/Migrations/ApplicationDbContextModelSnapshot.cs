@@ -407,6 +407,37 @@ namespace Sem.Web.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Sem.Web.Core.EventShorteningPolicy", b =>
+                {
+                    b.Property<string>("EventId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PartId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Scope")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("AllowDuration")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("AllowPrep")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("MinDurationSeconds")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("MinPrepSeconds")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("EventId", "PartId", "Scope");
+
+                    b.ToTable("EventShorteningPolicies", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ShorteningPolicy", "\"Scope\" IN ('Plan','Live') AND \"MinPrepSeconds\">=0 AND \"MinDurationSeconds\">=0 AND \"AllowPrep\" IN (0,1) AND \"AllowDuration\" IN (0,1)");
+                        });
+                });
+
             modelBuilder.Entity("Sem.Web.Core.EventSpectator", b =>
                 {
                     b.Property<string>("EventId")
@@ -776,6 +807,47 @@ namespace Sem.Web.Data.Migrations
                             t.HasCheckConstraint("CK_SessionEvents_PhaseKind", "\"PhaseKind\" IN ('Hidden','View')");
 
                             t.HasCheckConstraint("CK_SessionEvents_TimeDisplay", "\"RoundStarts\" IN (0,1) AND \"ClockFormat\" IN ('seconds','minutes') AND \"DurationFormat\" IN ('units','colon') AND \"SongIcon\" IN ('🎵','💿','🎤')");
+                        });
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.ShorteningOperation", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ActorId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("At")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EventId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Fingerprint")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ResultJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActorId");
+
+                    b.HasIndex("EventId");
+
+                    b.ToTable("ShorteningOperations", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ShorteningOperation", "\"Kind\" IN ('Policy','Approve') AND json_valid(\"ResultJson\")");
                         });
                 });
 
@@ -1589,6 +1661,16 @@ namespace Sem.Web.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Sem.Web.Core.EventShorteningPolicy", b =>
+                {
+                    b.HasOne("Sem.Web.Core.TimePart", null)
+                        .WithMany()
+                        .HasForeignKey("EventId", "PartId")
+                        .HasPrincipalKey("EventId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Sem.Web.Core.EventSpectator", b =>
                 {
                     b.HasOne("Sem.Web.Core.SessionEvent", null)
@@ -1689,6 +1771,21 @@ namespace Sem.Web.Data.Migrations
                     b.HasOne("Sem.Web.Data.ApplicationUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.ShorteningOperation", b =>
+                {
+                    b.HasOne("Sem.Web.Data.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("ActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Sem.Web.Core.SessionEvent", null)
+                        .WithMany()
+                        .HasForeignKey("EventId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

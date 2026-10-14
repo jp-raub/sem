@@ -32,7 +32,7 @@ public sealed partial class CoreFoundationService {
   var calculated=TimetableCalculator.Calculate(e,drafts,songs);if(calculated.OverrunSeconds>0&&!edit.AcknowledgeOverrun)throw new ValidationException("終了予定を超過します。最新の超過秒数を確認してから保存してください。");
   foreach(var p in old.Where(x=>x.DeletedAt==null&&!drafts.Any(d=>d.Id==x.Id)))p.DeletedAt=Utc(clock.GetUtcNow());
   var songOrder=0;foreach(var d in drafts){var p=old.SingleOrDefault(x=>x.Id==d.Id);if(p is null){p=d;db.TimeParts.Add(p);}else{p.Name=d.Name;p.DurationSeconds=d.DurationSeconds;p.Icon=d.Icon;p.SortOrder=d.SortOrder;}if(d.SongId is string sid)songs.Single(s=>s.Id==sid).SortOrder=songOrder++;}
-  e.RowVersion++;Audit(db,actor.Id,"TimetableSaved",id);await db.SaveChangesAsync(ct);await tx.CommitAsync(ct);return await ReadTimetableAsync(principal,id,ct);
+  e.RowVersion++;Audit(db,actor.Id,"TimetableSaved",id);await db.SaveChangesAsync(ct);await ValidatePlannedPolicies(db,e,ct);await tx.CommitAsync(ct);return await ReadTimetableAsync(principal,id,ct);
  }
  // The existing song editor owns song contents, never transition order or opening.
  private async Task SyncSongTimeParts(ApplicationDbContext db,SessionEvent e,SongEdit[] drafts,CancellationToken ct){

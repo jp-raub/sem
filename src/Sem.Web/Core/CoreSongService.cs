@@ -31,6 +31,6 @@ public sealed partial class CoreFoundationService {
   var order=0;foreach(var d in drafts){var row=rows.SingleOrDefault(x=>x.Id==d.Id);if(row is null){row=new(){Id=d.Id,EventId=e.Id};db.Songs.Add(row);}row.Title=d.Title;row.Artist=d.Artist;row.PerformanceSeconds=d.PerformanceSeconds;row.PrepSeconds=d.PrepSeconds;row.SortOrder=order++;
    foreach(var id in d.DefinitionIds){var existing=parts.Where(p=>p.SongId==d.Id&&p.PartDefinitionId==id).ToArray();if(existing.Length==0)db.SongParts.Add(new(){EventId=e.Id,SongId=d.Id,PartDefinitionId=id});else if(existing.Length>1){var keep=existing.FirstOrDefault(p=>p.AssignedUserId!=null)??existing[0];db.SongParts.RemoveRange(existing.Where(p=>p.Id!=keep.Id));}}
   }
-  await SyncSongTimeParts(db,e,drafts,ct);e.DefaultPrepSeconds=edit.DefaultPrepSeconds;e.RowVersion++;Audit(db,actor.Id,"SongPlanSaved",e.Id);await db.SaveChangesAsync(ct);await tx.CommitAsync(ct);return await ReadSongsAsync(principal,eventId,ct);
+  await SyncSongTimeParts(db,e,drafts,ct);e.DefaultPrepSeconds=edit.DefaultPrepSeconds;e.RowVersion++;Audit(db,actor.Id,"SongPlanSaved",e.Id);await db.SaveChangesAsync(ct);await ValidatePlannedPolicies(db,e,ct);await tx.CommitAsync(ct);return await ReadSongsAsync(principal,eventId,ct);
  }
 }

@@ -34,6 +34,8 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<ProgressMark> ProgressMarks => Set<ProgressMark>();
     public DbSet<ProgressEstimate> ProgressEstimates => Set<ProgressEstimate>();
     public DbSet<ProgressOperation> ProgressOperations => Set<ProgressOperation>();
+    public DbSet<EventShorteningPolicy> EventShorteningPolicies => Set<EventShorteningPolicy>();
+    public DbSet<ShorteningOperation> ShorteningOperations => Set<ShorteningOperation>();
     public DbSet<TimePart> TimeParts => Set<TimePart>();
     public DbSet<Song> Songs => Set<Song>();
     public DbSet<SongPart> SongParts => Set<SongPart>();
@@ -126,6 +128,13 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         b.Entity<ProgressEstimate>().HasKey(x=>new{x.EventId,x.PartId});
         b.Entity<ProgressEstimate>().HasOne<EventProgressState>().WithMany().HasForeignKey(x=>x.EventId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<ProgressEstimate>().ToTable("ProgressEstimates",t=>t.HasCheckConstraint("CK_ProgressEstimate", "(\"PrepSeconds\" IS NULL OR \"PrepSeconds\">=0) AND (\"DurationSeconds\" IS NULL OR \"DurationSeconds\">=0)"));
+        b.Entity<TimePart>().HasAlternateKey(x=>new{x.EventId,x.Id});
+        b.Entity<EventShorteningPolicy>().HasKey(x=>new{x.EventId,x.PartId,x.Scope});
+        b.Entity<EventShorteningPolicy>().HasOne<TimePart>().WithMany().HasForeignKey(x=>new{x.EventId,x.PartId}).HasPrincipalKey(x=>new{x.EventId,x.Id}).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<EventShorteningPolicy>().ToTable("EventShorteningPolicies",t=>t.HasCheckConstraint("CK_ShorteningPolicy", "\"Scope\" IN ('Plan','Live') AND \"MinPrepSeconds\">=0 AND \"MinDurationSeconds\">=0 AND \"AllowPrep\" IN (0,1) AND \"AllowDuration\" IN (0,1)"));
+        b.Entity<ShorteningOperation>().HasOne<SessionEvent>().WithMany().HasForeignKey(x=>x.EventId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<ShorteningOperation>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x=>x.ActorId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<ShorteningOperation>().ToTable("ShorteningOperations",t=>t.HasCheckConstraint("CK_ShorteningOperation", "\"Kind\" IN ('Policy','Approve') AND json_valid(\"ResultJson\")"));
         b.Entity<TimePart>().HasOne<SessionEvent>().WithMany().HasForeignKey(x=>x.EventId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<TimePart>().HasOne<Song>().WithMany().HasForeignKey(x=>new{x.EventId,x.SongId}).HasPrincipalKey(x=>new{x.EventId,x.Id}).OnDelete(DeleteBehavior.Restrict);
         b.Entity<TimePart>().HasIndex(x=>x.SongId).IsUnique().HasFilter("\"SongId\" IS NOT NULL");
