@@ -54,3 +54,5 @@ The flags require the storage-upgrade harness. reception-roster.yml retains all
 prior tests and adds privacy/normalization/no-write/member-denial/mobile checks.
 Synthetic local DB, SMTP and sandbox browsers only. No real recipient/provider,
 QR credential, camera, DXP .env/key/volume/hostname/image, bundle or merge changes.
+
+Follow-up manual receipt confirmation/cancellation is documented in [MANUAL-RECEPTION.md](MANUAL-RECEPTION.md); the roster GET remains read-only. QR issuance/scans remain a separate boundary.

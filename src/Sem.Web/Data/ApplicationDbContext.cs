@@ -30,6 +30,9 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<PartPresetState> PartPresetStates => Set<PartPresetState>();
     public DbSet<PartPreset> PartPresets => Set<PartPreset>();
     public DbSet<EventPartDefinition> EventPartDefinitions => Set<EventPartDefinition>();
+    public DbSet<EventReceptionState> EventReceptionStates => Set<EventReceptionState>();
+    public DbSet<EventReception> EventReceptions => Set<EventReception>();
+    public DbSet<ReceptionOperation> ReceptionOperations => Set<ReceptionOperation>();
     public DbSet<EventComment> EventComments => Set<EventComment>();
     public DbSet<CommentOperation> CommentOperations => Set<CommentOperation>();
     public DbSet<EventQuestion> EventQuestions => Set<EventQuestion>();
@@ -49,6 +52,29 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     protected override void OnModelCreating(ModelBuilder b)
     {
         base.OnModelCreating(b);
+        b.Entity<EventReceptionState>().HasKey(x=>new{x.EventId,x.UserId});
+        b.Entity<EventReceptionState>().Property(x=>x.RowVersion).IsConcurrencyToken();
+        b.Entity<EventReceptionState>().HasOne<SessionEvent>().WithMany().HasForeignKey(x=>x.EventId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<EventReceptionState>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x=>x.UserId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<EventReceptionState>().ToTable("EventReceptionStates",t=>t.HasCheckConstraint("CK_ReceptionState_Version","\"RowVersion\">=0"));
+        b.Entity<EventReception>().HasOne<SessionEvent>().WithMany().HasForeignKey(x=>x.EventId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<EventReception>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x=>x.UserId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<EventReception>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x=>x.ActorId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<EventReception>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x=>x.CancelledBy).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<EventReception>().HasIndex(x=>new{x.EventId,x.UserId}).IsUnique().HasFilter("\"CancelledAt\" IS NULL");
+        b.Entity<EventReception>().HasIndex(x=>new{x.EventId,x.UserId,x.At,x.Id});
+        b.Entity<EventReception>().ToTable("EventReceptions",t=>{
+            t.HasCheckConstraint("CK_Reception_Method","\"Method\"='Manual'");
+            t.HasCheckConstraint("CK_Reception_Note","length(\"Note\")<=500");
+            t.HasCheckConstraint("CK_Reception_Cancel","(\"CancelledAt\" IS NULL AND \"CancelledBy\" IS NULL) OR (\"CancelledAt\" IS NOT NULL AND \"CancelledBy\" IS NOT NULL)");
+        });
+        b.Entity<ReceptionOperation>().HasOne<SessionEvent>().WithMany().HasForeignKey(x=>x.EventId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<ReceptionOperation>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x=>x.ActorId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<ReceptionOperation>().HasOne<EventReception>().WithMany().HasForeignKey(x=>x.ReceptionId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<ReceptionOperation>().ToTable("ReceptionOperations",t=>{
+            t.HasCheckConstraint("CK_ReceptionOperation_Kind","\"Kind\" IN ('Complete','Cancel')");
+            t.HasCheckConstraint("CK_ReceptionOperation_Hash","length(\"RequestHash\")=64");
+        });
         b.Entity<EventComment>().HasOne<SessionEvent>().WithMany().HasForeignKey(x=>x.EventId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<EventComment>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x=>x.UserId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<EventComment>().HasIndex(x=>new{x.EventId,x.CreatedAt,x.Id});

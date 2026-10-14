@@ -744,6 +744,87 @@ namespace Sem.Web.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Sem.Web.Core.EventReception", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ActorId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("At")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CancelledAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CancelledBy")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EventId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Method")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Note")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActorId");
+
+                    b.HasIndex("CancelledBy");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("EventId", "UserId")
+                        .IsUnique()
+                        .HasFilter("\"CancelledAt\" IS NULL");
+
+                    b.HasIndex("EventId", "UserId", "At", "Id");
+
+                    b.ToTable("EventReceptions", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Reception_Cancel", "(\"CancelledAt\" IS NULL AND \"CancelledBy\" IS NULL) OR (\"CancelledAt\" IS NOT NULL AND \"CancelledBy\" IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_Reception_Method", "\"Method\"='Manual'");
+
+                            t.HasCheckConstraint("CK_Reception_Note", "length(\"Note\")<=500");
+                        });
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.EventReceptionState", b =>
+                {
+                    b.Property<string>("EventId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("RowVersion")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("EventId", "UserId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("EventReceptionStates", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ReceptionState_Version", "\"RowVersion\">=0");
+                        });
+                });
+
             modelBuilder.Entity("Sem.Web.Core.EventShorteningPolicy", b =>
                 {
                     b.Property<string>("EventId")
@@ -1078,6 +1159,51 @@ namespace Sem.Web.Data.Migrations
                     b.ToTable("ProgressOperations", null, t =>
                         {
                             t.HasCheckConstraint("CK_ProgressOperation", "\"Kind\" IN ('Record','Estimate') AND json_valid(\"ResultJson\")");
+                        });
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.ReceptionOperation", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ActorId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("At")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EventId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ReceptionId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RequestHash")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActorId");
+
+                    b.HasIndex("EventId");
+
+                    b.HasIndex("ReceptionId");
+
+                    b.ToTable("ReceptionOperations", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ReceptionOperation_Hash", "length(\"RequestHash\")=64");
+
+                            t.HasCheckConstraint("CK_ReceptionOperation_Kind", "\"Kind\" IN ('Complete','Cancel')");
                         });
                 });
 
@@ -2224,6 +2350,47 @@ namespace Sem.Web.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Sem.Web.Core.EventReception", b =>
+                {
+                    b.HasOne("Sem.Web.Data.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("ActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Sem.Web.Data.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("CancelledBy")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Sem.Web.Core.SessionEvent", null)
+                        .WithMany()
+                        .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Sem.Web.Data.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.EventReceptionState", b =>
+                {
+                    b.HasOne("Sem.Web.Core.SessionEvent", null)
+                        .WithMany()
+                        .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Sem.Web.Data.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Sem.Web.Core.EventShorteningPolicy", b =>
                 {
                     b.HasOne("Sem.Web.Core.TimePart", null)
@@ -2330,6 +2497,27 @@ namespace Sem.Web.Data.Migrations
                     b.HasOne("Sem.Web.Core.EventProgressState", null)
                         .WithMany()
                         .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.ReceptionOperation", b =>
+                {
+                    b.HasOne("Sem.Web.Data.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("ActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Sem.Web.Core.SessionEvent", null)
+                        .WithMany()
+                        .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Sem.Web.Core.EventReception", null)
+                        .WithMany()
+                        .HasForeignKey("ReceptionId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
