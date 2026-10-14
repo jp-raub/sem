@@ -5,7 +5,7 @@
 @inject CoreFoundationService Core
 <PageTitle>受付対象の検索</PageTitle>
 <h1>受付対象の検索：@Plan?.Title</h1><p><a href="/workspace">業務基盤へ戻る</a></p>
-<p>管理者向けの現在の参加登録者一覧です。選択した本人・申込みと必要な受付対応を確認して手動受付できます。この画面は手動受付です。QR貼付／リンク読取・確認は上の専用欄で扱います。カメラ読取は後続です。</p>
+<p>管理者向けの現在の参加登録者一覧です。選択した本人・申込みと必要な受付対応を確認して手動受付できます。この画面は手動受付です。QR貼付／リンク読取・確認は上の専用欄で扱います。カメラまたは貼付／リンクで取り込み、明示して読取を記録してください。</p>
 <QrReceptionPanel EventId="@EventId" @key="EventId" ExternalBusy="@(Busy||Pending is not null||PendingCancel is not null)" LockChanged="@(value=>QrLocked=value)" />
 <fieldset disabled="@QrLocked">
 <p id="reception-error" role="alert">@Error</p>

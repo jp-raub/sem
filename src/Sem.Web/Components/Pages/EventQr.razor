@@ -6,7 +6,7 @@
 <PageTitle>自分のイベント受付QR</PageTitle>
 <h1>自分のイベント受付QR：@View?.Title</h1><p><a href="/workspace">業務基盤へ戻る</a></p>
 <p>現在このイベントに参加登録している本人の受付用です。匿名プロフィールQRとは別です。QRを読んだだけで受付完了にはなりません。コードやコード付きリンクを公開・チャット共有しないでください。</p>
-<p>管理者は受付画面でこのイベントのQRリンクを明示的に読み取り、本人確認後にQR受付できます。カメラ読取は後続です。</p>
+<p>管理者は受付画面でこのイベントのQRリンクを明示的に読み取り、本人確認後にQR受付できます。カメラまたは貼付／リンクで取り込み、明示して読取を記録してください。</p>
 <p id="event-qr-error" role="alert">@Error</p><p id="event-qr-message" role="status">@Message</p>
 <button id="event-qr-refresh" disabled="@(Busy||Pending is not null)" @onclick="Load">最新の受付QRを取得</button>
 @if(View is not null){<section id="event-qr-view"><p>対象者：@View.DisplayName</p>
