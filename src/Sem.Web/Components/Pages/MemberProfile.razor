@@ -1,0 +1,26 @@
+@page "/profiles/{UserId}"
+@rendermode InteractiveServer
+@using Sem.Web.Core
+@inject AuthenticationStateProvider Authentication
+@inject CoreFoundationService Core
+<PageTitle>メンバープロフィール</PageTitle>
+<h1>メンバープロフィール</h1><p><a href="/workspace">業務基盤へ戻る</a></p>
+<p id="member-profile-error" role="alert">@Error</p>
+<button id="member-profile-refresh" disabled="@Busy" @onclick="Load">最新情報を取得</button>
+@if(Profile is not null){
+ <section id="member-profile" data-user="@Profile.UserId"><h2>@Profile.DisplayName</h2>
+ <dl><dt>読み</dt><dd>@(Profile.Reading.Length==0?"未設定":Profile.Reading)</dd><dt>対面での呼び</dt><dd>@(Profile.CallName.Length==0?"未設定":Profile.CallName)</dd></dl>
+ <h3>SNS等</h3>
+ @if(Profile.Social.Length==0){<p>リンクは未設定です。</p>}
+ @foreach(var link in Profile.Social.Where(Safe)){<p><a href="@link.Url" target="_blank" rel="noopener noreferrer">@link.Service</a></p>}
+ <p>認証済みメンバー向けの基本プロフィールです。メール・認証情報は表示しません。登録履歴・追加設問・未ログイン用プロフィールQRは別の実装範囲です。</p>
+ </section>
+}
+@code{
+ [Parameter]public string UserId{get;set;}="";
+ ProfileView?Profile;string Error="";bool Busy,Ready;long Epoch;
+ protected override void OnParametersSet(){Epoch++;Profile=null;Error="";Busy=Ready=false;}
+ protected override async Task OnAfterRenderAsync(bool first){if(!Ready){Ready=true;await Load();StateHasChanged();}}
+ async Task Load(){if(Busy)return;var epoch=Epoch;var id=UserId;Profile=null;Error="";Busy=true;try{var p=await Core.ReadProfileAsync((await Authentication.GetAuthenticationStateAsync()).User,id);if(epoch==Epoch)Profile=p;}catch{if(epoch==Epoch)Error="ログイン状態と現在のプロフィール閲覧条件を確認してください。";}finally{if(epoch==Epoch)Busy=false;}}
+ static bool Safe(SocialLink link)=>Uri.TryCreate(link.Url,UriKind.Absolute,out var uri)&&uri.Scheme is "https" or "http"&&uri.UserInfo.Length==0;
+}
