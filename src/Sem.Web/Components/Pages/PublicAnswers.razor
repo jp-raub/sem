@@ -1,0 +1,30 @@
+@page "/events/{EventId}/public-answers"
+@rendermode InteractiveServer
+@using Sem.Web.Core
+@inject AuthenticationStateProvider Authentication
+@inject CoreFoundationService Core
+<PageTitle>公開回答集計</PageTitle>
+<h1>公開回答集計：@Plan?.Title</h1>
+<p><a href="/workspace">業務基盤へ戻る</a> ／ <a href="@($"/events/{EventId}/participation")">参加登録・設問回答へ</a></p>
+<p role="alert" id="public-answers-error">@Error</p>
+<button id="public-answers-refresh" disabled="@Busy" @onclick="Load">最新の公開範囲で再取得</button>
+@if(Plan is not null){
+ <p>公開が許可された設問の、保存済みの空でない回答を集計しています。参加解除後に残っている回答も含みます。自動更新ではありません。</p>
+ @if(Plan.Questions.Length==0){<p id="public-answers-empty">公開中の設問はありません。</p>}
+ @foreach(var q in Plan.Questions){
+  <section class="panel" data-public-question="@q.Id"><h2>@q.Text</h2>
+  <p>回答数：@q.AnsweredCount</p>
+  @if(q.Type=="Text"&&!q.PublicText){<p>回答本文は非公開です。回答数と回答者だけを公開しています。</p>}
+  @if(q.AnsweredCount==0){<p>回答はまだありません。</p>}
+  <table><caption>@q.Text の公開回答一覧</caption><thead><tr><th scope="col">@(q.Type=="Text"&&!q.PublicText?"集計対象":"回答")</th><th scope="col">件数</th><th scope="col">回答者</th></tr></thead><tbody>
+  @foreach(var g in q.Groups){<tr><td>@(g.Value??"回答済み")</td><td>@g.Count</td><td>@foreach(var u in g.Respondents){<span class="public-respondent">@u.DisplayName </span>}</td></tr>}
+  </tbody></table></section>
+ }
+}
+@code{
+ [Parameter]public string EventId{get;set;}="";
+ PublicAnswerPlan? Plan;string Error="";bool Busy,Ready;long Epoch;
+ protected override void OnParametersSet(){Epoch++;Plan=null;Error="";Ready=false;Busy=false;}
+ protected override async Task OnAfterRenderAsync(bool firstRender){if(!Ready){Ready=true;await Load();StateHasChanged();}}
+ async Task Load(){if(Busy)return;var epoch=Epoch;var id=EventId;Busy=true;Plan=null;Error="";try{var plan=await Core.ReadPublicAnswersAsync((await Authentication.GetAuthenticationStateAsync()).User,id);if(epoch==Epoch)Plan=plan;}catch{if(epoch==Epoch)Error="ログイン状態とイベントの公開・権限を確認してください。";}finally{if(epoch==Epoch)Busy=false;}}
+}
