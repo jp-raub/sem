@@ -55,6 +55,17 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     protected override void OnModelCreating(ModelBuilder b)
     {
         base.OnModelCreating(b);
+        b.Entity<ManualNotificationPushActivation>().Property(x => x.Epoch).IsConcurrencyToken();
+        b.Entity<ManualNotificationPushActivation>().ToTable("ManualNotificationPushActivations", t => {
+            t.HasCheckConstraint("CK_ManualPushActivation_State", "\"Id\"=1 AND \"Epoch\">0 AND \"Enabled\" IN (0,1)");
+        });
+        b.Entity<ManualNotificationPushAdmission>().HasKey(x => x.OperationId);
+        b.Entity<ManualNotificationPushAdmission>().HasOne<ManualNotificationOperation>().WithOne()
+            .HasForeignKey<ManualNotificationPushAdmission>(x => x.OperationId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<ManualNotificationPushAdmission>().ToTable("ManualNotificationPushAdmissions", t => {
+            t.HasCheckConstraint("CK_ManualPushAdmission_Time", "\"AcceptedAt\">=0 AND \"AcceptedAt\"<=9223372036854775207 AND \"ExpiresAt\"=\"AcceptedAt\"+600");
+            t.HasCheckConstraint("CK_ManualPushAdmission_Epoch", "\"Epoch\">0");
+        });
         b.Entity<ManualNotificationOperation>().HasAlternateKey(x => new { x.EventId, x.Id });
         b.Entity<ManualNotificationOperation>().HasOne<SessionEvent>().WithMany().HasForeignKey(x => x.EventId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<ManualNotificationOperation>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.ActorId).OnDelete(DeleteBehavior.Restrict);

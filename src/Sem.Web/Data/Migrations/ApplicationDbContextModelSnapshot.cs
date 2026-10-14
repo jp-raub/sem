@@ -1047,6 +1047,51 @@ namespace Sem.Web.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Sem.Web.Core.ManualNotificationPushActivation", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Epoch")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("ManualNotificationPushActivations", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ManualPushActivation_State", "\"Id\"=1 AND \"Epoch\">0 AND \"Enabled\" IN (0,1)");
+                        });
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.ManualNotificationPushAdmission", b =>
+                {
+                    b.Property<string>("OperationId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("AcceptedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Epoch")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("ExpiresAt")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("OperationId");
+
+                    b.ToTable("ManualNotificationPushAdmissions", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ManualPushAdmission_Epoch", "\"Epoch\">0");
+
+                            t.HasCheckConstraint("CK_ManualPushAdmission_Time", "\"AcceptedAt\">=0 AND \"AcceptedAt\"<=9223372036854775207 AND \"ExpiresAt\"=\"AcceptedAt\"+600");
+                        });
+                });
+
             modelBuilder.Entity("Sem.Web.Core.ManualNotificationRecipient", b =>
                 {
                     b.Property<string>("Id")
@@ -2694,6 +2739,15 @@ namespace Sem.Web.Data.Migrations
                     b.HasOne("Sem.Web.Core.SessionEvent", null)
                         .WithMany()
                         .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.ManualNotificationPushAdmission", b =>
+                {
+                    b.HasOne("Sem.Web.Core.ManualNotificationOperation", null)
+                        .WithOne()
+                        .HasForeignKey("Sem.Web.Core.ManualNotificationPushAdmission", "OperationId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

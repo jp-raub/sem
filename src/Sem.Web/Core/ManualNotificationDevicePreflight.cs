@@ -4,7 +4,7 @@ using Sem.Web.Runtime;
 namespace Sem.Web.Core;
 
 // Facts for a future dispatcher, not a send authorization or an HTTP response.
-// No worker/DI registration/transport invocation. A passing binding still lacks approved dispatch policy.
+// No worker/DI registration/transport invocation. This helper reports facts only.
 public sealed record ManualNotificationDevicePreflightResult(string State, bool? CurrentlyRegistered = null)
 {
     public bool DispatchConnected => false;
@@ -14,12 +14,20 @@ public sealed class ManualNotificationDevicePreflight(IDbContextFactory<Applicat
     public async Task<ManualNotificationDevicePreflightResult> ReadAsync(string recipientId, string deviceId,
         string expectedBindingFingerprint, CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(recipientId) || string.IsNullOrWhiteSpace(deviceId) ||
-            expectedBindingFingerprint is null || expectedBindingFingerprint.Length != 64 ||
-            expectedBindingFingerprint.Any(c => !char.IsAsciiHexDigit(c)))
-            return new("InvalidInput");
+        if (!ValidInput(recipientId, deviceId, expectedBindingFingerprint)) return new("InvalidInput");
         await using var db = await factory.CreateDbContextAsync(ct);
         await using var tx = await db.Database.BeginTransactionAsync(ct);
+        var result = await ReadInTransactionAsync(db, clock.GetUtcNow(), recipientId, deviceId, expectedBindingFingerprint, ct);
+        await tx.CommitAsync(ct);
+        return result;
+    }
+    internal static bool ValidInput(string recipientId, string deviceId, string expectedBindingFingerprint) =>
+        !string.IsNullOrWhiteSpace(recipientId) && !string.IsNullOrWhiteSpace(deviceId) &&
+        expectedBindingFingerprint is not null && expectedBindingFingerprint.Length == 64 &&
+        expectedBindingFingerprint.All(char.IsAsciiHexDigit);
+    internal static async Task<ManualNotificationDevicePreflightResult> ReadInTransactionAsync(ApplicationDbContext db,
+        DateTimeOffset now, string recipientId, string deviceId, string expectedBindingFingerprint, CancellationToken ct)
+    {
         // Start at an immutable, accepted snapshot; never discover additional recipients.
         var snapshot = await db.Set<ManualNotificationRecipient>().AsNoTracking()
             .Where(x => x.Id == recipientId).Select(x => new { x.Id, x.EventId, x.OperationId, x.UserId }).SingleOrDefaultAsync(ct);
@@ -35,7 +43,7 @@ public sealed class ManualNotificationDevicePreflight(IDbContextFactory<Applicat
         if (user is null || !user.Enabled || !user.EmailConfirmed) return new("AccountUnavailable");
         var e = await db.SessionEvents.AsNoTracking().Include(x => x.Admins).Include(x => x.Phases)
             .SingleOrDefaultAsync(x => x.Id == snapshot.EventId, ct);
-        if (e is null || !CoreFoundationService.PushViewAllowed(e, user, clock.GetUtcNow())) return new("ViewingDenied");
+        if (e is null || !CoreFoundationService.PushViewAllowed(e, user, now)) return new("ViewingDenied");
         var registered = await db.EventSpectators.AsNoTracking().AnyAsync(x => x.EventId == snapshot.EventId && x.UserId == user.Id, ct)
             || await (from part in db.SongParts.AsNoTracking()
                       join song in db.Songs.AsNoTracking() on part.SongId equals song.Id
@@ -47,7 +55,6 @@ public sealed class ManualNotificationDevicePreflight(IDbContextFactory<Applicat
         if (device is null) return new("DeviceUnavailable", registered);
         if (!await PushBinding.Valid(db, user, device, ct)) return new("BindingInvalid", registered);
         if (PushBinding.Fingerprint(device) != expectedBindingFingerprint) return new("BindingChanged", registered);
-        await tx.CommitAsync(ct);
         // Registration is a fact, not a silently chosen post-acceptance removal/retention policy.
         // No deadline, TTL, dispatch lease, device delivery row or payload is created here.
         return new("PolicyPending", registered);

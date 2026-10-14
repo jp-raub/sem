@@ -59,7 +59,8 @@ try {
         db.ServiceSettings.Add(new() { Id=1, Name="Upgrade sentinel", Description="Preserved existing settings" });
         await db.SaveChangesAsync();
         await SqliteStorageInitializer.InitializeAsync(db);
-        Check((await db.Database.GetAppliedMigrationsAsync()).Last().EndsWith("_AddManualNotificationAcceptance"), "Additive migration upgrades populated previous schema");
+        var applied = (await db.Database.GetAppliedMigrationsAsync()).ToArray();
+        Check(applied.Contains("20261014025716_AddManualNotificationAcceptance") && applied.SequenceEqual(db.Database.GetMigrations()), "Additive migration upgrades populated previous schema through all current migrations");
         Check((await db.Users.SingleAsync(x=>x.Id=="legacy")).SecurityStamp=="legacy-stamp" &&
             (await db.Messages.SingleAsync(x=>x.Id=="legacy-message")).ReadAt==124 &&
             (await db.Deliveries.SingleAsync(x=>x.Id=="legacy-delivery")).ProtectedBody=="opaque-existing-payload" &&
