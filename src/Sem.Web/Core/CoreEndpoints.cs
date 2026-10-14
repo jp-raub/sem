@@ -40,6 +40,14 @@ public static class CoreEndpoints
                     await ctx.Response.WriteAsJsonAsync(await service.SetManualPushActivationAsync(ctx.User, edit, ctx.RequestAborted));
                     return;
                 }
+                if (action == "manual-notification-push-status") {
+                    if (post) { ctx.Response.StatusCode = 405; return; }
+                    var actor = ctx.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                    if (string.IsNullOrEmpty(actor) || ctx.Request.Query["actor"].Count != 1 || ctx.Request.Query["actor"].ToString() != actor) throw new UnauthorizedAccessException();
+                    if (ctx.Request.Query["id"].Count != 1 || ctx.Request.Query["requestId"].Count != 1) throw new ValidationException("イベントと操作Idを確認してください。");
+                    await ctx.Response.WriteAsJsonAsync(await service.ReadEventManualNotificationPushStatusAsync(ctx.User, ctx.Request.Query["id"].ToString(), ctx.Request.Query["requestId"].ToString(), ctx.RequestAborted));
+                    return;
+                }
                 if (action == "manual-notification-context")
                 {
                     if (post) { ctx.Response.StatusCode = 405; return; }

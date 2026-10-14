@@ -110,6 +110,7 @@ module.exports = async ({p,g,ok}) => {
   ok((await a.locator('#manual-notification-result').innerText()).includes('同じ操作ID'),'Native exact retry displays original accepted replay result');
   const after=(await g.evaluate(async()=>await(await fetch('/api/snapshot')).json())).messages.filter(x=>x.title===draft.subject+' changed');
   ok(after.length===before+1&&after[0].body===draft.body,'Lost response plus rejected retry and successful replay saves exactly one ordinary inbox message');
+  if(process.env.SEM_MANUAL_PUSH_STATUS_CHECKS)await require('./manual-push-status-ui-checks.cjs')({a,p,g,ok,id,actor,member,requestId:frozen});
   await a.locator('[data-event-tab=roster]').click();await a.waitForURL('**/participants');ok(a.url().endsWith('/participants'),'Confirmed acceptance unlocks actual navigation');
   await m.goto(origin+'/events/'+id+'/manual-notification');await m.locator('#manual-notification-reauthorize').waitFor();
   ok(await m.locator('#manual-notification-composer').count()===0,'Ordinary participant direct composer route exposes no draft fields');
