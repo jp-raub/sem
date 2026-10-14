@@ -14,7 +14,7 @@ module.exports=async({p,g,ok})=>{
   await a.locator('[data-event-tab=main]').focus();await a.keyboard.press('End');await a.waitForURL('**/participants');await ready(a);await a.locator('[data-participant-roster-user]').first().waitFor();
   ok(await selected(a)==='roster'&&await a.locator('#event-tab-panel').getAttribute('aria-labelledby')==='event-tab-roster','Keyboard End selects actual authorized roster route and labelled panel: '+await selected(a)+'/'+await a.locator('#event-tab-panel').getAttribute('aria-labelledby'));
   const scope=await a.evaluate(()=>Object.keys(sessionStorage).filter(k=>k.startsWith('sem.event-tab.v1:')));
-  ok(scope.length===1&&await a.evaluate(k=>sessionStorage.getItem(k),scope[0])==='roster','Native session storage contains only current scoped tab identifier');
+  ok(scope.length===1&&await a.evaluate(k=>sessionStorage.getItem(k),scope[0])==='roster','Native session storage contains only current scoped tab identifier: '+JSON.stringify(await a.evaluate(ks=>ks.map(k=>[k,sessionStorage.getItem(k)]),scope)));
   await a.reload();await ready(a);ok(await selected(a)==='roster','Native reload keeps actual selected roster route');
   await a.goto(origin+'/events/'+fixture.id);await a.waitForURL('**/participants');await ready(a);ok(await selected(a)==='roster','Returning to same event restores saved permitted tab');
   await a.locator('[data-event-tab=main]').click();await a.waitForURL('**?tab=main');await ready(a);ok(await selected(a)==='main','Explicit main selection avoids restore loop');

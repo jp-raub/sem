@@ -21,29 +21,33 @@
     EventTabsView? View; IJSObjectReference? Module; DotNetObjectReference<EventTabNavigation>? Sink;
     readonly CancellationTokenSource Stop = new();
     readonly string RootId = "event-tabs-" + Guid.NewGuid().ToString("N");
-    string LoadedId = "", Error = ""; bool Ready, Bound, Disposed, Navigating;
+    string LoadedId = "", LoadedSelected = "", Error = ""; long Generation; bool Ready, Bound, Disposed, Navigating;
     string TabId(string kind) => "event-tab-" + kind;
     static string Label(string kind) => kind switch { "main"=>"イベント", "roster"=>"参加者名簿", "checkin"=>"受付", "progress"=>"当日進行", "notifications"=>"通知", _=>"" };
     string Route(string kind) => "/events/" + Uri.EscapeDataString(EventId) + (kind switch { "main"=>"?tab=main", "roster"=>"/participants", "checkin"=>"/reception", "progress"=>"/progress", "notifications"=>"/notification-plan", _=>throw new InvalidOperationException() });
     protected override async Task OnParametersSetAsync()
     {
-        if (LoadedId == EventId) return;
-        LoadedId = EventId; View = null; Error = "";
-        try { View = await Core.ReadEventTabsAsync((await Authentication.GetAuthenticationStateAsync()).User, EventId, Stop.Token); }
+        if (LoadedId == EventId && LoadedSelected == Selected) return;
+        LoadedId = EventId; LoadedSelected = Selected; var generation = ++Generation; var id = EventId;
+        Bound = Ready = false; View = null; Error = "";
+        try { var loaded = await Core.ReadEventTabsAsync((await Authentication.GetAuthenticationStateAsync()).User, id, Stop.Token); if (!Disposed && generation == Generation && id == EventId) View = loaded; }
         catch (OperationCanceledException) { }
-        catch { Error = "ログイン状態と現在のイベント閲覧権限を確認してください。"; }
+        catch { if (!Disposed && generation == Generation) Error = "ログイン状態と現在のイベント閲覧権限を確認してください。"; }
     }
     protected override async Task OnAfterRenderAsync(bool first)
     {
         if (Disposed || Bound || View is null) return;
-        Bound = true;
+        Bound = true; var generation = Generation;
         try {
-            Module = await JS.InvokeAsync<IJSObjectReference>("import", "/event-tabs.js"); Sink = DotNetObjectReference.Create(this);
+            Module ??= await JS.InvokeAsync<IJSObjectReference>("import", "/event-tabs.js");
+            if (Disposed || generation != Generation || View is null) return;
+            Sink ??= DotNetObjectReference.Create(this);
             var restore = Selected == "main" && !Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(new Uri(Navigation.Uri).Query).ContainsKey("tab");
             var target = await Module.InvokeAsync<string?>("bindTabs", RootId, Sink, View.UserId, EventId, View.Available, Selected, restore);
+            if (Disposed || generation != Generation) return;
             Ready = true; StateHasChanged();
             if (target is not null && target != Selected) await Select(target);
-        } catch (JSDisconnectedException) { } catch { Error = "タブの選択保持を利用できません。画面のボタンから移動してください。"; Ready = true; StateHasChanged(); }
+        } catch (JSDisconnectedException) { } catch { if (!Disposed && generation == Generation) { Error = "タブの選択保持を利用できません。画面のボタンから移動してください。"; Ready = true; StateHasChanged(); } }
     }
     [JSInvokable] public Task SelectFromKeyboard(string kind) => InvokeAsync(()=>Select(kind));
     async Task Select(string kind)

@@ -16,6 +16,7 @@ const server=http.createServer((req,res)=>{if(req.url==='/'){res.setHeader('Cont
  await page.evaluate(()=>sessionStorage.setItem('sem.event-tab.v1:u:e','roster'));ok(await bind('u','e','main',true)==='roster','Returning to event restores permitted selection');
  ok(await page.evaluate(()=>sessionStorage.getItem('sem.event-tab.v1:u:e'))==='roster','Restore does not overwrite selection before destination loads');
  ok(await bind('u','e','roster')==='roster','Direct destination stores actual selected route');
+ await bind('u','e','main');await bind('u','e','roster');ok(await page.evaluate(()=>sessionStorage.getItem('sem.event-tab.v1:u:e'))==='roster','Reused same-event host rebind saves new actual selected route');
  ok(await bind('other','e','main',true)==='main','Another user never inherits selected manager tab');
  ok(await bind('u','other','main',true)==='main','Another event has independent state');
  await page.evaluate(()=>sessionStorage.setItem('sem.event-tab.v1:u:e','checkin'));ok(await bind('u','e','main',true,['main','roster'])==='main','Unavailable remembered manager tab falls back to main');
