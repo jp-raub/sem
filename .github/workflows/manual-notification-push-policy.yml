@@ -27,7 +27,19 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p verification
-          dotnet build src/Sem.Web -c Release -warnaserror 2>&1 | tee verification/device-preflight-build.log
+          if dotnet build src/Sem.Web -c Release -warnaserror 2>&1 | tee verification/device-preflight-build.log; then
+            echo "Release build passed with warnings as errors."
+          else
+            python3 - <<'PYERROR'
+          import pathlib
+          lines = pathlib.Path("verification/device-preflight-build.log").read_text(errors="replace").splitlines()
+          errors = [line for line in lines if "error" in line.lower()][-20:]
+          for line in errors:
+              safe = line.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+              print("::error title=Release build diagnostic::" + safe)
+          PYERROR
+            exit 1
+          fi
       - name: Durable policy admission and all existing .NET regressions
         run: |
           set -euo pipefail
