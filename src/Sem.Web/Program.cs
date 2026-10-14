@@ -39,6 +39,7 @@ builder.Services.AddAuthentication().AddCookie("SEM.Enrollment", o =>
 builder.Services.AddAntiforgery(o => { o.HeaderName = "X-CSRF-TOKEN"; o.Cookie.Name = "__Host-SEM-CSRF"; o.Cookie.SecurePolicy = CookieSecurePolicy.Always; o.Cookie.Path = "/"; o.Cookie.HttpOnly = true; });
 builder.Services.AddDbContextFactory<ApplicationDbContext>(o => o.UseSqlite($"Data Source={Path.Combine(deployment.DataDirectory, "sem.db")}"), ServiceLifetime.Scoped);
 builder.Services.AddScoped<CoreFoundationService>();
+builder.Services.AddSingleton(new ManualPushRuntime(false)); // explicit runtime truth; worker remains unregistered
 builder.Services.AddIdentityCore<ApplicationUser>(o => { o.SignIn.RequireConfirmedAccount = true; o.User.RequireUniqueEmail = true; o.Stores.SchemaVersion = IdentitySchemaVersions.Version3; }).AddEntityFrameworkStores<ApplicationDbContext>().AddSignInManager().AddDefaultTokenProviders().AddUserConfirmation<SemUserConfirmation>();
 builder.Services.AddSingleton<NotificationService>();
 builder.Services.AddSingleton<BusinessNotificationStore>();
@@ -77,7 +78,7 @@ await app.InitializeSemStorageAsync();
 app.Use(async (context, next) =>
 {
     context.Response.Headers["Referrer-Policy"] = "no-referrer";
-    if (context.Request.Path.Equals("/workspace", StringComparison.OrdinalIgnoreCase) || context.Request.Path.Value?.EndsWith("/manual-notification", StringComparison.OrdinalIgnoreCase) == true) context.Response.Headers.CacheControl = "no-store";
+    if (context.Request.Path.Equals("/workspace", StringComparison.OrdinalIgnoreCase) || context.Request.Path.Equals("/service/manual-push", StringComparison.OrdinalIgnoreCase) || context.Request.Path.Value?.EndsWith("/manual-notification", StringComparison.OrdinalIgnoreCase) == true) context.Response.Headers.CacheControl = "no-store";
     context.Response.Headers["X-Content-Type-Options"] = "nosniff";
     context.Response.Headers["X-Frame-Options"] = "DENY";
     if (!context.Request.Path.StartsWithSegments("/health"))

@@ -21,8 +21,8 @@ public sealed record ManualNotificationPushActivationResult(string RequestId, bo
 
 public sealed partial class CoreFoundationService
 {
-    // Internal application API only. No HTTP/DI/worker registration or actual activation
-    // is performed by startup/migration. A future route must add Origin/CSRF/no-store.
+    // Current-cookie operational routes add Origin/CSRF/no-store and frozen actor binding.
+    // Startup/migrations never enable activation; no manual Push worker is registered here.
     public async Task<ManualNotificationPushActivationView> ReadManualPushActivationAsync(ClaimsPrincipal principal, CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
