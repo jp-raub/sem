@@ -35,5 +35,6 @@ if(process.env.SEM_STORAGE_UPGRADE_COMMAND){
  if(process.env.SEM_SONG_CHECKS)await require('./song-checks.cjs')({p,g,ok});
  if(process.env.SEM_PARTICIPATION_CHECKS)await require('./participation-checks.cjs')({p,g,ok});
  if(process.env.SEM_TIMETABLE_CHECKS)await require('./timetable-checks.cjs')({p,g,ok});
+ if(process.env.SEM_PROGRESS_CHECKS)await require('./progress-checks.cjs')({p,g,ok});
 }
 fs.writeFileSync('verification/e2e-result.json',JSON.stringify({passed:checks.length,checks,errors},null,2));}finally{await b.close();await new Promise(r=>proxy.close(r))}})().catch(e=>{fs.mkdirSync('verification',{recursive:true});fs.writeFileSync('verification/e2e-error.txt',e.stack);console.error(e);process.exit(1)});

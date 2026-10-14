@@ -153,6 +153,7 @@ public sealed partial class CoreFoundationService(IDbContextFactory<ApplicationD
             item.Phases.Single(p => p.Kind == edit.PhaseKind).IsActive = true;
             item.ManualPhaseOverride = true;
         }
+        if (id is not null && (item.ScheduledDate != Utc(edit.ScheduledDate) || item.OpensAt != (edit.OpensAt is null ? null : Utc(edit.OpensAt.Value)))) await EnsurePlanEditable(db,id,ct);
         item.Title = title; item.Description = description; item.Location = location; item.ScheduledDate = Utc(edit.ScheduledDate);
         item.OpensAt = edit.OpensAt is null ? null : Utc(edit.OpensAt.Value); item.AnnouncementMessage = announcement;
         item.PhaseKind = edit.PhaseKind; item.RowVersion++;
