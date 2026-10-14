@@ -1,0 +1,153 @@
+@page "/events/{EventId}/manual-notification"
+@rendermode InteractiveServer
+@implements IAsyncDisposable
+@using Sem.Web.Core
+@inject AuthenticationStateProvider Authentication
+@inject CoreFoundationService Core
+@inject IJSRuntime JS
+<NavigationLock ConfirmExternalNavigation="@State.NavigationBlocked" OnBeforeInternalNavigation="BeforeNavigation" />
+<EventTabNavigation EventId="@EventId" Selected="notifications" />
+<section id="event-tab-panel" role="tabpanel" aria-label="通知" aria-labelledby="event-tab-notifications" tabindex="0">
+<PageTitle>参加者への手動メッセージ</PageTitle>
+<h1>参加者への手動メッセージ：@Title</h1>
+<p><a href="@($"/events/{EventId}/notification-plan")">通知予定へ戻る</a></p>
+<p id="manual-notification-policy">現在の演奏・観覧登録者へ1人1件、メッセージボックスに保存します。プレビューだけでは保存しません。受付済みは保存完了で、既読・端末到着ではありません。この工期では手動Push配信は未接続です。</p>
+<p>下書きと処理中の要求はこの画面のメモリだけに保持します。処理中・結果不明では再読込や画面を閉じる操作を避け、同じ操作IDで結果を確認してください。別IDでの送信は別の通知になります。</p>
+<p id="manual-notification-error" role="alert">@Error</p>
+<p id="manual-notification-message" role="status">@Message</p>
+@if (Ready && Allowed)
+{
+<section id="manual-notification-composer" data-ready="true" data-busy="@State.Busy.ToString().ToLowerInvariant()" data-uncertain="@State.Uncertain.ToString().ToLowerInvariant()">
+@if (State.Accepted is { } accepted)
+{
+    <section id="manual-notification-result" role="status">
+    <h2>メッセージの受付済み</h2>
+    <p>@accepted.RecipientCount 人分を保存しました。受付日時：@Time(accepted.AcceptedAt)。@(accepted.Replayed ? "同じ操作IDの保存済み結果を確認しました。" : "")</p>
+    <p>操作ID：<code>@accepted.RequestId</code></p>
+    <p>手動Pushは未配信です。端末受信・既読・外部配信の完全な一回性を意味しません。</p>
+    <button id="manual-notification-new" @onclick="StartNew">別のメッセージを新しく作成</button>
+    </section>
+}
+else
+{
+    <fieldset disabled="@(!State.CanEdit)"><legend>件名と本文（文字として表示）</legend>
+    <label for="manual-notification-subject">件名（1〜80文字）</label>
+    <input id="manual-notification-subject" maxlength="80" autocomplete="off" value="@State.Subject" @oninput="SubjectChanged" />
+    <label for="manual-notification-body">本文（1〜2000文字）</label>
+    <textarea id="manual-notification-body" maxlength="2000" autocomplete="off" rows="7" value="@State.Body" @oninput="BodyChanged"></textarea>
+    </fieldset>
+    <div class="manual-notification-actions">
+    <button id="manual-notification-preview" disabled="@(!State.CanEdit)" @onclick="Preview">対象人数と内容をプレビュー</button>
+    <button id="manual-notification-discard" disabled="@(!State.CanEdit)" @onclick="Discard">未送信の入力を取り消す</button>
+    </div>
+    @if (State.Preview is { } preview)
+    {
+        <section id="manual-notification-preview-result" class="panel">
+        <h2>送信前の確認：@preview.EventTitle</h2>
+        <p id="manual-notification-count">現在の対象：@preview.RecipientCount 人（演奏・観覧の重複なし）</p>
+        <h3 id="manual-notification-preview-subject">@preview.Subject</h3>
+        <p id="manual-notification-preview-body" class="manual-notification-plain">@preview.Body</p>
+        <p>Push表示予定：@preview.Subject ／ @preview.PushPreviewBody ／ 本人のメッセージボックスへ（配信は未接続）</p>
+        <p>対象者・イベント・内容が変わった場合は、新しいプレビューが必要です。</p>
+        <label><input id="manual-notification-confirm" type="checkbox" checked="@State.Confirmed" disabled="@(!State.CanEdit)" @onchange="ConfirmChanged" />対象人数と件名・本文を確認し、メッセージの保存を実行する</label>
+        </section>
+    }
+    @if (State.Pending is not null)
+    {
+        <p id="manual-notification-pending">@(State.Busy ? "処理中です。" : "結果は未確認です。")操作ID：<code>@State.Pending.RequestId</code>。入力の破棄・新規送信・画面移動はできません。</p>
+    }
+    <button id="manual-notification-submit" disabled="@(State.Busy || State.Pending is null && (State.Preview is null || !State.Confirmed))" @onclick="Submit">@(State.Pending is null ? "確認した内容でメッセージを保存" : "同じ操作IDで結果を確認／再試行")</button>
+}
+</section>
+}
+else if (Ready)
+{
+    <p>通常ログインと現在のイベント管理権限が必要です。</p>
+    @if (State.Pending is not null) { <p>結果未確認の操作ID：<code>@State.Pending.RequestId</code>。別の送信は始めず、元のアカウントでログイン状態を確認してください。</p> }
+    <button id="manual-notification-reauthorize" disabled="@State.Busy" @onclick="Initialize">現在の権限を再確認</button>
+    @if (State.CanEdit && State.NavigationBlocked) { <button id="manual-notification-discard-private" @onclick="Discard">非表示の未送信入力だけを取り消す</button> }
+}
+</section>
+@code {
+    [Parameter] public string EventId { get; set; } = "";
+    ManualNotificationComposerState State = new();
+    IJSObjectReference? Module;
+    string LoadedId = "", ActorId = "", Title = "", Error = "", Message = "";
+    bool Ready, Allowed, Disposed, Initializing;
+    long Generation;
+    protected override void OnParametersSet()
+    {
+        if (LoadedId == EventId) return;
+        // NavigationLock normally prevents this; never silently replace a pending operation on parameter reuse.
+        if (State.NavigationBlocked) { Allowed = false; Error = "未送信または結果未確認の操作が残っています。元の画面で結果を確認してください。"; return; }
+        LoadedId = EventId; Generation++; State = new(); ActorId = Title = Error = Message = ""; Ready = Allowed = false;
+    }
+    protected override async Task OnAfterRenderAsync(bool first)
+    {
+        if (!Ready && !Initializing && !Disposed) { await Initialize(); if (!Disposed) StateHasChanged(); }
+    }
+    async Task Initialize()
+    {
+        if (Initializing || State.Busy || Disposed) return;
+        Initializing = true; var generation = Generation; var id = LoadedId;
+        try {
+            var view = await Core.ReadEventTabsAsync((await Authentication.GetAuthenticationStateAsync()).User, id);
+            if (Disposed || generation != Generation || EventId != id) return;
+            if (!view.Available.Contains("notifications") || ActorId.Length > 0 && view.UserId != ActorId) throw new UnauthorizedAccessException();
+            Module ??= await JS.InvokeAsync<IJSObjectReference>("import", "/manual-notification.js");
+            if (Disposed || generation != Generation) return;
+            ActorId = view.UserId; Title = view.Title; Allowed = true; Error = "";
+        } catch { if (!Disposed && generation == Generation) { Allowed = false; Title = ""; Error = "ログイン状態と現在のイベント管理権限を確認してください。"; } }
+        finally { if (!Disposed && generation == Generation) { Ready = true; Initializing = false; } }
+    }
+    void SubjectChanged(ChangeEventArgs e) { if (State.CanEdit) State.Edit(e.Value?.ToString() ?? "", State.Body); }
+    void BodyChanged(ChangeEventArgs e) { if (State.CanEdit) State.Edit(State.Subject, e.Value?.ToString() ?? ""); }
+    void ConfirmChanged(ChangeEventArgs e) { if (State.CanEdit && State.Preview is not null) State.Confirm(e.Value is true); }
+    void BeforeNavigation(LocationChangingContext context)
+    {
+        if (State.NavigationBlocked) { context.PreventNavigation(); Error = "未送信・処理中・結果未確認の操作があります。結果確認または未送信入力の取消後に移動してください。"; }
+    }
+    void Discard() { if (!State.CanEdit) return; State.DiscardDraft(); Error = ""; Message = "未送信の入力だけを取り消しました。保存済みのメッセージは変更していません。"; }
+    void StartNew() { if (State.Busy || State.Pending is not null) return; State.StartNew(); Message = Error = ""; }
+    sealed record Transport<T>(int Status, T? Value);
+    async Task Preview()
+    {
+        if (!Allowed || Module is null || !State.CanEdit) return;
+        var generation = Generation;
+        State.BeginPreview(); Error = Message = "";
+        try {
+            var result = await Module.InvokeAsync<Transport<ManualNotificationPreview>>("post", "manual-notification-preview", LoadedId, ActorId, new ManualNotificationDraft(State.Subject, State.Body));
+            if (Disposed || generation != Generation) return;
+            if (result.Status == 200 && result.Value is { } preview && preview.EventId == LoadedId && preview.RecipientCount > 0 && preview.Fingerprint.Length == 64) {
+                State.ShowPreview(preview); Message = "プレビューを取得しました。まだ保存していません。";
+            } else {
+                State.PreviewFailed();
+                if (result.Status == 403) { Allowed = false; Title = ""; }
+                Error = "対象者・入力・現在の管理権限を確認して、プレビューを取得し直してください。";
+            }
+        } catch { if (!Disposed && generation == Generation) { State.PreviewFailed(); Error = "プレビューを取得できませんでした。この操作ではメッセージを保存していません。"; } }
+    }
+    async Task Submit()
+    {
+        if (!Allowed || Module is null || State.Busy || State.Accepted is not null || State.Pending is null && (State.Preview is null || !State.Confirmed)) return;
+        var generation = Generation;
+        var request = State.BeginSubmit(); // Freeze before the first await; a rapid second click cannot create another ID.
+        Error = Message = "";
+        try {
+            var result = await Module.InvokeAsync<Transport<ManualNotificationAcceptance>>("post", "manual-notification-accept", LoadedId, ActorId, request);
+            if (Disposed || generation != Generation) return;
+            if (result.Status == 200 && result.Value is { } acceptance) { State.SubmissionAccepted(acceptance); Message = "受付結果を確認しました。メッセージボックスへの保存完了です。手動Pushは未配信です。"; }
+            else if (result.Status is 400 or 403 or 409) {
+                State.SubmissionRejected();
+                if (result.Status == 403) { Allowed = false; Title = ""; }
+                Error = State.Pending is not null ? "以前の処理結果は依然不明です。新しい送信は始めず、同じ操作IDで結果を確認してください。" : "受付されませんでした。現在の権限・対象者・入力を確認し、再度プレビューしてください。";
+            } else { throw new InvalidOperationException("Unclassified acceptance response"); }
+        } catch { if (!Disposed && generation == Generation) { State.SubmissionUnknown(); Error = "保存されたか確認できません。同じ操作IDで結果を確認／再試行してください。新しい操作IDでは送信しないでください。"; } }
+    }
+    static string Time(long at) => DateTimeOffset.FromUnixTimeSeconds(at).ToOffset(TimeSpan.FromHours(9)).ToString("yyyy/MM/dd HH:mm:ss") + "（日本時間）";
+    public async ValueTask DisposeAsync()
+    {
+        Disposed = true; Generation++;
+        if (Module is not null) try { await Module.DisposeAsync(); } catch (JSDisconnectedException) { }
+    }
+}

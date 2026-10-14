@@ -77,7 +77,7 @@ await app.InitializeSemStorageAsync();
 app.Use(async (context, next) =>
 {
     context.Response.Headers["Referrer-Policy"] = "no-referrer";
-    if (context.Request.Path.Equals("/workspace", StringComparison.OrdinalIgnoreCase)) context.Response.Headers.CacheControl = "no-store";
+    if (context.Request.Path.Equals("/workspace", StringComparison.OrdinalIgnoreCase) || context.Request.Path.Value?.EndsWith("/manual-notification", StringComparison.OrdinalIgnoreCase) == true) context.Response.Headers.CacheControl = "no-store";
     context.Response.Headers["X-Content-Type-Options"] = "nosniff";
     context.Response.Headers["X-Frame-Options"] = "DENY";
     if (!context.Request.Path.StartsWithSegments("/health"))

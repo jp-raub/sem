@@ -14,6 +14,7 @@
 <p>予定時刻はサーバー送信基準で、端末到着を保証しません。実データ保存後や当日見積・進行変更後は最新状態を取得してください。</p>
 <p id="notification-plan-error" role="alert">@Error</p>
 @if(Plan is not null){
+ <p><a id="manual-notification-link" href="@($"/events/{EventId}/manual-notification")">参加者への手動メッセージを作成</a></p>
  <section id="notification-plan" class="panel" data-interactive="@InteractiveReady.ToString().ToLowerInvariant()" data-fingerprint="@Plan.Fingerprint">
  <button id="notification-plan-refresh" disabled="@Busy" @onclick="Load">最新状態を取得</button>
  <p>Asia/Tokyo ／ イベント版 @Plan.RowVersion ／ 進行版 @Plan.ProgressVersion</p>
