@@ -70,7 +70,7 @@ else
                 <p>担当管理者：@string.Join("、", item.ManagerIds.Select(id => View.Members.FirstOrDefault(m => m.UserId == id)?.DisplayName ?? "不明"))</p>
                 <a href="@($"/events/{item.Id}/progress")">当日進行</a>
                 <a href="@($"/events/{item.Id}/timetable")">タイムテーブル</a>
-                <a href="@($"/events/{item.Id}/participation")">参加登録・観覧</a> <a href="@($"/events/{item.Id}/qr")">自分の受付QR</a> <a href="@($"/events/{item.Id}/public-answers")">公開回答集計</a> <a href="@($"/events/{item.Id}/comments")">コメント</a>
+                <a href="@($"/events/{item.Id}/participation")">参加登録・観覧</a> <a href="@($"/events/{item.Id}/qr")">自分の受付QR</a> <a href="@($"/events/{item.Id}/public-answers")">公開回答集計</a> <a href="@($"/events/{item.Id}/participants")">参加者名簿</a> <a href="@($"/events/{item.Id}/comments")">コメント</a>
                 @if (item.CanManage) { <a href="@($"/events/{item.Id}/reception")">受付対象の検索</a> <button disabled="@(Busy || Editing is not null)" @onclick="() => EditEvent(item)">概要・管理者を編集</button> <a href="@($"/events/{item.Id}/phases")">フェーズ管理</a> <a href="@($"/events/{item.Id}/definitions")">演奏パート定義</a> <a href="@($"/events/{item.Id}/questions")">設問管理</a> <a href="@($"/events/{item.Id}/songs")">曲・枠管理</a> }
             </article>
         }
