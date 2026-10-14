@@ -41,6 +41,9 @@ public sealed partial class CoreFoundationService
   await using var db=await factory.CreateDbContextAsync(ct);await using var tx=await db.Database.BeginTransactionAsync(ct);
   var e=await Managed(db,principal,id,ct);var actor=await Actor(db,principal,ct);
   if(e.RowVersion!=edit.RowVersion)throw new CoreConflictException();
+  var observationNow=clock.GetUtcNow();
+  var priorEffectivePhase=e.ManualPhaseOverride?e.Phases.Single(p=>p.IsActive):Automatic(e,observationNow);
+  CoreEventImportHistory.Observe(e,priorEffectivePhase,observationNow);
   var drafts=new List<EventPhase>();var order=2;
   foreach(var d in edit.CustomPhases)
   {
@@ -61,6 +64,7 @@ public sealed partial class CoreFoundationService
   if(target is null)throw new ValidationException("有効なフェーズは削除できません。先に別のフェーズを選択してください。");
   // Tombstones and new custom phases must not be saved before the old active row is cleared.
   foreach(var p in removed)p.DeletedAt=null;
+  CoreEventImportHistory.Observe(e,target,clock.GetUtcNow());
   await Switch(db,e,target,ct);
   foreach(var p in removed)p.DeletedAt=Utc(clock.GetUtcNow());
   e.ManualPhaseOverride=edit.ManualOverride;e.RowVersion++;
@@ -73,7 +77,8 @@ public sealed partial class CoreFoundationService
   foreach(var e in events)
   {
    if(e.Phases.Count(p=>p.IsActive)!=1)throw new InvalidOperationException("Event must have exactly one active phase.");
-   var target=Automatic(e,now);if(target.IsActive)continue;
+   var target=Automatic(e,now);var historyChanged=CoreEventImportHistory.Observe(e,target,now);
+   if(target.IsActive){if(historyChanged)e.RowVersion++;continue;}
    await Switch(db,e,target,ct);e.RowVersion++;Audit(db,"system","PhaseAutoActivated",target.Id);changed++;
   }
   await db.SaveChangesAsync(ct);await tx.CommitAsync(ct);return changed;

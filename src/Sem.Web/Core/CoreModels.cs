@@ -34,6 +34,9 @@ public sealed class SessionEvent
     // Compatibility visibility cache; the active Phases row is authoritative for phase kind.
     public string PhaseKind { get; set; } = "Hidden";
     public bool ManualPhaseOverride { get; set; }
+    // Server-only import guard state. Existing events remain unknown after migration.
+    public bool ImportHistoryKnown { get; set; }
+    public bool HasEverRegistrationPhase { get; set; }
     public List<EventPhase> Phases { get; set; } = [];
     public string CreatedAt { get; set; } = "";
     public long RowVersion { get; set; }

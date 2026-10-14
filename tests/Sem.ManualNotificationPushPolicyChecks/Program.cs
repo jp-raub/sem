@@ -31,7 +31,7 @@ try{
   await db.GetService<IMigrator>().MigrateAsync("20261014025716_AddManualNotificationAcceptance");
   foreach(var id in new[]{"admin","member","late"})db.Users.Add(new(){Id=id,UserName=id,Email=id+"@PRIVATE.invalid",DisplayName=id,Enabled=true,EmailConfirmed=true,SecurityStamp=id+"-stamp",IsAdmin=id=="admin"});
   var e=new SessionEvent{Id="event",Title="PRIVATE-EVENT",ScheduledDate="2099-01-01T00:00:00Z",CreatedAt="2026-10-01T00:00:00Z",ManualPhaseOverride=true};
-  e.Phases.Add(new(){Id="view",EventId="event",Kind="View",Name="View",IsActive=true});e.Phases.Add(new(){Id="hidden",EventId="event",Kind="Hidden",Name="Hidden"});db.SessionEvents.Add(e);
+  e.Phases.Add(new(){Id="view",EventId="event",Kind="View",Name="View",IsActive=true});e.Phases.Add(new(){Id="hidden",EventId="event",Kind="Hidden",Name="Hidden"});await LegacySessionEventSeed.AddAsync(db,e);
   db.EventSpectators.Add(new(){EventId="event",UserId="member",RegisteredBy="admin",RegisteredAt="2026-10-01T00:00:00Z"});
   db.PushDevices.Add(new(){Id="device",UserId="member",SecurityStamp="member-stamp",SessionHash="member-session",Endpoint="https://fcm.googleapis.com/PRIVATE",P256dh="PRIVATE-KEY",Auth="PRIVATE-AUTH"});
   db.Add(new ManualNotificationOperation{Id="legacy",EventId="event",ActorId="admin",RequestHash=new('A',64),PreviewFingerprint=new('B',64),Subject="old",Body="keep",RecipientCount=1,AcceptedAt=clock.Now.ToUnixTimeSeconds()});

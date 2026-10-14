@@ -142,12 +142,19 @@ public sealed partial class CoreFoundationService(IDbContextFactory<ApplicationD
         if (await db.Users.CountAsync(u => managers.Contains(u.Id) && u.Enabled && u.EmailConfirmed, ct) != managers.Length)
             throw new ValidationException("有効なイベント管理者を選択してください。");
         if (item is null) {
-            item = new() { CreatedAt = Utc(clock.GetUtcNow()), ManualPhaseOverride = edit.PhaseKind == "View" };
+            item = new() { CreatedAt = Utc(clock.GetUtcNow()), ManualPhaseOverride = edit.PhaseKind == "View", ImportHistoryKnown = true };
             item.Phases.Add(new() { EventId = item.Id, Kind = "Hidden", Name = "非表示", SortOrder = 0, IsActive = edit.PhaseKind == "Hidden" });
             item.Phases.Add(new() { EventId = item.Id, Kind = "View", Name = "閲覧", SortOrder = 1, IsActive = edit.PhaseKind == "View" });
             db.SessionEvents.Add(item);
             await CopyPartPresetsAsync(db,item.Id,ct);
-        } else if (item.PhaseKind != edit.PhaseKind) {
+        } else {
+            var observationNow = clock.GetUtcNow();
+            var priorEffectivePhase = item.ManualPhaseOverride
+                ? item.Phases.Single(p => p.IsActive)
+                : Automatic(item, observationNow);
+            CoreEventImportHistory.Observe(item, priorEffectivePhase, observationNow);
+        }
+        if (id is not null && item.PhaseKind != edit.PhaseKind) {
             foreach (var phase in item.Phases) phase.IsActive = false;
             await db.SaveChangesAsync(ct);
             item.Phases.Single(p => p.Kind == edit.PhaseKind).IsActive = true;

@@ -40,7 +40,7 @@ try{
  await using(var db=await factory.CreateDbContextAsync()){
   await db.GetService<IMigrator>().MigrateAsync("20261014074520_AddManualNotificationPushAdmission");
   foreach(var id in new[]{"admin","member","late"})db.Users.Add(new(){Id=id,UserName=id,Email=id+"@PRIVATE.invalid",DisplayName=id,Enabled=true,EmailConfirmed=true,SecurityStamp=id+"-stamp",IsAdmin=id=="admin"});
-  var e=new SessionEvent{Id="event",Title="PRIVATE-EVENT",ScheduledDate="2099-01-01T00:00:00Z",CreatedAt="2026-10-01T00:00:00Z",ManualPhaseOverride=true};e.Phases.Add(new(){Id="view",EventId="event",Kind="View",Name="View",IsActive=true});e.Phases.Add(new(){Id="hidden",EventId="event",Kind="Hidden",Name="Hidden"});db.SessionEvents.Add(e);
+  var e=new SessionEvent{Id="event",Title="PRIVATE-EVENT",ScheduledDate="2099-01-01T00:00:00Z",CreatedAt="2026-10-01T00:00:00Z",ManualPhaseOverride=true};e.Phases.Add(new(){Id="view",EventId="event",Kind="View",Name="View",IsActive=true});e.Phases.Add(new(){Id="hidden",EventId="event",Kind="Hidden",Name="Hidden"});await LegacySessionEventSeed.AddAsync(db,e);
   db.EventSpectators.Add(new(){EventId="event",UserId="member",RegisteredBy="admin",RegisteredAt="2026-10-01T00:00:00Z"});
   foreach(var id in new[]{"a","b"})db.PushDevices.Add(new(){Id=id,UserId="member",SecurityStamp="member-stamp",SessionHash="member-session",Endpoint="https://fcm.googleapis.com/PRIVATE-"+id,P256dh="PRIVATE-KEY",Auth="PRIVATE-AUTH"});
   db.Messages.Add(new(){Id="legacy-message",UserId="member",Title="keep",Body="legacy",Created=123,ReadAt=124});

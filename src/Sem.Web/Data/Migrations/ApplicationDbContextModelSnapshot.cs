@@ -1723,6 +1723,12 @@ namespace Sem.Web.Data.Migrations
                         .HasColumnType("TEXT")
                         .HasDefaultValue("units");
 
+                    b.Property<bool>("HasEverRegistrationPhase")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("ImportHistoryKnown")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Location")
                         .IsRequired()
                         .HasColumnType("TEXT");
