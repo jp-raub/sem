@@ -42,6 +42,17 @@ public sealed partial class CoreFoundationService
         var (e, actor, _, manager) = await ParticipantEvent(db, principal, id, ct);
         if (!manager) throw new UnauthorizedAccessException();
         var draft = ManualNotificationDraftPolicy.Normalize(subject, body);
+        var source = await BuildManualNotificationSource(db, e, actor, draft, ct);
+        await tx.CommitAsync(ct);
+        return source.Preview;
+    }
+
+    private sealed record ManualNotificationSource(ManualNotificationPreview Preview, string[] Recipients);
+
+    private async Task<ManualNotificationSource> BuildManualNotificationSource(ApplicationDbContext db,
+        SessionEvent e, ApplicationUser actor, ManualNotificationDraft draft, CancellationToken ct)
+    {
+        var id = e.Id;
         var performers = from part in db.SongParts.AsNoTracking()
             join song in db.Songs.AsNoTracking() on part.SongId equals song.Id
             join definition in db.EventPartDefinitions.AsNoTracking() on part.PartDefinitionId equals definition.Id
@@ -66,8 +77,7 @@ public sealed partial class CoreFoundationService
             EventId = id, EventTitle = e.Title, EventVersion = e.RowVersion,
             draft.Subject, draft.Body, Recipients = recipients
         }));
-        await tx.CommitAsync(ct);
-        return new(id, e.Title, e.RowVersion, draft.Subject, draft.Body, recipients.Length,
-            fingerprint, "新しいメッセージがあります");
+        return new(new(id, e.Title, e.RowVersion, draft.Subject, draft.Body, recipients.Length,
+            fingerprint, "新しいメッセージがあります"), recipients);
     }
 }

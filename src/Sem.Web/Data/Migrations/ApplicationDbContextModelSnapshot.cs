@@ -998,6 +998,93 @@ namespace Sem.Web.Data.Migrations
                     b.ToTable("EventSpectators");
                 });
 
+            modelBuilder.Entity("Sem.Web.Core.ManualNotificationOperation", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("AcceptedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ActorId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EventId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PreviewFingerprint")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("RecipientCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("RequestHash")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActorId");
+
+                    b.ToTable("ManualNotificationOperations", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ManualNotificationOperation_Count", "\"RecipientCount\">0");
+
+                            t.HasCheckConstraint("CK_ManualNotificationOperation_Hashes", "length(\"RequestHash\")=64 AND length(\"PreviewFingerprint\")=64");
+
+                            t.HasCheckConstraint("CK_ManualNotificationOperation_Text", "length(trim(\"Subject\")) BETWEEN 1 AND 80 AND length(trim(\"Body\")) BETWEEN 1 AND 2000");
+                        });
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.ManualNotificationRecipient", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EventId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OperationId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PushState")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("EventId", "OperationId");
+
+                    b.HasIndex("OperationId", "UserId")
+                        .IsUnique();
+
+                    b.ToTable("ManualNotificationRecipients", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ManualNotificationRecipient_Id", "length(\"Id\")=64");
+
+                            t.HasCheckConstraint("CK_ManualNotificationRecipient_Pending", "\"PushState\"='Pending'");
+                        });
+                });
+
             modelBuilder.Entity("Sem.Web.Core.NotificationReservation", b =>
                 {
                     b.Property<string>("EventId")
@@ -2592,6 +2679,43 @@ namespace Sem.Web.Data.Migrations
                     b.HasOne("Sem.Web.Data.ApplicationUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.ManualNotificationOperation", b =>
+                {
+                    b.HasOne("Sem.Web.Data.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("ActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Sem.Web.Core.SessionEvent", null)
+                        .WithMany()
+                        .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.ManualNotificationRecipient", b =>
+                {
+                    b.HasOne("Sem.Web.Runtime.Message", null)
+                        .WithMany()
+                        .HasForeignKey("Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Sem.Web.Data.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Sem.Web.Core.ManualNotificationOperation", null)
+                        .WithMany()
+                        .HasForeignKey("EventId", "OperationId")
+                        .HasPrincipalKey("EventId", "Id")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
