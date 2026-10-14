@@ -11,7 +11,8 @@
 <p id="part-start-error" role="alert">@Error</p><p id="part-start-message" role="status">@Message</p>
 @if(View is not null){
  <section id="part-start-settings" data-interactive="@Ready.ToString().ToLowerInvariant()" data-connected="@View.DeliveryConnected.ToString().ToLowerInvariant()">
- @if(!View.DeliveryConnected){<p role="status">現在は設定の保存のみ対応しています。ONにしても、まだ開始通知は送信されません。</p>}
+ <p>実Startの記録後、現在もON・閲覧可能・有効な端末登録である場合に送信します。実Startから10分後と実Endの早い方まで有効です。ON前の開始は遡って通知しません。配信サービス受理と端末受信は別です。</p>
+ @if(!View.PushConfigured){<p role="status">ホストのPush配信鍵は未設定です。この状態では送信しません。</p>}
  <button id="part-start-refresh" disabled="@(Busy||!Ready)" @onclick="Load">最新状態を取得</button>
  @if(View.Parts.Length==0){<p>選択できるタイムパートはありません。</p>}
  @foreach(var part in View.Parts){<p><button role="switch" aria-checked="@part.Enabled.ToString().ToLowerInvariant()" aria-label="@(part.Title+"の開始通知")" data-part-start="@part.PartId" disabled="@(Busy||!Ready)" @onclick="()=>Toggle(part)">@part.Title：@(part.Enabled?"ON":"OFF")</button></p>}

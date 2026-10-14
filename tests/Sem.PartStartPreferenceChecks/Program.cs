@@ -32,7 +32,7 @@ try{
  var table=await core.ReadTimetableAsync(Who("admin"),id);var talk=Guid.NewGuid().ToString();await core.SaveTimetableAsync(Who("admin"),id,new(table.RowVersion,table.RoundStarts,table.ClockFormat,table.DurationFormat,table.SongIcon,null,[..table.Parts,new(talk,"Transition",null,"Talk",30)]));
  var audit=await AuditCount();var view=await core.ReadPartStartPreferencesAsync(Who("member"),id);
  Check(view.Parts.Length==3&&view.Parts.Select(x=>x.Kind).ToHashSet().SetEquals(["Opening","Song","Transition"]),"Member can select any opening/song/transition without a performance assignment");
- Check(view.Parts.All(x=>!x.Enabled&&x.Version==0)&&!view.DeliveryConnected,"All choices default OFF and truthfully show disconnected delivery");
+ Check(view.Parts.All(x=>!x.Enabled&&x.Version==0)&&view.DeliveryConnected&&!view.PushConfigured,"All choices default OFF and truthfully show connected with keys unset delivery");
  await using(var db=await factory.CreateDbContextAsync())Check(await db.Set<PartStartPreference>().CountAsync()==0&&await AuditCount()==audit,"Read of defaults writes no preference or audit");
  await core.SavePartStartPreferenceAsync(Who("member"),id,new(talk,false,0,view.EventVersion));Check(await AuditCount()==audit,"Absent OFF no-op does not create audit or generation");
  await core.SavePartStartPreferenceAsync(Who("member"),id,new(talk,true,0,view.EventVersion));var enabled=(await core.ReadPartStartPreferencesAsync(Who("member"),id)).Parts.Single(x=>x.PartId==talk);
