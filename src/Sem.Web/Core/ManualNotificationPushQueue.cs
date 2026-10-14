@@ -30,7 +30,7 @@ public sealed class ManualNotificationPushDelivery
 }
 public sealed record ManualNotificationPushPreparationResult(string State, int DeviceCount = 0, bool Replayed = false);
 public sealed record ManualNotificationPushClaim(string DeliveryId, string Token, long LeaseUntil, int Attempt);
-public enum ManualNotificationPushCompletion { ProviderAccepted, RetryableNotAccepted, AcceptanceUnknown, SubscriptionGone, PermanentFailure }
+public enum ManualNotificationPushCompletion { ProviderAccepted, RetryableNotAccepted, AcceptanceUnknown, SubscriptionGone, PermanentFailure, FinalGateRejected, ExpiredBeforeSend }
 
 // Infrastructure only: no DI, HTTP, scanning worker or transport invocation.
 public sealed class ManualNotificationPushQueue(IDbContextFactory<ApplicationDbContext> factory, TimeProvider clock)
@@ -142,6 +142,10 @@ public sealed class ManualNotificationPushQueue(IDbContextFactory<ApplicationDbC
                 End(row, "Suppressed", "SubscriptionGone");break;
             case ManualNotificationPushCompletion.PermanentFailure:
                 End(row, "Failed", "PermanentFailure");break;
+            case ManualNotificationPushCompletion.FinalGateRejected:
+                End(row, "Suppressed", "FinalSnapshotRejected");break;
+            case ManualNotificationPushCompletion.ExpiredBeforeSend:
+                End(row, "Expired", "TooLateToSend");break;
             case ManualNotificationPushCompletion.RetryableNotAccepted:
                 var due = seconds + (15L << Math.Min(row.Attempts - 1, 4));
                 if (row.Attempts >= MaxAttempts) End(row, "Failed", "RetryLimit");
