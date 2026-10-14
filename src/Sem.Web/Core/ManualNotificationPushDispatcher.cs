@@ -1,3 +1,4 @@
+using System.Net.Http.Headers;
 using Microsoft.EntityFrameworkCore;
 using Sem.Web.Data;
 using Sem.Web.Runtime;
@@ -50,11 +51,14 @@ public sealed class ManualNotificationPushDispatcher(IDbContextFactory<Applicati
             return new(await FinishAsync(claim, ManualNotificationPushCompletion.SubscriptionGone) ? "SubscriptionGone" : "OutcomeNotRecorded");
         } catch (WebPushException ex) when ((int)ex.StatusCode is 400 or 401 or 403 or 413) {
             return new(await FinishAsync(claim, ManualNotificationPushCompletion.PermanentFailure) ? "PermanentFailure" : "OutcomeNotRecorded");
+        } catch (WebPushException ex) when ((int)ex.StatusCode == 429) {
+            // Explicit provider rate-limit rejection establishes nonacceptance, unlike a lost response.
+            return new(await FinishAsync(claim, ManualNotificationPushCompletion.RetryableNotAccepted, RetryNotBefore(ex)) ? "RateLimited" : "OutcomeNotRecorded");
         } catch (OperationCanceledException) when (ct.IsCancellationRequested) {
             await FinishAsync(claim, invoked ? ManualNotificationPushCompletion.AcceptanceUnknown : ManualNotificationPushCompletion.RetryableNotAccepted);
             throw;
         } catch (Exception) {
-            // A timeout, network failure, 429/5xx or unexpected failure after invocation
+            // A timeout, network failure, 5xx or unexpected failure after invocation
             // cannot establish nonacceptance. Do not retry merely because a task threw.
             var completion = invoked ? ManualNotificationPushCompletion.AcceptanceUnknown : ManualNotificationPushCompletion.RetryableNotAccepted;
             return new(await FinishAsync(claim, completion) ? (invoked ? "AcceptanceUnknown" : "DeferredBeforeSend") : "OutcomeNotRecorded");
@@ -77,12 +81,24 @@ public sealed class ManualNotificationPushDispatcher(IDbContextFactory<Applicati
         await tx.CommitAsync(ct);
         return new(device, new(subject, "新しいメッセージがあります", "/?messages=1", recipient.Id, checked(row.ExpiresAt * 1000)), row.LeaseUntil!.Value);
     }
-    private async Task<bool> FinishAsync(ManualNotificationPushClaim claim, ManualNotificationPushCompletion result)
+    private long? RetryNotBefore(WebPushException ex)
+    {
+        // Never persist/log provider headers. Missing, malformed or multiple values use bounded local backoff.
+        if (!ex.Headers.TryGetValues("Retry-After", out var raw)) return null;
+        var values = raw.Take(2).ToArray();
+        if (values.Length != 1 || values[0].Length > 128 || !RetryConditionHeaderValue.TryParse(values[0], out var retry)) return null;
+        if (retry.Date is { } date) return Math.Max(0, date.ToUnixTimeSeconds());
+        if (retry.Delta is not { } delta || delta < TimeSpan.Zero) return null;
+        // Any wait above the original maximum600s is necessarily past this job's deadline.
+        var wait = (long)Math.Min(601, Math.Ceiling(delta.TotalSeconds));
+        return (clock.GetUtcNow().ToUnixTimeMilliseconds() + wait * 1000 + 999) / 1000;
+    }
+    private async Task<bool> FinishAsync(ManualNotificationPushClaim claim, ManualNotificationPushCompletion result, long? notBeforeUnixSeconds = null)
     {
         // Save outcome even if the request cancellation fired after external I/O.
         // If persistence fails, propagate: lease expiry will become Unknown, not resend.
         using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-        return await queue.CompleteAsync(claim.DeliveryId, claim.Token, result, cleanup.Token);
+        return await queue.CompleteAsync(claim.DeliveryId, claim.Token, result, cleanup.Token, notBeforeUnixSeconds);
     }
     private async Task RemoveUnchangedBindingAsync(ManualNotificationPushClaim claim)
     {

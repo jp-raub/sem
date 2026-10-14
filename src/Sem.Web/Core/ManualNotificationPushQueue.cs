@@ -138,9 +138,11 @@ public sealed class ManualNotificationPushQueue(IDbContextFactory<ApplicationDbC
         await tx.CommitAsync(ct);
         return allowed;
     }
-    public async Task<bool> CompleteAsync(string deliveryId, string token, ManualNotificationPushCompletion completion, CancellationToken ct = default)
+    public async Task<bool> CompleteAsync(string deliveryId, string token, ManualNotificationPushCompletion completion, CancellationToken ct = default, long? notBeforeUnixSeconds = null)
     {
         if (!HashId(deliveryId) || !Guid.TryParseExact(token, "N", out _) || !Enum.IsDefined(completion)) return false;
+        if (notBeforeUnixSeconds is < 0 || notBeforeUnixSeconds.HasValue && completion != ManualNotificationPushCompletion.RetryableNotAccepted)
+            throw new ArgumentOutOfRangeException(nameof(notBeforeUnixSeconds));
         await using var db = await factory.CreateDbContextAsync(ct);
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         var row = await db.Set<ManualNotificationPushDelivery>().SingleOrDefaultAsync(x => x.Id == deliveryId, ct);
@@ -160,7 +162,7 @@ public sealed class ManualNotificationPushQueue(IDbContextFactory<ApplicationDbC
             case ManualNotificationPushCompletion.ExpiredBeforeSend:
                 End(row, "Expired", "TooLateToSend");break;
             case ManualNotificationPushCompletion.RetryableNotAccepted:
-                var due = seconds + (15L << Math.Min(row.Attempts - 1, 4));
+                var due = Math.Max(seconds + (15L << Math.Min(row.Attempts - 1, 4)), notBeforeUnixSeconds ?? 0);
                 if (row.Attempts >= MaxAttempts) End(row, "Failed", "RetryLimit");
                 else if (due >= row.ExpiresAt) End(row, "Expired", "RetryPastDeadline");
                 else if (row.LeaseUntil <= seconds) End(row, "Unknown", "LeaseElapsed");
