@@ -20,7 +20,8 @@
     [Parameter] public string Selected { get; set; } = "main";
     EventTabsView? View; IJSObjectReference? Module; DotNetObjectReference<EventTabNavigation>? Sink;
     readonly CancellationTokenSource Stop = new();
-    readonly string RootId = "event-tabs-" + Guid.NewGuid().ToString("N");
+    const string RootId = "event-tabs"; // Stable across prerender and interactive hydration.
+    readonly string Owner = Guid.NewGuid().ToString("N");
     string LoadedId = "", LoadedSelected = "", Error = ""; long Generation; bool Ready, Bound, Disposed, Navigating;
     string TabId(string kind) => "event-tab-" + kind;
     static string Label(string kind) => kind switch { "main"=>"イベント", "roster"=>"参加者名簿", "checkin"=>"受付", "progress"=>"当日進行", "notifications"=>"通知", _=>"" };
@@ -43,7 +44,7 @@
             if (Disposed || generation != Generation || View is null) return;
             Sink ??= DotNetObjectReference.Create(this);
             var restore = Selected == "main" && !Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(new Uri(Navigation.Uri).Query).ContainsKey("tab");
-            var target = await Module.InvokeAsync<string?>("bindTabs", RootId, Sink, View.UserId, EventId, View.Available, Selected, restore);
+            var target = await Module.InvokeAsync<string?>("bindTabs", RootId, Sink, View.UserId, EventId, View.Available, Selected, restore, Owner);
             if (Disposed || generation != Generation) return;
             Ready = true; StateHasChanged();
             if (target is not null && target != Selected) await Select(target);
@@ -68,7 +69,7 @@
     public async ValueTask DisposeAsync()
     {
         Disposed = true; Stop.Cancel();
-        if (Module is not null) { try { await Module.InvokeVoidAsync("unbindTabs", RootId); await Module.DisposeAsync(); } catch (JSDisconnectedException) { } }
+        if (Module is not null) { try { await Module.InvokeVoidAsync("unbindTabs", RootId, Owner); await Module.DisposeAsync(); } catch (JSDisconnectedException) { } }
         Sink?.Dispose(); Stop.Dispose();
     }
 }

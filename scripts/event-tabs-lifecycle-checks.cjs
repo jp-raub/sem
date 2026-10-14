@@ -21,6 +21,7 @@ const server=http.createServer((req,res)=>{if(req.url==='/'){res.setHeader('Cont
  ok(await bind('u','other','main',true)==='main','Another event has independent state');
  await page.evaluate(()=>sessionStorage.setItem('sem.event-tab.v1:u:e','checkin'));ok(await bind('u','e','main',true,['main','roster'])==='main','Unavailable remembered manager tab falls back to main');
  await page.evaluate(()=>calls.length=0);await page.locator('#event-tab-roster').focus();await page.keyboard.press('ArrowRight');ok(await page.evaluate(()=>calls.at(-1)[1])==='main','Keyboard never visits excluded manager tab');
+ await page.evaluate(()=>{mod.bindTabs('tabs',sink,'u','e',['main','roster'],'main',false,'new-owner');mod.unbindTabs('tabs','old-owner');calls.length=0;});await page.locator('#event-tab-main').focus();await page.keyboard.press('ArrowRight');ok(await page.evaluate(()=>calls.length===1),'Old owner disposal cannot remove new active host listener');
  await page.evaluate(()=>mod.unbindTabs('tabs'));await page.evaluate(()=>calls.length=0);await page.keyboard.press('ArrowRight');ok(await page.evaluate(()=>calls.length===0),'Disposed tab host has no live key listener');
  await page.evaluate(()=>Object.defineProperty(window,'sessionStorage',{get(){throw new Error('blocked storage');},configurable:true}));ok(await bind()===null,'Blocked storage leaves manual buttons usable');
  console.log('Event tabs lifecycle checks passed: '+passed);
