@@ -55,6 +55,23 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     protected override void OnModelCreating(ModelBuilder b)
     {
         base.OnModelCreating(b);
+        b.Entity<ManualNotificationPushPreparation>().HasKey(x => x.RecipientId);
+        b.Entity<ManualNotificationPushPreparation>().HasOne<ManualNotificationRecipient>().WithOne()
+            .HasForeignKey<ManualNotificationPushPreparation>(x => x.RecipientId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<ManualNotificationPushPreparation>().ToTable("ManualNotificationPushPreparations", t => {
+            t.HasCheckConstraint("CK_ManualPushPreparation_Count", "\"DeviceCount\">=0 AND ((\"Outcome\"='Prepared' AND \"DeviceCount\">0) OR (\"Outcome\"<>'Prepared' AND \"DeviceCount\"=0))");
+        });
+        b.Entity<ManualNotificationPushDelivery>().HasOne<ManualNotificationPushPreparation>().WithMany()
+            .HasForeignKey(x => x.RecipientId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<ManualNotificationPushDelivery>().HasIndex(x => new { x.RecipientId, x.DeviceId }).IsUnique();
+        b.Entity<ManualNotificationPushDelivery>().HasIndex(x => new { x.State, x.DueAt });
+        b.Entity<ManualNotificationPushDelivery>().ToTable("ManualNotificationPushDeliveries", t => {
+            t.HasCheckConstraint("CK_ManualPushDelivery_Digests", "length(\"Id\")=64 AND length(\"BindingFingerprint\")=64");
+            t.HasCheckConstraint("CK_ManualPushDelivery_State", "\"State\" IN ('Pending','Claimed','Unknown','Accepted','Expired','Suppressed','Failed')");
+            t.HasCheckConstraint("CK_ManualPushDelivery_Attempts", "\"Attempts\" BETWEEN 0 AND 5");
+            t.HasCheckConstraint("CK_ManualPushDelivery_Claim", "(\"State\"='Claimed' AND \"Claim\" IS NOT NULL AND \"LeaseUntil\" IS NOT NULL AND \"Attempts\">0 AND \"LeaseUntil\"<=\"ExpiresAt\") OR (\"State\"<>'Claimed' AND \"Claim\" IS NULL AND \"LeaseUntil\" IS NULL)");
+            t.HasCheckConstraint("CK_ManualPushDelivery_Accepted", "(\"State\"='Accepted' AND \"ProviderAcceptedAt\" IS NOT NULL) OR (\"State\"<>'Accepted' AND \"ProviderAcceptedAt\" IS NULL)");
+        });
         b.Entity<ManualNotificationPushActivation>().Property(x => x.Epoch).IsConcurrencyToken();
         b.Entity<ManualNotificationPushActivation>().ToTable("ManualNotificationPushActivations", t => {
             t.HasCheckConstraint("CK_ManualPushActivation_State", "\"Id\"=1 AND \"Epoch\">0 AND \"Enabled\" IN (0,1)");

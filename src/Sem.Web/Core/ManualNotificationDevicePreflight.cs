@@ -28,29 +28,9 @@ public sealed class ManualNotificationDevicePreflight(IDbContextFactory<Applicat
     internal static async Task<ManualNotificationDevicePreflightResult> ReadInTransactionAsync(ApplicationDbContext db,
         DateTimeOffset now, string recipientId, string deviceId, string expectedBindingFingerprint, CancellationToken ct)
     {
-        // Start at an immutable, accepted snapshot; never discover additional recipients.
-        var snapshot = await db.Set<ManualNotificationRecipient>().AsNoTracking()
-            .Where(x => x.Id == recipientId).Select(x => new { x.Id, x.EventId, x.OperationId, x.UserId }).SingleOrDefaultAsync(ct);
-        if (snapshot is null || !await db.Set<ManualNotificationOperation>().AsNoTracking()
-            .AnyAsync(x => x.Id == snapshot.OperationId && x.EventId == snapshot.EventId, ct))
-            return new("MissingAcceptedRecipient");
-        if (!await db.Messages.AsNoTracking().AnyAsync(x => x.Id == snapshot.Id && x.UserId == snapshot.UserId, ct))
-            return new("MissingInbox");
-        // Authentication email/profile/answer/message content is not projected into this checker or its result.
-        var user = await db.Users.AsNoTracking().Where(x => x.Id == snapshot.UserId)
-            .Select(x => new ApplicationUser { Id = x.Id, Enabled = x.Enabled, EmailConfirmed = x.EmailConfirmed,
-                IsAdmin = x.IsAdmin, SecurityStamp = x.SecurityStamp }).SingleOrDefaultAsync(ct);
-        if (user is null || !user.Enabled || !user.EmailConfirmed) return new("AccountUnavailable");
-        var e = await db.SessionEvents.AsNoTracking().Include(x => x.Admins).Include(x => x.Phases)
-            .SingleOrDefaultAsync(x => x.Id == snapshot.EventId, ct);
-        if (e is null || !CoreFoundationService.PushViewAllowed(e, user, now)) return new("ViewingDenied");
-        var registered = await db.EventSpectators.AsNoTracking().AnyAsync(x => x.EventId == snapshot.EventId && x.UserId == user.Id, ct)
-            || await (from part in db.SongParts.AsNoTracking()
-                      join song in db.Songs.AsNoTracking() on part.SongId equals song.Id
-                      join definition in db.EventPartDefinitions.AsNoTracking() on part.PartDefinitionId equals definition.Id
-                      where part.EventId == snapshot.EventId && song.EventId == snapshot.EventId && definition.EventId == snapshot.EventId
-                          && song.DeletedAt == null && definition.DeletedAt == null && part.AssignedUserId == user.Id
-                      select part.Id).AnyAsync(ct);
+        var (facts, user) = await ReadRecipientInTransactionAsync(db, now, recipientId, ct);
+        if (user is null) return facts;
+        var registered = facts.CurrentlyRegistered;
         var device = await db.PushDevices.AsNoTracking().SingleOrDefaultAsync(x => x.Id == deviceId && x.UserId == user.Id, ct);
         if (device is null) return new("DeviceUnavailable", registered);
         if (!await PushBinding.Valid(db, user, device, ct)) return new("BindingInvalid", registered);
@@ -59,4 +39,33 @@ public sealed class ManualNotificationDevicePreflight(IDbContextFactory<Applicat
         // No deadline, TTL, dispatch lease, device delivery row or payload is created here.
         return new("PolicyPending", registered);
     }
+    internal static async Task<(ManualNotificationDevicePreflightResult Facts, ApplicationUser? User)> ReadRecipientInTransactionAsync(
+        ApplicationDbContext db, DateTimeOffset now, string recipientId, CancellationToken ct)
+    {
+        // Start at an immutable, accepted snapshot; never discover additional recipients.
+        var snapshot = await db.Set<ManualNotificationRecipient>().AsNoTracking()
+            .Where(x => x.Id == recipientId).Select(x => new { x.Id, x.EventId, x.OperationId, x.UserId }).SingleOrDefaultAsync(ct);
+        if (snapshot is null || !await db.Set<ManualNotificationOperation>().AsNoTracking()
+            .AnyAsync(x => x.Id == snapshot.OperationId && x.EventId == snapshot.EventId, ct))
+            return (new("MissingAcceptedRecipient"), null);
+        if (!await db.Messages.AsNoTracking().AnyAsync(x => x.Id == snapshot.Id && x.UserId == snapshot.UserId, ct))
+            return (new("MissingInbox"), null);
+        // Authentication email/profile/answer/message content is not projected into this checker or its result.
+        var user = await db.Users.AsNoTracking().Where(x => x.Id == snapshot.UserId)
+            .Select(x => new ApplicationUser { Id = x.Id, Enabled = x.Enabled, EmailConfirmed = x.EmailConfirmed,
+                IsAdmin = x.IsAdmin, SecurityStamp = x.SecurityStamp }).SingleOrDefaultAsync(ct);
+        if (user is null || !user.Enabled || !user.EmailConfirmed) return (new("AccountUnavailable"), null);
+        var e = await db.SessionEvents.AsNoTracking().Include(x => x.Admins).Include(x => x.Phases)
+            .SingleOrDefaultAsync(x => x.Id == snapshot.EventId, ct);
+        if (e is null || !CoreFoundationService.PushViewAllowed(e, user, now)) return (new("ViewingDenied"), null);
+        var registered = await db.EventSpectators.AsNoTracking().AnyAsync(x => x.EventId == snapshot.EventId && x.UserId == user.Id, ct)
+            || await (from part in db.SongParts.AsNoTracking()
+                      join song in db.Songs.AsNoTracking() on part.SongId equals song.Id
+                      join definition in db.EventPartDefinitions.AsNoTracking() on part.PartDefinitionId equals definition.Id
+                      where part.EventId == snapshot.EventId && song.EventId == snapshot.EventId && definition.EventId == snapshot.EventId
+                          && song.DeletedAt == null && definition.DeletedAt == null && part.AssignedUserId == user.Id
+                      select part.Id).AnyAsync(ct);
+        return (new("PolicyPending", registered), user);
+    }
+
 }
