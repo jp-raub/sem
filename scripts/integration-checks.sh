@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+set -euo pipefail
+mkdir -p verification
+bash -n scripts/integration-checks.sh
+printf 'Checked commit: %s\nTree: %s\n' "$(git rev-parse HEAD)" "$(git rev-parse HEAD^{tree})" | tee verification/source.txt
+if [[ ! -f src/Sem.Web/Sem.Web.csproj ]]; then
+  if [[ -n $(git log -1 --format=%H -- src/Sem.Web/Sem.Web.csproj) ]]; then
+    echo 'Application project was removed from a product tree.' >&2; exit 1
+  fi
+  echo 'CI bootstrap only: no application exists at this tree; no application acceptance claimed.' | tee verification/bootstrap.txt
+  exit 0
+fi
+# Use default NuGet auditing. Historical dependency warnings are recorded, not suppressed.
+dotnet build src/Sem.Web/Sem.Web.csproj -c Release 2>&1 | tee verification/build.log
+suites=0
+shopt -s nullglob
+for project in tests/*/*.csproj; do
+  name=$(basename "$(dirname "$project")")
+  dotnet build "$project" -c Release 2>&1 | tee "verification/${name}-build.log"
+  # Tests may use synthetic loopback fixtures but cannot reach an external provider.
+  output_type=$(dotnet msbuild "$project" -getProperty:OutputType -nologo)
+  command=run; project_flag=--project
+  if [[ $output_type != Exe && $output_type != WinExe ]]; then command=test; project_flag=; fi
+  # Drop root/capabilities/supplementary groups and forbid privilege escalation.
+  sudo -E unshare --net bash -c 'set -euo pipefail; ip link set lo up; exec setpriv --reuid="$2" --regid=65534 --clear-groups --no-new-privs --bounding-set=-all --inh-caps=-all --ambient-caps=-all "$3" "$4" ${5:+"$5"} "$1" -c Release --no-build --no-restore' bash "$project" "$(id -u)" "$(command -v dotnet)" "$command" "$project_flag" 2>&1 | tee "verification/${name}.log"
+  suites=$((suites+1))
+done
+if [[ $suites -eq 0 ]]; then
+ if [[ -n $(git log -1 --format=%H -- tests) ]]; then
+  echo 'Previously present test suites disappeared.' >&2; exit 1
+ fi
+ echo 'Historical tree has no dedicated .NET suite; build and Docker smoke only.' | tee verification/suites.txt
+else
+ printf 'All %s .NET suites passed.\n' "$suites" | tee verification/suites.txt
+fi
+dotnet publish src/Sem.Web/Sem.Web.csproj -c Release --no-build -o /tmp/sem-integration-publish 2>&1 | tee verification/publish.log
+docker build --platform linux/amd64 -t sem-integration:check -f deploy/Dockerfile . 2>&1 | tee verification/docker-build.log
+docker volume create sem-integration-data
+cleanup() {
+ docker logs sem-integration > verification/storage.log 2>&1 || true
+ docker rm -f sem-integration >/dev/null 2>&1 || true
+ docker volume rm sem-integration-data >/dev/null 2>&1 || true
+}
+trap cleanup EXIT
+# Disposable empty storage only: no host secrets, SMTP provider, Push keys or external data.
+docker run -d --name sem-integration --network none --cap-drop ALL --security-opt no-new-privileges:true \
+ -v sem-integration-data:/data sem-integration:check
+ready() {
+ for n in $(seq 1 60); do
+  if timeout 5s docker exec sem-integration bash -c 'exec 3<>/dev/tcp/127.0.0.1/8080; printf "GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n" >&3; cat <&3' > verification/ready.json && grep -q '^HTTP/1.1 200' verification/ready.json && grep -q storage-ready verification/ready.json; then
+   return 0
+  fi
+  sleep 1
+ done
+ return 1
+}
+ready
+cp verification/ready.json verification/initial-ready.json
+docker restart sem-integration >/dev/null
+sleep 2
+ready
+cp verification/ready.json verification/restart-ready.json
+echo 'Isolated Docker empty storage initial start/restart passed; no browser/device/production acceptance.' | tee verification/smoke.txt
