@@ -5,7 +5,7 @@ module.exports=async({p,g,ok})=>{
  const fixture=(await api('workspace')).body.events.find(e=>e.title==='Profile-link native fixture');if(!fixture)throw Error('Profile-link event missing');
  const today=new Date().toISOString();const created=await api('event',{title:'Native tab host <img src=x>',description:'Synthetic overview',location:'Synthetic hall',scheduledDate:today,opensAt:null,announcementMessage:'',phaseKind:'View',managerIds:[],rowVersion:0});if(created.status!==200)throw Error('Native day event creation failed');
  const a=await g.context().newPage(),m=await p.context().newPage(),errors=[];for(const page of [a,m])page.on('pageerror',e=>errors.push(e.message));
- const ready=async page=>{await page.locator('[data-event-tabs-ready=true]').waitFor();const error=await page.locator('#event-tabs-error').innerText();if(error)throw Error('Tab binding: '+error);};
+ const ready=async page=>{const pathname=new URL(page.url()).pathname;const expected=pathname.endsWith('/participants')?'roster':pathname.endsWith('/reception')?'checkin':pathname.endsWith('/progress')?'progress':pathname.endsWith('/notification-plan')?'notifications':'main';await page.waitForFunction(expected=>{const root=document.querySelector('[role=tablist][data-event-tabs-ready=true]');return root?.querySelector('[role=tab][aria-selected=true]')?.dataset.eventTab===expected;},expected);const error=await page.locator('#event-tabs-error').innerText();if(error)throw Error('Tab binding: '+error);};
  const selected=page=>page.locator('[role=tab][aria-selected=true]').getAttribute('data-event-tab');
  try{
   await a.setViewportSize({width:390,height:844});await a.goto(origin+'/events/'+fixture.id);await ready(a);
