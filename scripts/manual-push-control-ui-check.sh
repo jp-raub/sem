@@ -22,7 +22,7 @@ dotnet publish src/Sem.Web -c Release -o "$ROOT/publish" > verification/manual-u
 openssl req -x509 -newkey rsa:2048 -nodes -keyout "$ROOT/key.pem" -out "$ROOT/cert.pem" -days 1 -subj '/CN=localhost' >/dev/null 2>&1
 python3 scripts/smtp-fixture.py > verification/manual-ui-smtp.log 2>&1 &
 SMTP_PID=$!
-ASPNETCORE_URLS=http://127.0.0.1:18080 ASPNETCORE_ENVIRONMENT=Production \
+ASPNETCORE_URLS=http://127.0.0.1:18080 ASPNETCORE_ENVIRONMENT=Production Push__PublicKey= Push__PrivateKey= \
 Sem__PublicUrl=https://localhost:18443/ Sem__TrustedProxies__0=127.0.0.1 Sem__DataDirectory="$ROOT/runtime" \
 Sem__BootstrapSecret=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA \
 Smtp__Host=127.0.0.1 Smtp__Port=2525 Smtp__From=fixture@example.test Smtp__Tls=None Smtp__AllowInsecureLocalTest=true \
