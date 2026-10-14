@@ -24,6 +24,14 @@ public static class CoreEndpoints
                     if (size is { IsReadOnly: false }) size.MaxRequestBodySize = 65536;
                     await csrf.ValidateRequestAsync(ctx);
                 }
+                if (action == "manual-notification-context")
+                {
+                    if (post) { ctx.Response.StatusCode = 405; return; }
+                    var view = await service.ReadEventTabsAsync(ctx.User, ctx.Request.Query["id"].ToString(), ctx.RequestAborted);
+                    if (!view.Available.Contains("notifications")) throw new UnauthorizedAccessException();
+                    await ctx.Response.WriteAsJsonAsync(new ManualNotificationComposerContext(view.UserId, view.EventId, view.Title));
+                    return;
+                }
                 if (action is "manual-notification-preview" or "manual-notification-accept")
                 {
                     if (!post) { ctx.Response.StatusCode = 405; return; }

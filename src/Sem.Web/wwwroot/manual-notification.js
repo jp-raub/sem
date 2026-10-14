@@ -19,3 +19,17 @@ export async function post(action, eventId, actorId, payload) {
         return { status: 200, value: await response.json() };
     } finally { clearTimeout(timer); }
 }
+
+// Current-cookie authority is re-read even when a long-lived Blazor circuit still has an older principal.
+export async function context(eventId) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 25000);
+    try {
+        const response = await fetch('/api/core/manual-notification-context?' + new URLSearchParams({ id: eventId }), {
+            cache: 'no-store', redirect: 'error', signal: controller.signal
+        });
+        if (response.status === 403) return { status: 403, value: null };
+        if (response.status !== 200) throw new Error('Current authority unavailable');
+        return { status: 200, value: await response.json() };
+    } finally { clearTimeout(timer); }
+}
