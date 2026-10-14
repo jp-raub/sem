@@ -57,6 +57,6 @@ public static class DeploymentConfiguration
     {
         await using var scope = app.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        await db.Database.EnsureCreatedAsync();
+        await SqliteStorageInitializer.InitializeAsync(db);
     }
 }

@@ -10,8 +10,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace Sem.Web.Migrations
 {
-    [DbContext(typeof(ApplicationDbContext))]
-    [Migration("00000000000000_CreateIdentitySchema")]
+    // Unused template scaffold: the deployed external test used EnsureCreated.
+    // Not discoverable; databases carrying this old history require explicit review.
     partial class CreateIdentitySchema
     {
         /// <inheritdoc />
