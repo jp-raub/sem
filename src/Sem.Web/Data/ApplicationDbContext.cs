@@ -55,6 +55,22 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     protected override void OnModelCreating(ModelBuilder b)
     {
         base.OnModelCreating(b);
+        b.Entity<ManualNotificationOperation>().HasAlternateKey(x => new { x.EventId, x.Id });
+        b.Entity<ManualNotificationOperation>().HasOne<SessionEvent>().WithMany().HasForeignKey(x => x.EventId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<ManualNotificationOperation>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.ActorId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<ManualNotificationOperation>().ToTable("ManualNotificationOperations", t => {
+            t.HasCheckConstraint("CK_ManualNotificationOperation_Hashes", "length(\"RequestHash\")=64 AND length(\"PreviewFingerprint\")=64");
+            t.HasCheckConstraint("CK_ManualNotificationOperation_Text", "length(trim(\"Subject\")) BETWEEN 1 AND 80 AND length(trim(\"Body\")) BETWEEN 1 AND 2000");
+            t.HasCheckConstraint("CK_ManualNotificationOperation_Count", "\"RecipientCount\">0");
+        });
+        b.Entity<ManualNotificationRecipient>().HasOne<ManualNotificationOperation>().WithMany().HasForeignKey(x => new { x.EventId, x.OperationId }).HasPrincipalKey(x => new { x.EventId, x.Id }).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<ManualNotificationRecipient>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<ManualNotificationRecipient>().HasOne<Message>().WithMany().HasForeignKey(x => x.Id).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<ManualNotificationRecipient>().HasIndex(x => new { x.OperationId, x.UserId }).IsUnique();
+        b.Entity<ManualNotificationRecipient>().ToTable("ManualNotificationRecipients", t => {
+            t.HasCheckConstraint("CK_ManualNotificationRecipient_Id", "length(\"Id\")=64");
+            t.HasCheckConstraint("CK_ManualNotificationRecipient_Pending", "\"PushState\"='Pending'");
+        });
         b.Entity<EventParticipantQr>().HasKey(x=>new{x.EventId,x.UserId});
         b.Entity<EventParticipantQr>().Property(x=>x.RowVersion).IsConcurrencyToken();
         b.Entity<EventParticipantQr>().HasIndex(x=>x.TokenHash).IsUnique();
