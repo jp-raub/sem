@@ -10,7 +10,7 @@
 <NavigationLock ConfirmExternalNavigation="@Editing" OnBeforeInternalNavigation="PreventUnsaved" />
 <p id="timetable-error" role="alert">@Error</p><p id="timetable-message" role="status">@Message</p>
 @if(Plan is not null){
- @if(!Editing){<button id="timetable-refresh" @onclick="Load">最新状態を取得</button>@if(Plan.CanManage){<button id="timetable-edit" @onclick="()=>Editing=true">編集</button><a href="@($"/events/{EventId}/songs")">曲・枠の追加／編集</a>}}
+ @if(!Editing){<button id="timetable-refresh" @onclick="Load">最新状態を取得</button>@if(Plan.CanManage){<button id="timetable-edit" @onclick="()=>Editing=true">編集</button><a href="@($"/events/{EventId}/songs")">曲・枠の追加／編集</a><a id="notification-plan-link" href="@($"/events/{EventId}/notification-plan")">通知予定プレビュー</a>}}
  else{
   <p>変更は下書きです。曲名・曲長・準備時間は曲・枠管理で編集し、この画面では混在順序・進行・表示設定を編集します。開場・開始はイベント概要から変更します。</p>
   <label><input id="timetable-round" type="checkbox" @bind="Round" @bind:after="Invalidate" />曲の準備開始・演奏開始だけ分境界へ切上げ</label>

@@ -1,0 +1,34 @@
+@page "/events/{EventId}/notification-plan"
+@rendermode InteractiveServer
+@using Sem.Web.Core
+@inject AuthenticationStateProvider Authentication
+@inject CoreFoundationService Core
+<PageTitle>通知予定プレビュー</PageTitle>
+<h1>通知予定プレビュー：@Plan?.Title</h1>
+<p><a href="/workspace">イベント一覧</a> ／ <a href="@($"/events/{EventId}/timetable")">タイムテーブル</a> ／ <a href="@($"/events/{EventId}/progress")">当日進行</a></p>
+<p id="notification-plan-policy">読取専用です。予約・実送信・宛先選択・既定有効化は行いません。開催は開場（なければ開始）の120分前。曲準備は直前タイムパートの開始実績、直前なしなら最新の準備開始予定の10分前です。開場行も直前タイムパートに含みます。開始実績がなければ時刻未確定です。</p>
+<p>予定時刻はサーバー送信基準で、端末到着を保証しません。実データ保存後や当日見積・進行変更後は最新状態を取得してください。</p>
+<p id="notification-plan-error" role="alert">@Error</p>
+@if(Plan is not null){
+ <section id="notification-plan" class="panel" data-interactive="@InteractiveReady.ToString().ToLowerInvariant()" data-fingerprint="@Plan.Fingerprint">
+ <button id="notification-plan-refresh" disabled="@Busy" @onclick="Load">最新状態を取得</button>
+ <p>Asia/Tokyo ／ イベント版 @Plan.RowVersion ／ 進行版 @Plan.ProgressVersion</p>
+ @foreach(var item in Plan.Entries){
+ <article data-notification-plan-id="@item.Id" class="panel">
+ <h2>@(item.Kind=="OpeningReminder"?"開催前通知":"曲準備通知")：@item.Title</h2>
+ <p>基準：@Basis(item.Basis) ／ @(item.ReferenceAt is DateTimeOffset r?TimetableCalculator.Clock(r,"seconds")+" +09:00":"実績未記録")</p>
+ <p>送信予定：<span data-notification-plan-due="@item.Id">@(item.DueAt is DateTimeOffset d?TimetableCalculator.Clock(d,"seconds")+" +09:00":"未確定")</span></p>
+ <p data-notification-plan-state="@item.Id">@State(item.State)</p>
+ </article>
+ }
+ </section>
+}
+@code{
+ [Parameter]public string EventId{get;set;}="";
+ EventNotificationPlan?Plan;bool Busy,InteractiveReady;string Error="";
+ protected override async Task OnParametersSetAsync()=>await Load();
+ protected override void OnAfterRender(bool firstRender){if(firstRender){InteractiveReady=true;StateHasChanged();}}
+ async Task Load(){if(Busy)return;Busy=true;Error="";try{Plan=await Core.ReadNotificationPlanAsync((await Authentication.GetAuthenticationStateAsync()).User,EventId);}catch(UnauthorizedAccessException){Plan=null;Error="通常ログインと現在のイベント管理権限が必要です。";}catch(System.ComponentModel.DataAnnotations.ValidationException e){Plan=null;Error=e.Message;}catch{Plan=null;Error="通知予定を取得できませんでした。計画・ログイン状態・管理権限を確認してください。";}finally{Busy=false;}}
+ static string Basis(string b)=>b switch{"OpeningMinus120Minutes"=>"開場の120分前","EventStartMinus120Minutes"=>"開催開始の120分前","FirstPartPreparationMinus10Minutes"=>"直前パートなし・最新準備開始予定の10分前",_=>"直前タイムパートの開始実績"};
+ static string State(string s)=>s switch{"WaitingActual"=>"直前パート開始実績待ち（予測時刻では代用しません）","Obsolete"=>"対象は開始済み・予定対象外（予約取消しの基準）","Due"=>"予定時刻に到達（この画面からは送信しません）",_=>"予定時刻前（未予約・未送信）"};
+}
