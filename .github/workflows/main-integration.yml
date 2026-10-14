@@ -1,6 +1,7 @@
 name: Main integration verification
 on:
   pull_request:
+    types: [opened, synchronize, reopened, edited]
     branches: [main]
   push:
     branches: [main, ci/main-integration]
