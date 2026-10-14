@@ -1,0 +1,14 @@
+{
+  "status": "available",
+  "run": "https://github.com/jp-raub/sem/actions/runs/38169700995",
+  "sourceCommit": "78b9a6cb6d25911b5c9c7a030efb71ab785d962d",
+  "artifactId": "11713652005",
+  "artifactUrl": "https://github.com/jp-raub/sem/actions/runs/38169700995/artifacts/11713652005",
+  "contents": [
+    "sem-dxp-source.zip",
+    "sem-dxp-image.tar.gz",
+    "README.ja.md",
+    "VERSION.txt",
+    "SHA256SUMS"
+  ]
+}

@@ -1,0 +1,10 @@
+.git
+**/bin
+**/obj
+**/*.db
+**/*.db-shm
+**/*.db-wal
+.env
+.env.*
+runtime-data
+verification
