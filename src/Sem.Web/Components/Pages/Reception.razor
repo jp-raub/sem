@@ -5,7 +5,7 @@
 @inject CoreFoundationService Core
 <PageTitle>受付対象の検索</PageTitle>
 <h1>受付対象の検索：@Plan?.Title</h1><p><a href="/workspace">業務基盤へ戻る</a></p>
-<p>管理者向けの現在の参加登録者一覧です。選択した本人・申込みと必要な受付対応を確認して手動受付できます。QR発行・読取記録はまだありません。</p>
+<p>管理者向けの現在の参加登録者一覧です。選択した本人・申込みと必要な受付対応を確認して手動受付できます。この画面は手動受付です。QR読取・QR連動受付の画面は後続です。</p>
 <p id="reception-error" role="alert">@Error</p>
 <label>表示名・読みで検索<input id="reception-search" @bind="Query" maxlength="200" disabled="@(Busy||Pending is not null||PendingCancel is not null)" /></label><button id="reception-search-submit" disabled="@(Busy||Pending is not null||PendingCancel is not null)" @onclick="Load">最新情報で検索</button>
 @if(Plan is not null){<section id="reception-roster"><p>参加登録者 @Plan.ParticipantCount 人 ／ 一致 @Plan.MatchCount 人</p>
@@ -18,12 +18,12 @@
  <h2>@Target.Person.DisplayName の受付</h2><p>@Target.Person.Reading ／ @(Target.Person.Spectator?"観覧のみ":"演奏参加")</p><p>@string.Join(" ／ ",Target.Person.Songs)</p>
  @if(Target.Current is null){<fieldset disabled="@(Busy||Pending is not null||PendingCancel is not null)"><legend>QRを使用しない手動受付</legend><label><input id="reception-done" type="checkbox" @bind="Done" />本人・申込状況と、必要な受付対応を確認した</label><label>受付メモ（任意）<textarea id="reception-note" maxlength="500" @bind="Note"></textarea></label></fieldset>
  <button id="reception-complete" disabled="@(Busy||PendingCancel is not null||Pending is null&&!Done)" @onclick="Complete">@(Pending is null?"確認して手動受付を確定":"同じ操作IDで結果を確認／再試行")</button>
- }else{<p id="reception-current">受付済み：@Time(Target.Current.At) ／ @Target.Current.ActorName ／ 手動</p>
+ }else{<p id="reception-current">受付済み：@Time(Target.Current.At) ／ @Target.Current.ActorName ／ @(Target.Current.Method=="QR"?"QR":"手動")</p>
  @if(!ConfirmCancel){<button id="reception-cancel-open" disabled="@Busy" @onclick="()=>ConfirmCancel=true">受付を取り消す</button>}
  else{<p>受付完了を取り消します。過去の受付・取消しの記録は残ります。</p><button id="reception-cancel-confirm" disabled="@Busy" @onclick="Cancel">@(PendingCancel is null?"取消しを確定":"同じ操作IDで取消し結果を確認／再試行")</button><button id="reception-cancel-back" disabled="@(Busy||PendingCancel is not null)" @onclick="()=>ConfirmCancel=false">戻る</button>}}
  @if(Pending is not null||PendingCancel is not null){<p>結果が未確認です。別の操作を始めず、同じ操作IDで再試行してください。</p>}
  <h3>受付履歴（新しい順）</h3>@if(Target.MoreHistory){<p>最新100件を表示しています。全件表示ではありません。</p>}
- @foreach(var r in Target.History){<article data-reception-history="@r.Id"><p>@Time(r.At) ／ @r.ActorName ／ 手動</p><p style="white-space:pre-wrap;overflow-wrap:anywhere">@r.Note</p>@if(r.CancelledAt is not null){<p>取消し：@Time(r.CancelledAt) ／ @r.CancelledByName</p>}</article>}
+ @foreach(var r in Target.History){<article data-reception-history="@r.Id"><p>@Time(r.At) ／ @r.ActorName ／ @(r.Method=="QR"?"QR":"手動")</p><p style="white-space:pre-wrap;overflow-wrap:anywhere">@r.Note</p>@if(r.CancelledAt is not null){<p>取消し：@Time(r.CancelledAt) ／ @r.CancelledByName</p>}</article>}
  <button id="reception-close" disabled="@(Busy||Pending is not null||PendingCancel is not null)" @onclick="()=>Target=null">閉じる</button>
  </section>}
 @code{

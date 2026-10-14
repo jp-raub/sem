@@ -61,6 +61,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         b.Entity<EventParticipantQr>().HasOne<SessionEvent>().WithMany().HasForeignKey(x=>x.EventId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<EventParticipantQr>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x=>x.UserId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<EventParticipantQr>().ToTable("EventParticipantQrs",t=>{t.HasCheckConstraint("CK_ParticipantQr_Hash","length(\"TokenHash\")=64");t.HasCheckConstraint("CK_ParticipantQr_Version","\"RowVersion\">0");});
+        b.Entity<EventQrRead>().HasAlternateKey(x=>new{x.EventId,x.UserId,x.Id});
         b.Entity<EventQrRead>().HasOne<SessionEvent>().WithMany().HasForeignKey(x=>x.EventId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<EventQrRead>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x=>x.UserId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<EventQrRead>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x=>x.ActorId).OnDelete(DeleteBehavior.Restrict);
@@ -78,10 +79,11 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         b.Entity<EventReception>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x=>x.UserId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<EventReception>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x=>x.ActorId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<EventReception>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x=>x.CancelledBy).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<EventReception>().HasOne<EventQrRead>().WithMany().HasForeignKey(x=>new{x.EventId,x.UserId,x.ReadId}).HasPrincipalKey(x=>new{x.EventId,x.UserId,x.Id}).OnDelete(DeleteBehavior.Restrict);
         b.Entity<EventReception>().HasIndex(x=>new{x.EventId,x.UserId}).IsUnique().HasFilter("\"CancelledAt\" IS NULL");
         b.Entity<EventReception>().HasIndex(x=>new{x.EventId,x.UserId,x.At,x.Id});
         b.Entity<EventReception>().ToTable("EventReceptions",t=>{
-            t.HasCheckConstraint("CK_Reception_Method","\"Method\"='Manual'");
+            t.HasCheckConstraint("CK_Reception_Method","(\"Method\"='Manual' AND \"ReadId\" IS NULL) OR (\"Method\"='QR' AND \"ReadId\" IS NOT NULL)");
             t.HasCheckConstraint("CK_Reception_Note","length(\"Note\")<=500");
             t.HasCheckConstraint("CK_Reception_Cancel","(\"CancelledAt\" IS NULL AND \"CancelledBy\" IS NULL) OR (\"CancelledAt\" IS NOT NULL AND \"CancelledBy\" IS NOT NULL)");
         });
