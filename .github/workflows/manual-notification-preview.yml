@@ -1,0 +1,51 @@
+name: Manual notification read-only preview foundation
+on:
+  push:
+    branches: [feat/manual-notification-preview]
+  pull_request:
+    branches: [feat/event-tabs]
+    paths:
+      - src/**
+      - tests/**
+      - .github/workflows/manual-notification-preview.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: manual-notification-preview-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  backend-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Release build with warnings as errors
+        run: |
+          set -euo pipefail
+          mkdir -p verification
+          dotnet build src/Sem.Web -c Release -warnaserror 2>&1 | tee verification/manual-preview-build.log
+      - name: Dedicated read-only preview checks
+        run: |
+          set -euo pipefail
+          dotnet run --project tests/Sem.ManualNotificationPreviewChecks -c Release 2>&1 | tee verification/manual-preview-checks.log
+      - name: Existing .NET regression suites
+        run: |
+          set -euo pipefail
+          suites=0
+          for project in tests/*/*.csproj; do
+            if [[ "$project" == tests/Sem.ManualNotificationPreviewChecks/* ]]; then continue; fi
+            name=$(basename "$(dirname "$project")")
+            dotnet run --project "$project" -c Release 2>&1 | tee "verification/${name}.log"
+            suites=$((suites+1))
+          done
+          echo "::notice title=Existing .NET regression suites::All $suites suites completed; no Docker, SMTP fixture or native-browser acceptance claimed."
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: manual-notification-preview-backend-verification
+          path: verification/*.log
+          retention-days: 7
