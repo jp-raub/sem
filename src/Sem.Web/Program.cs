@@ -9,6 +9,12 @@ using Sem.Web.Data;
 using Sem.Web.Runtime;
 using WebPush;
 
+// Maintenance exits before deployment configuration, migrations, HTTP or notification workers.
+if (args.Length > 0 && args[0] == "--legacy-event-reset")
+{
+    Environment.ExitCode = await LegacyEventResetMaintenance.RunAsync(args[1..]);
+    return;
+}
 if (args.Contains("--generate-vapid"))
 {
     var keys = VapidHelper.GenerateVapidKeys();
