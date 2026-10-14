@@ -75,6 +75,19 @@ public sealed class ManualNotificationPushQueue(IDbContextFactory<ApplicationDbC
         await tx.CommitAsync(ct);
         return new(outcome, count);
     }
+    // Bounded housekeeping must work even when the transport is unconfigured.
+    public async Task<int> SweepAsync(CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        var now = clock.GetUtcNow().ToUnixTimeSeconds();
+        var rows = await db.Set<ManualNotificationPushDelivery>()
+            .Where(x => x.State == "Pending" && x.ExpiresAt <= now || x.State == "Claimed" && x.LeaseUntil <= now)
+            .OrderBy(x => x.DueAt).ThenBy(x => x.Id).Take(20).ToArrayAsync(ct);
+        foreach (var row in rows)
+            End(row, row.State == "Claimed" ? "Unknown" : "Expired", row.State == "Claimed" ? "LeaseElapsed" : "Expired");
+        await db.SaveChangesAsync(ct);await tx.CommitAsync(ct);return rows.Length;
+    }
     public async Task<ManualNotificationPushClaim?> ClaimAsync(string deliveryId, CancellationToken ct = default)
     {
         if (!HashId(deliveryId)) return null;
