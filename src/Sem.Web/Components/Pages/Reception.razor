@@ -3,11 +3,15 @@
 @using Sem.Web.Core
 @inject AuthenticationStateProvider Authentication
 @inject CoreFoundationService Core
+<EventTabNavigation EventId="@EventId" Selected="checkin" />
+<section id="event-tab-panel" role="tabpanel" aria-label="受付" tabindex="0">
 <PageTitle>受付対象の検索</PageTitle>
 <h1>受付対象の検索：@Plan?.Title</h1><p><a href="/workspace">業務基盤へ戻る</a></p>
 <p>管理者向けの現在の参加登録者一覧です。選択した本人・申込みと必要な受付対応を確認して手動受付できます。この画面は手動受付です。QR貼付／リンク読取・確認は上の専用欄で扱います。カメラまたは貼付／リンクで取り込み、明示して読取を記録してください。</p>
 <QrReceptionPanel EventId="@EventId" @key="EventId" ExternalBusy="@(Busy||Pending is not null||PendingCancel is not null)" LockChanged="@(value=>QrLocked=value)" />
 <fieldset disabled="@QrLocked">
+<NavigationLock ConfirmExternalNavigation="@NavigationBlocked" OnBeforeInternalNavigation="PreventNavigation" />
+<button id="reception-discard-draft" disabled="@(Busy||Pending is not null||PendingCancel is not null||QrLocked)" @onclick="DiscardDraft">手動受付の未送信入力を取り消す</button>
 <p id="reception-error" role="alert">@Error</p>
 <label>表示名・読みで検索<input id="reception-search" @bind="Query" maxlength="200" disabled="@(Busy||Pending is not null||PendingCancel is not null)" /></label><button id="reception-search-submit" disabled="@(Busy||Pending is not null||PendingCancel is not null)" @onclick="Load">最新の受付状態で再検索</button>
 @if(Plan is not null){<section id="reception-roster"><p>参加登録者 @Plan.ParticipantCount 人 ／ 受付済み @Plan.CompletedCount 人 ／ 未受付 @Plan.UnreceivedCount 人 ／ 検索一致 @Plan.MatchCount 人</p>
@@ -31,9 +35,13 @@
 </fieldset>
 <QrReadHistoryPanel EventId="@EventId" @key="@(EventId+":qr-history")" ExternalBusy="@(QrLocked||Busy||Pending is not null||PendingCancel is not null)" />
 <ReceiptHistoryPanel EventId="@EventId" @key="@(EventId+":receipt-history")" ExternalBusy="@(QrLocked||Busy||Pending is not null||PendingCancel is not null)" />
+</section>
 @code{
  [Parameter]public string EventId{get;set;}="";
  ReceptionRoster?Plan;ReceptionTarget?Target;ManualReceptionEdit?Pending;ReceptionCancelEdit?PendingCancel;string Query="",Error="",Message="",Note="";bool Busy,Ready,Done,ConfirmCancel,QrLocked;long Epoch;
+ bool NavigationBlocked => Busy || Pending is not null || PendingCancel is not null || QrLocked || Done || ConfirmCancel || !string.IsNullOrEmpty(Note);
+ void PreventNavigation(LocationChangingContext c) { if(NavigationBlocked){c.PreventNavigation();Error="処理中・結果未確認、または未送信の受付入力があります。結果確認、カメラ停止、保存または入力取消をしてから移動してください。";} }
+ void DiscardDraft(){if(Busy||Pending is not null||PendingCancel is not null||QrLocked)return;Done=ConfirmCancel=false;Note="";Error="";Message="未送信の手動受付入力を取り消しました。受付記録は変更していません。";}
  protected override void OnParametersSet(){Epoch++;Plan=null;Target=null;Pending=null;PendingCancel=null;Query=Error=Message=Note="";Busy=Ready=Done=ConfirmCancel=QrLocked=false;}
  protected override async Task OnAfterRenderAsync(bool first){if(!Ready){Ready=true;await Load();StateHasChanged();}}
  async Task Load(){if(Busy||Pending is not null||PendingCancel is not null)return;Target=null;var epoch=Epoch;var id=EventId;var query=Query;Busy=true;Plan=null;Error="";try{var p=await Core.ReadReceptionRosterAsync((await Authentication.GetAuthenticationStateAsync()).User,id,query);if(epoch==Epoch)Plan=p;}catch{if(epoch==Epoch)Error="ログイン状態と現在のイベント管理権限を確認してください。";}finally{if(epoch==Epoch)Busy=false;}}

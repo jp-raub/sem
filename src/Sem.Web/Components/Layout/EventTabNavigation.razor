@@ -1,0 +1,69 @@
+@using Sem.Web.Core
+@implements IAsyncDisposable
+@inject AuthenticationStateProvider Authentication
+@inject CoreFoundationService Core
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@if (View is not null)
+{
+    <div class="event-tabs" id="@RootId" role="tablist" aria-label="イベント内の画面" data-event-tabs-ready="@Ready.ToString().ToLowerInvariant()">
+        @foreach (var kind in View.Available)
+        {
+            <button type="button" id="@TabId(kind)" role="tab" data-event-tab="@kind" aria-controls="event-tab-panel" aria-selected="@((kind == Selected).ToString().ToLowerInvariant())" tabindex="@(kind == Selected ? 0 : -1)" @onclick="()=>Select(kind)">@Label(kind)</button>
+        }
+    </div>
+}
+<p id="event-tabs-error" role="alert">@Error</p>
+@code {
+    [Parameter] public string EventId { get; set; } = "";
+    [Parameter] public string Selected { get; set; } = "main";
+    EventTabsView? View; IJSObjectReference? Module; DotNetObjectReference<EventTabNavigation>? Sink;
+    readonly CancellationTokenSource Stop = new();
+    readonly string RootId = "event-tabs-" + Guid.NewGuid().ToString("N");
+    string LoadedId = "", Error = ""; bool Ready, Bound, Disposed, Navigating;
+    string TabId(string kind) => "event-tab-" + kind;
+    static string Label(string kind) => kind switch { "main"=>"イベント", "roster"=>"参加者名簿", "checkin"=>"受付", "progress"=>"当日進行", "notifications"=>"通知", _=>"" };
+    string Route(string kind) => "/events/" + Uri.EscapeDataString(EventId) + (kind switch { "main"=>"?tab=main", "roster"=>"/participants", "checkin"=>"/reception", "progress"=>"/progress", "notifications"=>"/notification-plan", _=>throw new InvalidOperationException() });
+    protected override async Task OnParametersSetAsync()
+    {
+        if (LoadedId == EventId) return;
+        LoadedId = EventId; View = null; Error = "";
+        try { View = await Core.ReadEventTabsAsync((await Authentication.GetAuthenticationStateAsync()).User, EventId, Stop.Token); }
+        catch (OperationCanceledException) { }
+        catch { Error = "ログイン状態と現在のイベント閲覧権限を確認してください。"; }
+    }
+    protected override async Task OnAfterRenderAsync(bool first)
+    {
+        if (Disposed || Bound || View is null) return;
+        Bound = true;
+        try {
+            Module = await JS.InvokeAsync<IJSObjectReference>("import", "/event-tabs.js"); Sink = DotNetObjectReference.Create(this);
+            var restore = Selected == "main" && !Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(new Uri(Navigation.Uri).Query).ContainsKey("tab");
+            var target = await Module.InvokeAsync<string?>("bindTabs", RootId, Sink, View.UserId, EventId, View.Available, Selected, restore);
+            Ready = true; StateHasChanged();
+            if (target is not null && target != Selected) await Select(target);
+        } catch (JSDisconnectedException) { } catch { Error = "タブの選択保持を利用できません。画面のボタンから移動してください。"; Ready = true; StateHasChanged(); }
+    }
+    [JSInvokable] public Task SelectFromKeyboard(string kind) => InvokeAsync(()=>Select(kind));
+    async Task Select(string kind)
+    {
+        if (Disposed || Navigating || View is null || kind == Selected || !View.Available.Contains(kind)) return;
+        Navigating = true;
+        try {
+            // Recheck current authority before routing. The destination independently authorizes its data.
+            var id = EventId; var userId = View.UserId;
+            var current = await Core.ReadEventTabsAsync((await Authentication.GetAuthenticationStateAsync()).User, id, Stop.Token);
+            if (Disposed || id != EventId || current.UserId != userId) return;
+            if (!current.Available.Contains(kind)) { Error = "現在はそのタブを利用できません。画面を再読み込みして確認してください。"; return; }
+            Navigation.NavigateTo(Route(kind)); // Existing NavigationLocks run before disposal; selection is saved ONLY by destination.
+        } catch (OperationCanceledException) { }
+        catch { Error = "移動できません。ログイン状態と現在の権限を確認してください。"; }
+        finally { Navigating = false; }
+    }
+    public async ValueTask DisposeAsync()
+    {
+        Disposed = true; Stop.Cancel();
+        if (Module is not null) { try { await Module.InvokeVoidAsync("unbindTabs", RootId); await Module.DisposeAsync(); } catch (JSDisconnectedException) { } }
+        Sink?.Dispose(); Stop.Dispose();
+    }
+}

@@ -4,9 +4,11 @@
 @using Sem.Web.Core
 @inject AuthenticationStateProvider Authentication
 @inject CoreFoundationService Core
+<EventTabNavigation EventId="@EventId" Selected="progress" />
+<section id="event-tab-panel" role="tabpanel" aria-label="当日進行" tabindex="0">
 <PageTitle>当日進行</PageTitle>
 <h1>当日進行：@Plan?.Title</h1><p><a href="/workspace">イベント一覧</a> ／ <a href="@($"/events/{EventId}/timetable")">計画タイムテーブル</a></p>
-<NavigationLock ConfirmExternalNavigation="@(Editing||ShorteningActive)" OnBeforeInternalNavigation="PreventUnsaved" />
+<NavigationLock ConfirmExternalNavigation="@(Busy||Editing||ShorteningActive)" OnBeforeInternalNavigation="PreventUnsaved" />
 <p id="progress-error" role="alert">@Error</p><p id="progress-message" role="status">@Message</p>
 @if(Plan is not null){
  <button id="progress-refresh" data-interactive="@InteractiveReady.ToString().ToLowerInvariant()" disabled="@(Busy||Editing||ShorteningActive)" @onclick="Load">最新状態を取得</button>
@@ -40,6 +42,7 @@
  .progress-comparison{display:none;overflow-x:auto}.progress-comparison.show-plan{display:block} .current-timepart{background:var(--soft,#eef4f2)}
  @@media(min-width:900px){.progress-comparison{display:block;margin-top:1rem}}
 </style>
+</section>
 @code{
  [Parameter]public string EventId{get;set;}="";
  ProgressPlan? Plan;ProgressRow?Selected;bool Busy,Editing,ShowPlan,ShorteningActive,InteractiveReady,ManagerView=true;string Error="",Message="",Prep="",Length="";DateTimeOffset LoadedAt;int Ticks;readonly CancellationTokenSource Stop=new();Task?TimerTask;
@@ -51,7 +54,7 @@
  protected override Task OnAfterRenderAsync(bool first){if(first)TimerTask=Tick();return Task.CompletedTask;}
  async Task Tick(){using var timer=new PeriodicTimer(TimeSpan.FromSeconds(1));try{while(await timer.WaitForNextTickAsync(Stop.Token)){await InvokeAsync(async()=>{if(Plan is not null){if(++Ticks%15==0&&!Busy&&!Editing&&!ShorteningActive)await Load();StateHasChanged();}});}}catch(OperationCanceledException){} }
  async Task Load(){try{Plan=await Core.ReadProgressAsync((await Authentication.GetAuthenticationStateAsync()).User,EventId,Stop.Token);LoadedAt=DateTimeOffset.UtcNow;Error="";}catch(OperationCanceledException){}catch{Plan=null;Selected=null;Editing=false;Error="ログイン状態と閲覧権限を確認してください。";}}
- void PreventUnsaved(Microsoft.AspNetCore.Components.Routing.LocationChangingContext c){if(Editing||ShorteningActive){c.PreventNavigation();Error="当日見積の下書きがあります。保存または取消してから移動してください。";}}
+ void PreventUnsaved(Microsoft.AspNetCore.Components.Routing.LocationChangingContext c){if(Busy||Editing||ShorteningActive){c.PreventNavigation();Error="処理中または当日見積の下書きがあります。処理完了を待ち、保存または取消してから移動してください。";}}
  void Open(ProgressRow row){if(Busy||Editing||ShorteningActive)return;Selected=row;Prep=row.PrepInput is int p?SongDuration.Format(p):"";Length=SongDuration.Format(row.Latest.LengthSeconds);Editing=true;}
  void Cancel(){Editing=false;Selected=null;Error="";Message="見積の下書きを取り消しました。";}
  async Task Record(){if(Busy||Editing||ShorteningActive||Plan?.CanRecord!=true||Plan.NextAction is null)return;Busy=true;Error="";try{var n=Plan.NextAction;await Core.RecordProgressAsync((await Authentication.GetAuthenticationStateAsync()).User,EventId,new(Guid.NewGuid().ToString(),Plan.RowVersion,Plan.ProgressVersion,n.PartId,n.Point));Message="実績を記録しました。";await Load();}catch(Exception e)when(e is CoreConflictException or System.ComponentModel.DataAnnotations.ValidationException){Error=e.Message;}catch(UnauthorizedAccessException){Plan=null;Error="再ログインとイベント管理権限を確認してください。";}catch{Error="結果を確認できませんでした。再送前に最新状態を取得してください。";}finally{Busy=false;}}
