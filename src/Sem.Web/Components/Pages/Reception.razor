@@ -5,7 +5,9 @@
 @inject CoreFoundationService Core
 <PageTitle>受付対象の検索</PageTitle>
 <h1>受付対象の検索：@Plan?.Title</h1><p><a href="/workspace">業務基盤へ戻る</a></p>
-<p>管理者向けの現在の参加登録者一覧です。選択した本人・申込みと必要な受付対応を確認して手動受付できます。この画面は手動受付です。QR読取・QR連動受付の画面は後続です。</p>
+<p>管理者向けの現在の参加登録者一覧です。選択した本人・申込みと必要な受付対応を確認して手動受付できます。この画面は手動受付です。QR貼付／リンク読取・確認は上の専用欄で扱います。カメラ読取は後続です。</p>
+<QrReceptionPanel EventId="@EventId" @key="EventId" ExternalBusy="@(Busy||Pending is not null||PendingCancel is not null)" LockChanged="@(value=>QrLocked=value)" />
+<fieldset disabled="@QrLocked">
 <p id="reception-error" role="alert">@Error</p>
 <label>表示名・読みで検索<input id="reception-search" @bind="Query" maxlength="200" disabled="@(Busy||Pending is not null||PendingCancel is not null)" /></label><button id="reception-search-submit" disabled="@(Busy||Pending is not null||PendingCancel is not null)" @onclick="Load">最新情報で検索</button>
 @if(Plan is not null){<section id="reception-roster"><p>参加登録者 @Plan.ParticipantCount 人 ／ 一致 @Plan.MatchCount 人</p>
@@ -26,10 +28,11 @@
  @foreach(var r in Target.History){<article data-reception-history="@r.Id"><p>@Time(r.At) ／ @r.ActorName ／ @(r.Method=="QR"?"QR":"手動")</p><p style="white-space:pre-wrap;overflow-wrap:anywhere">@r.Note</p>@if(r.CancelledAt is not null){<p>取消し：@Time(r.CancelledAt) ／ @r.CancelledByName</p>}</article>}
  <button id="reception-close" disabled="@(Busy||Pending is not null||PendingCancel is not null)" @onclick="()=>Target=null">閉じる</button>
  </section>}
+</fieldset>
 @code{
  [Parameter]public string EventId{get;set;}="";
- ReceptionRoster?Plan;ReceptionTarget?Target;ManualReceptionEdit?Pending;ReceptionCancelEdit?PendingCancel;string Query="",Error="",Message="",Note="";bool Busy,Ready,Done,ConfirmCancel;long Epoch;
- protected override void OnParametersSet(){Epoch++;Plan=null;Target=null;Pending=null;PendingCancel=null;Query=Error=Message=Note="";Busy=Ready=Done=ConfirmCancel=false;}
+ ReceptionRoster?Plan;ReceptionTarget?Target;ManualReceptionEdit?Pending;ReceptionCancelEdit?PendingCancel;string Query="",Error="",Message="",Note="";bool Busy,Ready,Done,ConfirmCancel,QrLocked;long Epoch;
+ protected override void OnParametersSet(){Epoch++;Plan=null;Target=null;Pending=null;PendingCancel=null;Query=Error=Message=Note="";Busy=Ready=Done=ConfirmCancel=QrLocked=false;}
  protected override async Task OnAfterRenderAsync(bool first){if(!Ready){Ready=true;await Load();StateHasChanged();}}
  async Task Load(){if(Busy||Pending is not null||PendingCancel is not null)return;Target=null;var epoch=Epoch;var id=EventId;var query=Query;Busy=true;Plan=null;Error="";try{var p=await Core.ReadReceptionRosterAsync((await Authentication.GetAuthenticationStateAsync()).User,id,query);if(epoch==Epoch)Plan=p;}catch{if(epoch==Epoch)Error="ログイン状態と現在のイベント管理権限を確認してください。";}finally{if(epoch==Epoch)Busy=false;}}
  async Task Select(string userId){if(Busy||Pending is not null||PendingCancel is not null)return;var epoch=Epoch;var id=EventId;Busy=true;Target=null;Done=ConfirmCancel=false;Note=Error=Message="";try{var t=await Core.ReadReceptionTargetAsync((await Authentication.GetAuthenticationStateAsync()).User,id,userId);if(epoch==Epoch)Target=t;}catch{if(epoch==Epoch){Plan=null;Error="対象者の現在の申込みと管理権限を確認してください。";}}finally{if(epoch==Epoch)Busy=false;}}
