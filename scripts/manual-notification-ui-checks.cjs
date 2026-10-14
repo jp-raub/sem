@@ -58,8 +58,11 @@ module.exports = async ({p,g,ok}) => {
   await a.locator('#manual-notification-submit').click();await a.locator('#manual-notification-preview-result').waitFor({state:'detached'});
   ok(await a.locator('#manual-notification-subject').isEnabled()&&await a.locator('#manual-notification-submit').isDisabled()&&await a.locator('#manual-notification-pending').count()===0,'First definite conflict preserves editable draft and requires fresh preview');
   await a.unroute('**/api/core/manual-notification-accept?*');await previewUI();await a.locator('#manual-notification-confirm').check();
+  ok(await a.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'390px composer has no horizontal page overflow');
+  const sizes=await a.locator('#manual-notification-composer button,.manual-notification-confirmation').evaluateAll(nodes=>nodes.map(n=>n.getBoundingClientRect().height));
+  ok(sizes.every(h=>h>=44),'Mobile buttons and full confirmation label provide at least 44px action height');
   await a.screenshot({path:'verification/manual-notification-mobile.png',fullPage:true});
-  await a.setViewportSize({width:1100,height:850});await a.locator('#manual-notification-submit').focus();
+  await a.setViewportSize({width:1100,height:850});await a.locator('#manual-notification-confirm').focus();await a.keyboard.press('Tab');
   await a.screenshot({path:'verification/manual-notification-desktop.png',fullPage:true});
   const before=(await g.evaluate(async()=>await(await fetch('/api/snapshot')).json())).messages.filter(x=>x.title===draft.subject+' changed').length;
   let frozen, captured, release;

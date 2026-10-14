@@ -49,7 +49,7 @@ else
         <p id="manual-notification-preview-body" class="manual-notification-plain">@preview.Body</p>
         <p>Push表示予定：@preview.Subject ／ @preview.PushPreviewBody ／ 本人のメッセージボックスへ（配信は未接続）</p>
         <p>対象者・イベント・内容が変わった場合は、新しいプレビューが必要です。</p>
-        <label><input id="manual-notification-confirm" type="checkbox" checked="@State.Confirmed" disabled="@(!State.CanEdit)" @onchange="ConfirmChanged" />対象人数と件名・本文を確認し、メッセージの保存を実行する</label>
+        <label class="manual-notification-confirmation"><input id="manual-notification-confirm" type="checkbox" checked="@State.Confirmed" disabled="@(!State.CanEdit)" @onchange="ConfirmChanged" />対象人数と件名・本文を確認し、メッセージの保存を実行する</label>
         </section>
     }
     @if (State.Pending is not null)
