@@ -6,7 +6,7 @@ using WebPush;
 namespace Sem.Web.Core;
 
 public sealed record ManualNotificationPushDispatchResult(string State);
-// Infrastructure, intentionally NOT registered in DI/HTTP/background services.
+// Scoped infrastructure composed with the bounded engine; every external call retains current-policy gates.
 // Actual transport is injectable; verification only uses synthetic spies/handlers.
 public sealed class ManualNotificationPushDispatcher(IDbContextFactory<ApplicationDbContext> factory,
     ManualNotificationPushQueue queue, IEventPushTransport transport, TimeProvider clock)

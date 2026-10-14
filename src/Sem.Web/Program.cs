@@ -39,7 +39,6 @@ builder.Services.AddAuthentication().AddCookie("SEM.Enrollment", o =>
 builder.Services.AddAntiforgery(o => { o.HeaderName = "X-CSRF-TOKEN"; o.Cookie.Name = "__Host-SEM-CSRF"; o.Cookie.SecurePolicy = CookieSecurePolicy.Always; o.Cookie.Path = "/"; o.Cookie.HttpOnly = true; });
 builder.Services.AddDbContextFactory<ApplicationDbContext>(o => o.UseSqlite($"Data Source={Path.Combine(deployment.DataDirectory, "sem.db")}"), ServiceLifetime.Scoped);
 builder.Services.AddScoped<CoreFoundationService>();
-builder.Services.AddSingleton(new ManualPushRuntime(false)); // explicit runtime truth; worker remains unregistered
 builder.Services.AddIdentityCore<ApplicationUser>(o => { o.SignIn.RequireConfirmedAccount = true; o.User.RequireUniqueEmail = true; o.Stores.SchemaVersion = IdentitySchemaVersions.Version3; }).AddEntityFrameworkStores<ApplicationDbContext>().AddSignInManager().AddDefaultTokenProviders().AddUserConfirmation<SemUserConfirmation>();
 builder.Services.AddSingleton<NotificationService>();
 builder.Services.AddSingleton<BusinessNotificationStore>();
@@ -50,6 +49,7 @@ builder.Services.AddScoped<DailyDigestScheduler>();
 builder.Services.AddScoped<DailyDigestDispatcher>();
 builder.Services.AddHostedService<DailyDigestWorker>();
 builder.Services.AddHttpClient<IEventPushTransport,EventWebPushTransport>(c=>c.Timeout=TimeSpan.FromSeconds(15)).ConfigurePrimaryHttpMessageHandler(()=>new HttpClientHandler{AllowAutoRedirect=false});
+builder.Services.AddManualNotificationPushPipeline(); // registration only; persisted activation remains default OFF
 builder.Services.AddScoped<EventPushScheduler>();
 builder.Services.AddScoped<EventPushDispatcher>();
 builder.Services.AddHostedService<EventPushWorker>();

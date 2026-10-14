@@ -8,7 +8,7 @@ module.exports=async({p,g,ok})=>{
  },{action,data,actor});
  const first=await api(p,'manual-push-control');const actor=first.body.userId,member=(await api(g,'workspace')).body.profile.userId;
  ok(first.status===200&&first.cache==='no-store'&&!first.body.enabled&&first.body.epoch===0,'Manual Push control defaults OFF at epoch0 with no-store');
- ok(Object.keys(first.body).sort().join(',')==='deliveryConnected,enabled,epoch,pushConfigured,userId'&&!first.body.deliveryConnected,'Control context is minimal and truthfully reports unregistered worker');
+ ok(Object.keys(first.body).sort().join(',')==='deliveryConnected,enabled,epoch,pushConfigured,userId'&&first.body.deliveryConnected===true,'Control context is minimal and truthfully reports registered worker independently of activation/key configuration');
  ok((await api(g,'manual-push-control')).status===403,'Ordinary member cannot read operational control');
  ok((await api(p,'manual-push-control',{},actor)).status===405,'Control context rejects POST');
  ok((await api(p,'manual-push-control-change')).status===405,'Control mutation rejects GET');
