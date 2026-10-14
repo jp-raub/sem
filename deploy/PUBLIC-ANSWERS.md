@@ -79,3 +79,5 @@ the following day; administrators can post afterwards. Standalone comments do
 not require performance/spectator registration. The combined registration flow
 must preserve the mock's partial-success behavior and safe idempotent replay.
 These are recorded prerequisites, **not implemented by this PR**.
+
+The follow-on event-comments increment implements the comment prerequisites; see EVENT-COMMENTS.md for its scope and validation.

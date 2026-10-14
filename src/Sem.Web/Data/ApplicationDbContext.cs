@@ -30,6 +30,8 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<PartPresetState> PartPresetStates => Set<PartPresetState>();
     public DbSet<PartPreset> PartPresets => Set<PartPreset>();
     public DbSet<EventPartDefinition> EventPartDefinitions => Set<EventPartDefinition>();
+    public DbSet<EventComment> EventComments => Set<EventComment>();
+    public DbSet<CommentOperation> CommentOperations => Set<CommentOperation>();
     public DbSet<EventQuestion> EventQuestions => Set<EventQuestion>();
     public DbSet<EventQuestionAnswer> EventQuestionAnswers => Set<EventQuestionAnswer>();
     public DbSet<EventParticipantState> EventParticipantStates => Set<EventParticipantState>();
@@ -47,6 +49,17 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     protected override void OnModelCreating(ModelBuilder b)
     {
         base.OnModelCreating(b);
+        b.Entity<EventComment>().HasOne<SessionEvent>().WithMany().HasForeignKey(x=>x.EventId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<EventComment>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x=>x.UserId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<EventComment>().HasIndex(x=>new{x.EventId,x.CreatedAt,x.Id});
+        b.Entity<EventComment>().ToTable("EventComments",t=>t.HasCheckConstraint("CK_EventComments_Body","length(trim(\"Body\"))>=3"));
+        b.Entity<CommentOperation>().HasOne<SessionEvent>().WithMany().HasForeignKey(x=>x.EventId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<CommentOperation>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x=>x.ActorId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<CommentOperation>().ToTable("CommentOperations",t=>{
+            t.HasCheckConstraint("CK_CommentOperation_Kind","\"Kind\" IN ('Post','Delete')");
+            t.HasCheckConstraint("CK_CommentOperation_Hash","length(\"RequestHash\")=64");
+        });
+
         b.Entity<EventPushDelivery>().HasOne<SessionEvent>().WithMany().HasForeignKey(x=>x.EventId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<EventPushDelivery>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x=>x.UserId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<EventPushDelivery>().HasIndex(x=>new{x.EventId,x.EntryId,x.UserId,x.DeviceId}).IsUnique();
