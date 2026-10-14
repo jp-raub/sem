@@ -23,7 +23,7 @@ try{
  await core.SetManualPushActivationAsync(Who(),new(Guid.NewGuid().ToString("D"),true,0,true));
  for(var n=0;n<25;n++)await Accept();
  var first=await engine.RunOnceAsync();Check(first.PreparedRecipients==20&&first.ProcessedDeliveries==20&&first.FailedItems==0&&spy.Calls==20,"one batch bounds both preparation and dispatch to twenty");
- var second=await engine.RunOnceAsync();Check(second.PreparedRecipients==5&&second.ProcessedDeliveries==5&&spy.Calls==25,"next batch progresses beyond first twenty without cursor duplication");
+ var second=await engine.RunOnceAsync();Check(second.PreparedRecipients==5&&second.ProcessedDeliveries==5&&spy.Calls==25,"next batch progresses beyond first twenty without recipient duplication");
  var third=await engine.RunOnceAsync();Check(third.PreparedRecipients==0&&third.ProcessedDeliveries==0&&spy.Calls==25,"idle batch never resends completed work");
  await using(var db=await factory.CreateDbContextAsync())Check(!await db.Set<ManualNotificationPushPreparation>().AnyAsync(x=>x.RecipientId==old),"pre-activation request remains excluded without backfill");
  spy.Available=false;var unavailable=new List<string>();for(var n=0;n<25;n++)unavailable.Add(await Accept());
@@ -65,6 +65,18 @@ try{
   using var stopWorker=new CancellationTokenSource(TimeSpan.FromSeconds(5));await worker.StopAsync(stopWorker.Token);
   var afterStop=spy.Calls;await Task.Delay(200);Check(spy.Calls==afterStop,"worker cancellation stops timer and leaves no further background I/O");
  }
+ // A full poisoned first batch must not starve later healthy recipients across scoped engines.
+ var fairIds=new List<string>();for(var n=0;n<25;n++)fairIds.Add(await Accept());
+ var poisoned=fairIds.Order(StringComparer.Ordinal).Take(20).ToArray();
+ await Change(db=>db.Database.ExecuteSqlRawAsync("CREATE TRIGGER RejectFirstBatch BEFORE INSERT ON ManualNotificationPushDeliveries WHEN NEW.RecipientId IN ("+string.Join(",",poisoned.Select(x=>"'"+x+"'"))+") BEGIN SELECT RAISE(ABORT,'synthetic-poisoned-batch'); END"));
+ var fairness=new ManualNotificationPushScanState();
+ var poisonedPass=await new ManualNotificationPushEngine(factory,queue,dispatcher,clock).RunOnceAsync(scanState:fairness);
+ Check(poisonedPass.FailedItems==20&&poisonedPass.PreparedRecipients==0,"twenty poisoned preparations remain bounded without false completion");
+ var healthyPass=await new ManualNotificationPushEngine(factory,queue,dispatcher,clock).RunOnceAsync(scanState:fairness);
+ Check(healthyPass.PreparedRecipients==5&&healthyPass.ProcessedDeliveries==5&&healthyPass.FailedItems==15,"fairness survives scope changes and advances beyond twenty persistent failures");
+ await Change(db=>db.Database.ExecuteSqlRawAsync("DROP TRIGGER RejectFirstBatch"));
+ var repairedPass=await new ManualNotificationPushEngine(factory,queue,dispatcher,clock).RunOnceAsync(scanState:fairness);
+ Check(repairedPass.PreparedRecipients==20&&repairedPass.ProcessedDeliveries==20&&repairedPass.FailedItems==0,"wraparound retries repaired failures without duplicate healthy deliveries");
  using(var stop=new CancellationTokenSource()){stop.Cancel();bool cancelled=false;try{await engine.RunOnceAsync(stop.Token);}catch(OperationCanceledException){cancelled=true;}Check(cancelled,"batch cancellation propagates before housekeeping or I/O");}
  await using(var db=await factory.CreateDbContextAsync()){
   Check(await db.Messages.CountAsync()==await db.Set<ManualNotificationOperation>().CountAsync()&&await db.Messages.AllAsync(x=>x.Body=="PRIVATE-BODY"&&x.ReadAt==null),"orchestration never duplicates or changes inbox content/read state");
