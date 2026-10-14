@@ -34,9 +34,9 @@ module.exports=async({p,g,ok})=>{
   ok(await a.locator('#manual-push-stage').isDisabled()&&await a.locator('#manual-push-submit').isDisabled(),'Outstanding context read disables stage and submission before stale response can race a write');
   releaseRead();await a.unroute('**/api/core/manual-push-control');await a.locator('#manual-push-stage').waitFor({state:'visible'});await a.waitForFunction(()=>!document.getElementById('manual-push-stage').disabled);
   ok(!(await api(p,'manual-push-control')).body.enabled,'Held context refresh cannot cause activation or issue a POST');
-  await a.locator('#manual-push-stage').click();ok(await a.locator('#manual-push-submit').isDisabled(),'Staged target still requires separate confirmation');
-  await a.getByRole('link',{name:'サービス管理へ戻る',exact:true}).click();await a.waitForFunction(()=>document.getElementById('manual-push-control-error').textContent.includes('未送信'));
-  ok(a.url().endsWith('/service/manual-push'),'Unsent activation draft blocks internal navigation');await a.locator('#manual-push-discard').click();await a.getByRole('link',{name:'サービス管理へ戻る',exact:true}).click();await a.waitForURL('**/workspace#core-service');
+  await a.locator('#manual-push-stage').click();await a.locator('#manual-push-confirmation').waitFor();ok(await a.locator('#manual-push-submit').isDisabled(),'Staged target still requires separate confirmation');
+  await a.getByRole('link',{name:'サービス管理へ戻る',exact:true}).click();await a.waitForFunction(()=>document.getElementById('manual-push-control-error')?.textContent.includes('未送信'));
+  ok(a.url().endsWith('/service/manual-push'),'Unsent activation draft blocks internal navigation');await a.locator('#manual-push-discard').click();await a.locator('#manual-push-confirmation').waitFor({state:'detached'});await a.getByRole('link',{name:'サービス管理へ戻る',exact:true}).click();await a.waitForURL('**/workspace#core-service');
   ok(a.url().includes('/workspace'),'Discarding unsent change permits navigation without altering activation');
   await a.locator('#manual-push-control-link').click();await ready();await a.locator('#manual-push-stage').click();await a.locator('#manual-push-confirm').check();
   ok(await a.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'390px operational control has no horizontal page overflow');

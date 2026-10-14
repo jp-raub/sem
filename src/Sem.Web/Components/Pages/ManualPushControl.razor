@@ -3,10 +3,11 @@
 @implements IAsyncDisposable
 @using Sem.Web.Core
 @inject IJSRuntime JS
+@inject NavigationManager Navigation
 <NavigationLock ConfirmExternalNavigation="@State.NavigationBlocked" OnBeforeInternalNavigation="BeforeNavigation" />
 <PageTitle>手動Pushの運用制御</PageTitle>
 <h1>手動Pushの運用制御</h1>
-<p><a href="/workspace#core-service">サービス管理へ戻る</a></p>
+<p><a href="/workspace#core-service" @onclick="ReturnToService" @onclick:preventDefault="true">サービス管理へ戻る</a></p>
 <p>全体管理者専用です。有効化後に新しく受付した通知だけが対象で、有効化前の受付は後付け配信しません。期限は元の受付から10分。参加解除後も保存済みメッセージは残しますが、以後のPushは抑止します。</p>
 <p>停止・再有効化は世代を変更します。以前の世代の通知は再開しません。配信基盤への受付は端末受信・既読の保証ではありません。</p>
 <p>下書きと結果未確認の操作はこの画面のメモリだけです。処理中・結果不明では再読込や画面を閉じる操作を避け、同じ操作IDで結果を確認してください。</p>
@@ -60,6 +61,12 @@
     void Stage(bool enabled) { if (!Initializing && State.CanEdit) State.Stage(enabled); }
     void ConfirmChanged(ChangeEventArgs e) { if (!Initializing && State.CanEdit && State.Target is not null) State.Confirm(e.Value is true); }
     void Discard() { if (Initializing) return; State.Discard(); Error = ""; Message = "未送信の変更だけを取り消しました。保存済み方針は変更していません。"; }
+    void ReturnToService()
+    {
+        // Static-SSR enhanced links can bypass the circuit's internal NavigationLock.
+        if (State.NavigationBlocked) { Error = "未送信・処理中・結果未確認の変更があります。結果確認または未送信変更の取消後に移動してください。"; return; }
+        Navigation.NavigateTo("/workspace#core-service");
+    }
     void BeforeNavigation(LocationChangingContext c) { if (State.NavigationBlocked) { c.PreventNavigation(); Error = "未送信・処理中・結果未確認の変更があります。結果確認または未送信変更の取消後に移動してください。"; } }
     async Task Submit() {
         if (Module is null || State.Busy || Initializing || State.View is null || State.Pending is null && (!State.Confirmed || State.Target is null)) return;
