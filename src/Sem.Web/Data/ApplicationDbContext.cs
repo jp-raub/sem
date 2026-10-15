@@ -52,6 +52,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<TimePart> TimeParts => Set<TimePart>();
     public DbSet<Song> Songs => Set<Song>();
     public DbSet<SongPart> SongParts => Set<SongPart>();
+    public DbSet<ThemeCatalogEntry> ThemeCatalogEntries => Set<ThemeCatalogEntry>();
     protected override void OnModelCreating(ModelBuilder b)
     {
         base.OnModelCreating(b);
@@ -355,5 +356,19 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         b.Entity<PasskeyAddition>().HasIndex(p => p.EmailTokenHash).IsUnique();
         b.Entity<PasskeyAddition>().HasIndex(p => new { p.UserId, p.SessionHash })
             .IsUnique().HasFilter("\"Cancelled\" = 0 AND \"CompletedAt\" IS NULL");
+        b.Entity<ThemeCatalogEntry>().HasKey(x => x.Id);
+        b.Entity<ThemeCatalogEntry>().Property(x => x.Id).HasMaxLength(64);
+        b.Entity<ThemeCatalogEntry>().Property(x => x.Name).HasMaxLength(30);
+        b.Entity<ThemeCatalogEntry>().Property(x => x.Accent).HasMaxLength(7);
+        b.Entity<ThemeCatalogEntry>().Property(x => x.Background).HasMaxLength(7);
+        b.Entity<ThemeCatalogEntry>().Property(x => x.Surface).HasMaxLength(7);
+        b.Entity<ThemeCatalogEntry>().Property(x => x.Text).HasMaxLength(7);
+        b.Entity<ThemeCatalogEntry>().Property(x => x.RowVersion).IsConcurrencyToken();
+        b.Entity<ThemeCatalogEntry>().ToTable("ThemeCatalogEntries", t => {
+            t.HasCheckConstraint("CK_ThemeCatalog_Id", "length(\"Id\") BETWEEN 1 AND 64 AND \"Id\" NOT GLOB '*[^a-z0-9-]*' AND \"Id\" NOT GLOB '-*' AND \"Id\" NOT GLOB '*-' AND \"Id\" NOT GLOB '*--*'");
+            t.HasCheckConstraint("CK_ThemeCatalog_Name", "length(trim(\"Name\")) BETWEEN 1 AND 30");
+            t.HasCheckConstraint("CK_ThemeCatalog_Colors", "length(\"Accent\")=7 AND \"Accent\" GLOB '#[0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F]' AND length(\"Background\")=7 AND \"Background\" GLOB '#[0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F]' AND length(\"Surface\")=7 AND \"Surface\" GLOB '#[0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F]' AND length(\"Text\")=7 AND \"Text\" GLOB '#[0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F]'");
+            t.HasCheckConstraint("CK_ThemeCatalog_FlagsAndVersion", "\"BuiltIn\" IN (0,1) AND \"RowVersion\">=0");
+        });
     }
 }

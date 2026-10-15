@@ -166,6 +166,26 @@ namespace Sem.Web.Data.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("Sem.Web.Core.ThemeCatalogEntry", b =>
+                {
+                    b.Property<string>("Id").IsRequired().HasMaxLength(64).HasColumnType("TEXT");
+                    b.Property<string>("Name").IsRequired().HasMaxLength(30).HasColumnType("TEXT");
+                    b.Property<string>("Accent").IsRequired().HasMaxLength(7).HasColumnType("TEXT");
+                    b.Property<string>("Background").IsRequired().HasMaxLength(7).HasColumnType("TEXT");
+                    b.Property<string>("Surface").IsRequired().HasMaxLength(7).HasColumnType("TEXT");
+                    b.Property<string>("Text").IsRequired().HasMaxLength(7).HasColumnType("TEXT");
+                    b.Property<bool>("BuiltIn").HasColumnType("INTEGER");
+                    b.Property<long>("RowVersion").IsConcurrencyToken().HasColumnType("INTEGER");
+                    b.HasKey("Id");
+                    b.ToTable("ThemeCatalogEntries", t =>
+                    {
+                        t.HasCheckConstraint("CK_ThemeCatalog_Id", "length(\"Id\") BETWEEN 1 AND 64 AND \"Id\" NOT GLOB '*[^a-z0-9-]*' AND \"Id\" NOT GLOB '-*' AND \"Id\" NOT GLOB '*-' AND \"Id\" NOT GLOB '*--*'");
+                        t.HasCheckConstraint("CK_ThemeCatalog_Name", "length(trim(\"Name\")) BETWEEN 1 AND 30");
+                        t.HasCheckConstraint("CK_ThemeCatalog_Colors", "length(\"Accent\")=7 AND \"Accent\" GLOB '#[0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F]' AND length(\"Background\")=7 AND \"Background\" GLOB '#[0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F]' AND length(\"Surface\")=7 AND \"Surface\" GLOB '#[0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F]' AND length(\"Text\")=7 AND \"Text\" GLOB '#[0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F]'");
+                        t.HasCheckConstraint("CK_ThemeCatalog_FlagsAndVersion", "\"BuiltIn\" IN (0,1) AND \"RowVersion\">=0");
+                    });
+                });
+
             modelBuilder.Entity("Sem.Web.Core.BusinessNotification", b =>
                 {
                     b.Property<string>("Id")
