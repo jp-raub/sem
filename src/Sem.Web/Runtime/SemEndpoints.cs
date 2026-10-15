@@ -21,7 +21,14 @@ public static class SemEndpoints
         app.MapMethods("/api/{**action}", ["GET", "POST"], async (HttpContext ctx, ApplicationDbContext db, UserManager<ApplicationUser> users, SignInManager<ApplicationUser> signin, IAntiforgery csrf, IDataProtectionProvider dp, DeploymentSettings settings, NotificationService notifications, PasskeyAdditionService additions) =>
         {
             ctx.Response.Headers.CacheControl = "no-store";
-            try { await Handle(ctx, db, users, signin, csrf, dp.CreateProtector("SEM.Tokens.v1"), settings, notifications, additions); }
+            try {
+                if ((ctx.Request.RouteValues["action"]?.ToString() ?? "").StartsWith("email-change-", StringComparison.Ordinal))
+                    await EmailChangeEndpoints.Handle(ctx, ctx.RequestServices.GetRequiredService<EmailChangeService>(), csrf, settings);
+                else await Handle(ctx, db, users, signin, csrf, dp.CreateProtector("SEM.Tokens.v1"), settings, notifications, additions);
+            }
+            catch (EmailChangeRateLimitException e) { ctx.Response.StatusCode = 429; ctx.Response.Headers.RetryAfter = e.RetryAfter.ToString(System.Globalization.CultureInfo.InvariantCulture); await ctx.Response.WriteAsJsonAsync(new { error = e.Message, retryAfter = e.RetryAfter }); }
+            catch (DbUpdateConcurrencyException) { ctx.Response.StatusCode = 409; await ctx.Response.WriteAsJsonAsync(new { error = "ほかの画面で更新されています。最新状態を取得してください。" }); }
+            catch (DbUpdateException) { ctx.Response.StatusCode = 409; await ctx.Response.WriteAsJsonAsync(new { error = "変更を確定できません。最新状態を取得してください。" }); }
             catch (ValidationException e) { ctx.Response.StatusCode = 400; await ctx.Response.WriteAsJsonAsync(new { error = e.Message }); }
             catch (AntiforgeryValidationException) { ctx.Response.StatusCode = 400; await ctx.Response.WriteAsJsonAsync(new { error = "ページを再読み込みしてください。" }); }
             catch (JsonException) { ctx.Response.StatusCode = 400; await ctx.Response.WriteAsJsonAsync(new { error = "入力形式を確認してください。" }); }

@@ -3378,6 +3378,196 @@ namespace Sem.Web.Data.Migrations
 
                     b.Navigation("Phases");
                 });
+            modelBuilder.Entity("Sem.Web.Runtime.EmailChangeMail", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Claim")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Due")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Error")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("ExpiresAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("LeaseUntil")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("OperationId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ProtectedPayload")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("SentAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("Status", "Due");
+
+                    b.ToTable("EmailChangeMails", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_EmailChangeMail_Claim", "(\"Status\"='Sending' AND \"Claim\" IS NOT NULL AND \"LeaseUntil\" IS NOT NULL) OR (\"Status\"<>'Sending' AND \"Claim\" IS NULL AND \"LeaseUntil\" IS NULL)");
+
+                            t.HasCheckConstraint("CK_EmailChangeMail_Kind", "\"Kind\" IN ('Verification','OldAddressNotice')");
+
+                            t.HasCheckConstraint("CK_EmailChangeMail_State", "\"Status\" IN ('Pending','Sending','Sent','Failed','Cancelled') AND \"Attempts\" BETWEEN 0 AND 5");
+                        });
+                });
+
+            modelBuilder.Entity("Sem.Web.Runtime.EmailChangeOperation", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("ChallengeExpiresAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ChallengeHash")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CreatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("ExpiresAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("LastSentAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("OriginalEmailHash")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ProtectedTargetEmail")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("ReauthenticatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("RowVersion")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SecurityStamp")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SessionHash")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TargetEmailHash")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TokenHash")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TargetEmailHash")
+                        .IsUnique();
+
+                    b.HasIndex("UserId")
+                        .IsUnique();
+
+                    b.ToTable("EmailChangeOperations", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_EmailChangeOperation_Hashes", "length(\"OriginalEmailHash\")=64 AND length(\"SessionHash\")=64 AND (\"TargetEmailHash\" IS NULL OR length(\"TargetEmailHash\")=64) AND (\"TokenHash\" IS NULL OR length(\"TokenHash\")=64)");
+
+                            t.HasCheckConstraint("CK_EmailChangeOperation_State", "\"Status\" IN ('Pending','Completed','Cancelled','Invalidated') AND \"RowVersion\">0");
+                        });
+                });
+
+            modelBuilder.Entity("Sem.Web.Runtime.EmailChangeRateState", b =>
+                {
+                    b.Property<string>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PasskeyFailures")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("RowVersion")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SendTimes")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("VerificationFailures")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("UserId");
+
+                    b.ToTable("EmailChangeRateStates", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_EmailChangeRateState_Version", "\"RowVersion\">0");
+                        });
+                });
+
+            modelBuilder.Entity("Sem.Web.Runtime.EmailChangeMail", b =>
+                {
+                    b.HasOne("Sem.Web.Data.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Sem.Web.Runtime.EmailChangeOperation", b =>
+                {
+                    b.HasOne("Sem.Web.Data.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Sem.Web.Runtime.EmailChangeRateState", b =>
+                {
+                    b.HasOne("Sem.Web.Data.ApplicationUser", null)
+                        .WithOne()
+                        .HasForeignKey("Sem.Web.Runtime.EmailChangeRateState", "UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
 #pragma warning restore 612, 618
         }
     }

@@ -24,8 +24,12 @@ public class NotificationService(IConfiguration cfg, IDataProtectionProvider dp)
             SemEndpoints.Hash("business-email:"+operationId)+"@notifications.sem.invalid");
     public async Task SendEmail(Delivery delivery, ApplicationUser user, CancellationToken ct, string? messageId = null)
     {
+        await SendEmailTo(user.Email!, delivery.Subject, protector.Unprotect(delivery.ProtectedBody), ct, messageId);
+    }
+    public async Task SendEmailTo(string recipient, string subject, string body, CancellationToken ct, string? messageId = null)
+    {
         if (!EmailConfigured) throw new InvalidOperationException("SMTP not configured");
-        var message = new MimeMessage(); message.From.Add(MailboxAddress.Parse(cfg["Smtp:From"]!)); message.To.Add(MailboxAddress.Parse(user.Email!)); message.Subject = delivery.Subject; message.Body = new TextPart("plain") { Text = protector.Unprotect(delivery.ProtectedBody) };
+        var message = new MimeMessage(); message.From.Add(MailboxAddress.Parse(cfg["Smtp:From"]!)); message.To.Add(MailboxAddress.Parse(recipient)); message.Subject = subject; message.Body = new TextPart("plain") { Text = body };
         if(messageId is not null) message.MessageId=messageId;
         using var client = new SmtpClient(); client.Timeout = 15000;
         var tls = cfg["Smtp:Tls"] ?? "StartTls";

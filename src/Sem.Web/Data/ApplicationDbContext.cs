@@ -21,6 +21,9 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<Participation> Participations => Set<Participation>();
     public DbSet<Audit> Audits => Set<Audit>();
     public DbSet<PasskeyAddition> PasskeyAdditions => Set<PasskeyAddition>();
+    public DbSet<EmailChangeOperation> EmailChangeOperations => Set<EmailChangeOperation>();
+    public DbSet<EmailChangeRateState> EmailChangeRateStates => Set<EmailChangeRateState>();
+    public DbSet<EmailChangeMail> EmailChangeMails => Set<EmailChangeMail>();
     public DbSet<RevokedAuthSession> RevokedAuthSessions => Set<RevokedAuthSession>();
     public DbSet<ServiceSettings> ServiceSettings => Set<ServiceSettings>();
     public DbSet<UserProfile> UserProfiles => Set<UserProfile>();
@@ -63,6 +66,25 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     protected override void OnModelCreating(ModelBuilder b)
     {
         base.OnModelCreating(b);
+        b.Entity<EmailChangeOperation>().HasIndex(x => x.UserId).IsUnique();
+        b.Entity<EmailChangeOperation>().HasIndex(x => x.TargetEmailHash).IsUnique();
+        b.Entity<EmailChangeOperation>().Property(x => x.RowVersion).IsConcurrencyToken();
+        b.Entity<EmailChangeOperation>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<EmailChangeOperation>().ToTable("EmailChangeOperations", t => {
+            t.HasCheckConstraint("CK_EmailChangeOperation_State", "\"Status\" IN ('Pending','Completed','Cancelled','Invalidated') AND \"RowVersion\">0");
+            t.HasCheckConstraint("CK_EmailChangeOperation_Hashes", "length(\"OriginalEmailHash\")=64 AND length(\"SessionHash\")=64 AND (\"TargetEmailHash\" IS NULL OR length(\"TargetEmailHash\")=64) AND (\"TokenHash\" IS NULL OR length(\"TokenHash\")=64)");
+        });
+        b.Entity<EmailChangeRateState>().HasKey(x => x.UserId);
+        b.Entity<EmailChangeRateState>().Property(x => x.RowVersion).IsConcurrencyToken();
+        b.Entity<EmailChangeRateState>().HasOne<ApplicationUser>().WithOne().HasForeignKey<EmailChangeRateState>(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<EmailChangeRateState>().ToTable("EmailChangeRateStates", t => t.HasCheckConstraint("CK_EmailChangeRateState_Version", "\"RowVersion\">0"));
+        b.Entity<EmailChangeMail>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<EmailChangeMail>().HasIndex(x => new { x.Status, x.Due });
+        b.Entity<EmailChangeMail>().ToTable("EmailChangeMails", t => {
+            t.HasCheckConstraint("CK_EmailChangeMail_Kind", "\"Kind\" IN ('Verification','OldAddressNotice')");
+            t.HasCheckConstraint("CK_EmailChangeMail_State", "\"Status\" IN ('Pending','Sending','Sent','Failed','Cancelled') AND \"Attempts\" BETWEEN 0 AND 5");
+            t.HasCheckConstraint("CK_EmailChangeMail_Claim", "(\"Status\"='Sending' AND \"Claim\" IS NOT NULL AND \"LeaseUntil\" IS NOT NULL) OR (\"Status\"<>'Sending' AND \"Claim\" IS NULL AND \"LeaseUntil\" IS NULL)");
+        });
         b.Entity<EventImportOperation>().HasOne<SessionEvent>().WithMany()
             .HasForeignKey(x => x.EventId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<EventImportOperation>().HasOne<ApplicationUser>().WithMany()
