@@ -1,0 +1,11 @@
+@page "/profile/email-change-confirm"
+@attribute [Microsoft.AspNetCore.Authorization.AllowAnonymous]
+
+<PageTitle>メールアドレスの確認</PageTitle>
+<section class="panel" style="max-width:720px;margin:24px auto;">
+    <h1>メールアドレスの確認</h1>
+    <p id="email-change-confirm-status" role="status" aria-live="polite">確認リンクを確認しています。</p>
+    <p id="email-change-confirm-error" role="alert"></p>
+    <p><a href="/">トップページへ戻る</a></p>
+</section>
+<script type="module" src="/email-change-confirm.js"></script>

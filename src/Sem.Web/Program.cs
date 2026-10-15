@@ -75,6 +75,11 @@ builder.Services.AddScoped<NotificationReservationReconciler>();
 builder.Services.AddHostedService<NotificationReservationWorker>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<PasskeyAdditionService>();
+builder.Services.AddScoped<IEmailChangePasskeyProof, NativeEmailChangePasskeyProof>();
+builder.Services.AddScoped<EmailChangeService>();
+builder.Services.AddSingleton<IEmailChangeMailTransport, EmailChangeMailTransport>();
+builder.Services.AddScoped<EmailChangeMailDispatcher>();
+builder.Services.AddHostedService<EmailChangeMailWorker>();
 builder.Services.AddHostedService<NotificationWorker>();
 builder.Services.AddHostedService<PhaseWorker>();
 builder.Services.AddRateLimiter(o =>

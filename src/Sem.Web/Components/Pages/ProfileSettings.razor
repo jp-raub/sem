@@ -39,6 +39,23 @@
             <button id="profile-save">保存</button>
         </form>
     </section>
+    <section class="panel" id="profile-email-change" aria-labelledby="profile-email-change-heading">
+        <h2 id="profile-email-change-heading">メールアドレスの変更</h2>
+        <p>新しいメールアドレスを入力し、パスキーで再認証した後、届いた確認リンクを開いて変更を確定してください。確認リンクを開いてもログイン状態は発行されません。</p>
+        <p id="profile-email-change-status" role="status" aria-live="polite">変更状況を確認しています。</p>
+        <p id="profile-email-change-error" role="alert"></p>
+        <form id="profile-email-change-form" method="post" action="/profile/settings">
+            <label for="profile-email-change-address">新しいメールアドレス</label>
+            <input id="profile-email-change-address" name="newEmail" type="email" maxlength="254" autocomplete="email" required disabled />
+            <button id="profile-email-change-begin" type="submit" disabled>変更を開始して再認証</button>
+        </form>
+        <div id="profile-email-change-pending" hidden>
+            <p id="profile-email-change-pending-status"></p>
+            <button id="profile-email-change-resend" type="button">再認証して確認メールを送信</button>
+            <button id="profile-email-change-cancel" type="button">変更を取り消す</button>
+        </div>
+        <button id="profile-email-change-refresh" type="button">状況を再取得</button>
+    </section>
     <section class="panel" aria-labelledby="profile-qr-heading">
         <h2 id="profile-qr-heading">プロフィールQR（24時間）</h2>
         <p id="profile-qr-status"></p>
@@ -61,10 +78,23 @@
 
 @code {
     private IJSObjectReference? _module;
+    private IJSObjectReference? _emailChangeModule;
     private bool _disposed;
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
+        try
+        {
+            var emailChangeModule = await JS.InvokeAsync<IJSObjectReference>("import", "/profile-email-change.js");
+            if (_disposed) { await emailChangeModule.DisposeAsync(); return; }
+            _emailChangeModule = emailChangeModule;
+            await _emailChangeModule.InvokeVoidAsync("init");
+        }
+        catch
+        {
+            // Keep email-change initialization independent of the profile editor module.
+        }
+        if (_disposed) return;
         try
         {
             var module = await JS.InvokeAsync<IJSObjectReference>("import", "/profile-editor.js");
@@ -74,7 +104,7 @@
         }
         catch
         {
-            // The page remains inert if its browser API module cannot initialize.
+            // The profile editor can remain inert if its browser module fails to initialize.
         }
     }
 
@@ -84,6 +114,11 @@
         if (_module is not null)
         {
             try { await _module.InvokeVoidAsync("cleanup"); await _module.DisposeAsync(); }
+            catch (JSDisconnectedException) { }
+        }
+        if (_emailChangeModule is not null)
+        {
+            try { await _emailChangeModule.InvokeVoidAsync("cleanup"); await _emailChangeModule.DisposeAsync(); }
             catch (JSDisconnectedException) { }
         }
     }
