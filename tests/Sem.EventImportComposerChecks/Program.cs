@@ -40,4 +40,14 @@ changedEvent.BeginOperation("event", "actor", "55555555-5555-4555-8555-555555555
 Check(changedEvent.SubmissionAccepted(new("55555555-5555-4555-8555-555555555555", 5, 1, 0, 0, 100)), "event change fixture accepted");
 changedEvent.StartNew(); changedEvent.Discard();
 Check(changedEvent.Accepted is null && changedEvent.Pending is null && changedEvent.Preview is null && changedEvent.Csv.Length == 0, "successful receipt cleared before event change");
+var browserDraft = new EventImportComposerState();
+browserDraft.MarkClientDirty(true);
+Check(browserDraft.Csv.Length == 0 && browserDraft.NavigationBlocked, "browser-owned draft blocks navigation without transferring text");
+browserDraft.Discard(); Check(!browserDraft.ClientDirty && !browserDraft.NavigationBlocked, "discard clears browser-owned draft marker");
+browserDraft.MarkClientDirty(true); browserDraft.BeginFileRead(); browserDraft.MarkClientDirty(false);
+Check(browserDraft.ClientDirty && browserDraft.Busy, "busy operation rejects late dirty-marker changes");
+browserDraft.CompleteFileRead("snapshot");
+Check(!browserDraft.ClientDirty && browserDraft.Csv == "snapshot" && browserDraft.NavigationBlocked, "bounded snapshot replaces dirty marker with captured CSV");
+browserDraft.Edit(""); browserDraft.MarkClientDirty(true); browserDraft.Edit("");
+Check(!browserDraft.ClientDirty && !browserDraft.NavigationBlocked, "explicit empty edit clears browser-owned marker");
 Console.WriteLine($"Event import composer checks: {checks} passed");
