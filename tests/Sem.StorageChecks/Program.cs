@@ -72,11 +72,19 @@ try
     {
         await SqliteStorageInitializer.InitializeAsync(fixture.Db);
         Check(before == await DumpAsync(legacy), "Legacy adoption preserves every pre-existing business row including passkey bytes");
-        Check(await fixture.Db.PartPresets.CountAsync()==6 && (await fixture.Db.PartPresetStates.SingleAsync()).RowVersion==0, "Legacy adoption adds only the explicit new preset seed rows");
+        Check(await fixture.Db.PartPresets.CountAsync()==6 && (await fixture.Db.PartPresetStates.SingleAsync()).RowVersion==0, "Legacy adoption preserves the six explicit preset seed rows");
+        var themeSeeds = await fixture.Db.ThemeCatalogEntries.AsNoTracking().OrderBy(x => x.Id).ToArrayAsync();
+        Check(themeSeeds.Length == 10 && Sem.Web.Core.ThemeCatalog.Default.Themes.All(t => themeSeeds.Any(row =>
+            row.Id == t.Id && row.Name == t.Name && row.Accent == t.Accent.Value && row.Background == t.Background.Value &&
+            row.Surface == t.Surface.Value && row.Text == t.Text.Value && row.BuiltIn && row.RowVersion == 0)),
+            "Legacy adoption adds only the ten exact approved catalog seed rows");
+        var themeSeedSnapshot = System.Text.Json.JsonSerializer.Serialize(themeSeeds);
         Check((await fixture.Db.Database.GetAppliedMigrationsAsync()).SequenceEqual(fixture.Db.Database.GetMigrations()),
             "Legacy schema receives baseline history and pending migration after validation");
         await SqliteStorageInitializer.InitializeAsync(fixture.Db);
         Check(before == await DumpAsync(legacy), "Migrated DB survives another startup without data changes");
+        Check(themeSeedSnapshot == System.Text.Json.JsonSerializer.Serialize(await fixture.Db.ThemeCatalogEntries.AsNoTracking().OrderBy(x => x.Id).ToArrayAsync()),
+            "Repeated legacy startup leaves every theme seed field unchanged");
     }
     SqliteConnection.ClearAllPools();
     var restored = Path.Combine(root, "restored.db");
@@ -185,7 +193,7 @@ static async Task<string> DumpAsync(string path)
     var tables = new List<string>();
     using (var command = connection.CreateCommand())
     {
-        command.CommandText = "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '__EF%' AND name NOT IN ('PartPresetStates','PartPresets') ORDER BY name";
+        command.CommandText = "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '__EF%' AND name NOT IN ('PartPresetStates','PartPresets','ThemeCatalogEntries') ORDER BY name";
         using var reader = await command.ExecuteReaderAsync();
         while (await reader.ReadAsync()) tables.Add(reader.GetString(0));
     }
