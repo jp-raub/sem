@@ -103,7 +103,7 @@ try
     await Deny<UnauthorizedAccessException>(() => core.ReadProfileQrSvgAsync(Who("other"), issued.Token, issued.RowVersion, "https://profile.example/"), "another member cannot fetch owner's QR SVG");
 
     var publicProfile = await core.ResolveProfileQrAsync(issued.Token);
-    Check(publicProfile.DisplayName == "Member" && publicProfile.Answers!.Single(x => x.QuestionId == qYesNo.Id).Value == "YES" && !publicProfile.Answers.Any(x => x.QuestionId == qText.Id), "anonymous bearer view contains active answers only and hides stopped answers");
+    Check(publicProfile.DisplayName == "Member" && publicProfile.Answers!.Single(x => x.QuestionId == qYesNo.Id).Value == "YES" && !publicProfile.Answers!.Any(x => x.QuestionId == qText.Id), "anonymous bearer view contains active answers only and hides stopped answers");
     var json = System.Text.Json.JsonSerializer.Serialize(publicProfile);
     Check(!json.Contains("private@test.invalid", StringComparison.Ordinal) && !json.Contains("Events", StringComparison.OrdinalIgnoreCase), "public view omits email and registration history");
     var statusBeforeRead = await core.ReadProfileQrStatusAsync(Who("member"));
