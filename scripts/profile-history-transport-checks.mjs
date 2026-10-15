@@ -45,8 +45,8 @@ try {
     await reject(() => history('target'), 'history response above 4 MiB is refused');
     check(cancelled, 'oversize history stream is cancelled immediately');
 
-    globalThis.fetch = async () => new Response(new ReadableStream({ start(controller) { controller.enqueue(new Uint8Array(2 * 1024 * 1024 + 1)); } }));
-    await reject(() => profile('target'), 'basic profile response above 2 MiB is refused');
+    globalThis.fetch = async () => new Response(new ReadableStream({ start(controller) { controller.enqueue(new Uint8Array(4 * 1024 * 1024 + 1)); } }));
+    await reject(() => profile('target'), 'basic profile response above 4 MiB is refused');
 
     let aborted = false;
     globalThis.setTimeout = callback => { queueMicrotask(callback); return 123; };

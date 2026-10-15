@@ -17,7 +17,7 @@ public sealed class CoreConflictException() : Exception("ほかの画面で更�
 public sealed record SocialLink(string Service, string Url);
 public sealed record ServiceView(string Name, string Description, long RowVersion);
 public sealed record ProfileView(string UserId, string DisplayName, string Reading, string CallName, SocialLink[] Social, long RowVersion,
-    string Icon = "", ProfileAnswerView[]? Answers = null);
+    string Icon = "", ProfileAnswerView[]? Answers = null, string? ImageDataUrl = null, long ImageRowVersion = 0);
 public sealed record MemberView(string UserId, string DisplayName);
 public sealed record EventView(string Id, string Title, string Description, string Location, string ScheduledDate,
     string? OpensAt, string AnnouncementMessage, string PhaseKind, string[] ManagerIds, long RowVersion, bool CanManage, string ActivePhaseName, string ActivePhaseKind, int MaxPicks, bool ManualPhaseOverride);
@@ -68,7 +68,7 @@ public sealed partial class CoreFoundationService(IDbContextFactory<ApplicationD
         var events = await db.SessionEvents.AsNoTracking().Include(e => e.Admins).Include(e => e.Phases)
             .Where(e => user.IsAdmin || e.PhaseKind == "View" || e.Admins.Any(a => a.UserId == user.Id))
             .OrderBy(e => e.ScheduledDate).ThenBy(e => e.Id).ToListAsync(ct);
-        return new(new(name, settings?.Description ?? "", settings?.RowVersion ?? 0), Profile(user, profile), user.Email!,
+        return new(new(name, settings?.Description ?? "", settings?.RowVersion ?? 0), await ProfileWithImageAsync(db, user, Profile(user, profile), ct), user.Email!,
             user.IsAdmin, members, events.Select(e => new EventView(e.Id, e.Title, e.Description, e.Location,
                 e.ScheduledDate, e.OpensAt, e.AnnouncementMessage, e.PhaseKind, e.Admins.Select(a => a.UserId).Order().ToArray(),
                 e.RowVersion, user.IsAdmin || e.Admins.Any(a => a.UserId == user.Id), e.Phases.Single(p => p.IsActive).Name,

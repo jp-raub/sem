@@ -24,6 +24,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<RevokedAuthSession> RevokedAuthSessions => Set<RevokedAuthSession>();
     public DbSet<ServiceSettings> ServiceSettings => Set<ServiceSettings>();
     public DbSet<UserProfile> UserProfiles => Set<UserProfile>();
+    public DbSet<ProfileImage> ProfileImages => Set<ProfileImage>();
     public DbSet<ProfileQuestion> ProfileQuestions => Set<ProfileQuestion>();
     public DbSet<ProfileAnswer> ProfileAnswers => Set<ProfileAnswer>();
     public DbSet<ProfileQrCredential> ProfileQrCredentials => Set<ProfileQrCredential>();
@@ -304,6 +305,14 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         b.Entity<EventQuestionAnswer>().HasOne<EventQuestion>().WithMany().HasForeignKey(x=>x.QuestionId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<EventQuestionAnswer>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x=>x.UserId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<EventQuestionAnswer>().ToTable("EventQuestionAnswers",t=>t.HasCheckConstraint("CK_EventQuestionAnswers_Value","\"Value\" IS NULL OR length(\"Value\") <= 2000"));
+        b.Entity<ProfileImage>().HasKey(x => x.UserId);
+        b.Entity<ProfileImage>().Property(x => x.UserId).HasMaxLength(450);
+        b.Entity<ProfileImage>().Property(x => x.RowVersion).IsConcurrencyToken();
+        b.Entity<ProfileImage>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<ProfileImage>().ToTable("ProfileImages", t => {
+            t.HasCheckConstraint("CK_ProfileImages_Data", "(length(\"Data\")=0 AND \"Width\"=0 AND \"Height\"=0) OR (length(\"Data\") BETWEEN 8 AND 1048576 AND \"Width\" BETWEEN 1 AND 512 AND \"Height\" BETWEEN 1 AND 512)");
+            t.HasCheckConstraint("CK_ProfileImages_RowVersion", "\"RowVersion\">0");
+        });
         b.Entity<SessionEvent>().ToTable("SessionEvents", t => t.HasCheckConstraint("CK_SessionEvents_DefaultPrep", "\"DefaultPrepSeconds\" >= 0"));
         b.Entity<SessionEvent>().ToTable("SessionEvents",t=>t.HasCheckConstraint("CK_SessionEvents_Capacity","\"Capacity\" IS NULL OR \"Capacity\" >= 0"));
         b.Entity<SongPart>().Property(x=>x.RowVersion).IsConcurrencyToken();

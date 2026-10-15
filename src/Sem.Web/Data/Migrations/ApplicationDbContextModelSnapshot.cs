@@ -2102,6 +2102,21 @@ namespace Sem.Web.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Sem.Web.Core.ProfileImage", b =>
+                {
+                    b.Property<string>("UserId").HasMaxLength(450).HasColumnType("TEXT");
+                    b.Property<byte[]>("Data").IsRequired().HasColumnType("BLOB");
+                    b.Property<int>("Width").HasColumnType("INTEGER");
+                    b.Property<int>("Height").HasColumnType("INTEGER");
+                    b.Property<long>("RowVersion").IsConcurrencyToken().HasColumnType("INTEGER");
+                    b.HasKey("UserId");
+                    b.ToTable("ProfileImages", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ProfileImages_Data", "(length(\"Data\")=0 AND \"Width\"=0 AND \"Height\"=0) OR (length(\"Data\") BETWEEN 8 AND 1048576 AND \"Width\" BETWEEN 1 AND 512 AND \"Height\" BETWEEN 1 AND 512)");
+                            t.HasCheckConstraint("CK_ProfileImages_RowVersion", "\"RowVersion\">0");
+                        });
+                });
+
             modelBuilder.Entity("Sem.Web.Core.ProfileQuestion", b =>
                 {
                     b.Property<string>("Id").HasColumnType("TEXT");
@@ -3336,6 +3351,11 @@ namespace Sem.Web.Data.Migrations
                 {
                     b.HasOne("Sem.Web.Data.ApplicationUser", null).WithMany().HasForeignKey("UserId").OnDelete(DeleteBehavior.Restrict).IsRequired();
                     b.HasOne("Sem.Web.Core.ProfileQuestion", null).WithMany().HasForeignKey("QuestionId").OnDelete(DeleteBehavior.Restrict).IsRequired();
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.ProfileImage", b =>
+                {
+                    b.HasOne("Sem.Web.Data.ApplicationUser", null).WithMany().HasForeignKey("UserId").OnDelete(DeleteBehavior.Restrict).IsRequired();
                 });
 
             modelBuilder.Entity("Sem.Web.Core.ProfileQrCredential", b =>

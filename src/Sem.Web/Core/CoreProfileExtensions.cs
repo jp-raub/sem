@@ -68,7 +68,7 @@ public sealed partial class CoreFoundationService
             .OrderBy(q => q.SortOrder).ThenBy(q => q.Id).ToArrayAsync(ct);
         var answers = await db.ProfileAnswers.AsNoTracking().Where(a => a.UserId == user.Id)
             .ToDictionaryAsync(a => a.QuestionId, ct);
-        var view = Profile(user, profile);
+        var view = await ProfileWithImageAsync(db, user, Profile(user, profile), ct);
         var visibleQuestions = questions.Where(q => q.Enabled)
             .Select(q => new ProfileAnswerView(q.Id, q.Text, q.Type,
                 answers.TryGetValue(q.Id, out var answer) ? answer.Value : null, q.Enabled))

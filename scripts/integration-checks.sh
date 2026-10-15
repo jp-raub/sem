@@ -56,6 +56,9 @@ ready() {
 }
 ready
 cp verification/ready.json verification/initial-ready.json
+if [[ -f src/Sem.Web/Core/ProfileImages.cs ]]; then
+ timeout 20s docker exec sem-integration dotnet /app/Sem.Web.dll --profile-image-self-test 2>&1 | tee verification/profile-image-native.log
+fi
 docker restart sem-integration >/dev/null
 sleep 2
 ready
