@@ -16,7 +16,8 @@ public sealed class CoreConflictException() : Exception("ほかの画面で更�
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record SocialLink(string Service, string Url);
 public sealed record ServiceView(string Name, string Description, long RowVersion);
-public sealed record ProfileView(string UserId, string DisplayName, string Reading, string CallName, SocialLink[] Social, long RowVersion);
+public sealed record ProfileView(string UserId, string DisplayName, string Reading, string CallName, SocialLink[] Social, long RowVersion,
+    string Icon = "", ProfileAnswerView[]? Answers = null);
 public sealed record MemberView(string UserId, string DisplayName);
 public sealed record EventView(string Id, string Title, string Description, string Location, string ScheduledDate,
     string? OpensAt, string AnnouncementMessage, string PhaseKind, string[] ManagerIds, long RowVersion, bool CanManage, string ActivePhaseName, string ActivePhaseKind, int MaxPicks, bool ManualPhaseOverride);
@@ -53,7 +54,8 @@ public sealed partial class CoreFoundationService(IDbContextFactory<ApplicationD
         return user;
     }
     private static ProfileView Profile(ApplicationUser user, UserProfile? p) => new(user.Id, user.DisplayName,
-        p?.Reading ?? "", p?.CallName ?? "", p is null ? [] : JsonSerializer.Deserialize<SocialLink[]>(p.SocialJson)!, p?.RowVersion ?? 0);
+        p?.Reading ?? "", p?.CallName ?? "", p is null ? [] : JsonSerializer.Deserialize<SocialLink[]>(p.SocialJson)!, p?.RowVersion ?? 0,
+        p?.Icon ?? "", []);
     public async Task<WorkspaceView> ReadAsync(ClaimsPrincipal principal, CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
@@ -78,7 +80,7 @@ public sealed partial class CoreFoundationService(IDbContextFactory<ApplicationD
         await Actor(db, principal, ct);
         var user = await db.Users.SingleOrDefaultAsync(u => u.Id == id && u.Enabled && u.EmailConfirmed, ct)
             ?? throw new UnauthorizedAccessException("プロフィールを閲覧できません。");
-        return Profile(user, await db.UserProfiles.SingleOrDefaultAsync(p => p.UserId == id, ct));
+        return await ProfileWithAnswersAsync(db, user, ct);
     }
     public async Task SaveServiceAsync(ClaimsPrincipal principal, ServiceEdit edit, CancellationToken ct = default)
     {

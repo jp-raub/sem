@@ -47,6 +47,25 @@ public static class CoreEndpoints
                 var themeAppearanceRead = action == "theme-appearance";
                 var themeAppearanceWrite = action is "theme-personal" or "theme-event" or "theme-site" or
                     "theme-catalog-save" or "theme-catalog-delete";
+                var profileEditorAction = action == "profile-editor";
+                var profileQuestionsAction = action == "profile-questions";
+                var profileQrAction = action == "profile-qr";
+                var profileQrSvgAction = action == "profile-qr-svg";
+                var profileQrViewAction = action == "profile-qr-view";
+                if (profileEditorAction && !HttpMethods.IsGet(ctx.Request.Method) && !post ||
+                    profileQuestionsAction && !HttpMethods.IsGet(ctx.Request.Method) && !post ||
+                    profileQrAction && !HttpMethods.IsGet(ctx.Request.Method) && !post ||
+                    profileQrSvgAction && !HttpMethods.IsGet(ctx.Request.Method) ||
+                    profileQrViewAction && !post)
+                {
+                    ctx.Response.StatusCode = 405;
+                    return;
+                }
+                if (action is "profile-editor" or "profile-questions" or "profile-qr" or "profile-qr-svg" or "profile-qr-view")
+                {
+                    ctx.Response.Headers["Referrer-Policy"] = "no-referrer";
+                    ctx.Response.Headers["X-Content-Type-Options"] = "nosniff";
+                }
                 if (themeAppearanceRead && !HttpMethods.IsGet(ctx.Request.Method) ||
                     themeAppearanceWrite && !post)
                 {
@@ -98,6 +117,14 @@ public static class CoreEndpoints
                 if (post)
                 {
                     if (ctx.Request.Headers.Origin.ToString() != deployment.PublicUrl.TrimEnd('/')) throw new UnauthorizedAccessException();
+                    if (action is "profile-editor" or "profile-questions" or "profile-qr")
+                    {
+                        var expectedActor = RequiredThemeQueryValue(ctx.Request.Query, "expectedActor");
+                        await service.AuthorizeProfileExtensionsRequestAsync(ctx.User, action!, ctx.RequestAborted);
+                        var cookieActor = ctx.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                        if (string.IsNullOrEmpty(cookieActor) || !string.Equals(expectedActor, cookieActor, StringComparison.Ordinal))
+                            throw new UnauthorizedAccessException();
+                    }
                     if (themeAppearanceWrite)
                     {
                         if (action == "theme-event") themeEventId = RequiredThemeQueryValue(ctx.Request.Query, "id");
@@ -132,7 +159,9 @@ public static class CoreEndpoints
                         // Leave Kestrel chunk headroom while bounded readers retain their probe limit, so they can return a
                         // deterministic 413 without buffering beyond their effective request limits.
                         size.MaxRequestBodySize = eventImport ? EventImportRequestMaxBytes + 16 * 1024L :
-                            themeAppearanceWrite ? ThemeAppearanceRequestMaxBytes + 16 * 1024L : 65536;
+                            themeAppearanceWrite ? ThemeAppearanceRequestMaxBytes + 16 * 1024L :
+                            profileEditorAction ? 1024 * 1024L + 16 * 1024L :
+                            profileQuestionsAction || profileQrAction || profileQrViewAction ? 65536 + 16 * 1024L : 65536;
                     }
                     await csrf.ValidateRequestAsync(ctx);
                     if (eventImport && ctx.Request.ContentLength > EventImportRequestMaxBytes) throw new EventImportPayloadTooLargeException();
@@ -182,6 +211,77 @@ public static class CoreEndpoints
                         await ctx.Response.WriteAsJsonAsync(new { message = "削除しました。" });
                         return;
                     }
+                }
+                if (profileEditorAction)
+                {
+                    if (post)
+                    {
+                        var edit = await ReadThemeAppearanceRequestAsync<ProfileEditorEdit>(ctx.Request, ctx.RequestAborted, 1024 * 1024)
+                            ?? throw new ValidationException("入力が必要です。");
+                        await service.SaveProfileEditorAsync(ctx.User, edit, ctx.RequestAborted);
+                        await ctx.Response.WriteAsJsonAsync(new { message = "プロフィールを保存しました。" });
+                    }
+                    else
+                    {
+                        await ctx.Response.WriteAsJsonAsync(await service.ReadProfileEditorAsync(ctx.User, ctx.RequestAborted));
+                    }
+                    return;
+                }
+                if (profileQuestionsAction)
+                {
+                    if (post)
+                    {
+                        var edit = await ReadThemeAppearanceRequestAsync<ProfileQuestionCommand>(ctx.Request, ctx.RequestAborted)
+                            ?? throw new ValidationException("入力が必要です。");
+                        await ctx.Response.WriteAsJsonAsync(await service.SaveProfileQuestionAsync(ctx.User, edit, ctx.RequestAborted));
+                    }
+                    else
+                    {
+                        await ctx.Response.WriteAsJsonAsync(await service.ReadProfileQuestionsAsync(ctx.User, ctx.RequestAborted));
+                    }
+                    return;
+                }
+                if (profileQrAction)
+                {
+                    if (post)
+                    {
+                        var edit = await ReadThemeAppearanceRequestAsync<ProfileQrIssueEdit>(ctx.Request, ctx.RequestAborted)
+                            ?? throw new ValidationException("入力が必要です。");
+                        await ctx.Response.WriteAsJsonAsync(await service.IssueProfileQrAsync(ctx.User, edit, ctx.RequestAborted));
+                    }
+                    else
+                    {
+                        await ctx.Response.WriteAsJsonAsync(await service.ReadProfileQrStatusAsync(ctx.User, ctx.RequestAborted));
+                    }
+                    return;
+                }
+                if (profileQrSvgAction)
+                {
+                    if (ctx.Request.Query.ContainsKey("token") || ctx.Request.Query.Count != 2 ||
+                        ctx.Request.Query["version"].Count != 1 ||
+                        !long.TryParse(ctx.Request.Query["version"], out var version) ||
+                        ctx.Request.Headers["X-Profile-QR-Token"].Count != 1)
+                        throw new ValidationException("QRコードを確認してください。");
+                    var expectedActor = RequiredThemeQueryValue(ctx.Request.Query, "expectedActor");
+                    var cookieActor = ctx.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                    if (string.IsNullOrEmpty(cookieActor) || expectedActor != cookieActor)
+                        throw new UnauthorizedAccessException();
+                    var svg = await service.ReadProfileQrSvgAsync(ctx.User, ctx.Request.Headers["X-Profile-QR-Token"].ToString(),
+                        version, deployment.PublicUrl, ctx.RequestAborted);
+                    ctx.Response.ContentType = "image/svg+xml; charset=utf-8";
+                    ctx.Response.Headers.CacheControl = "no-store";
+                    await ctx.Response.WriteAsync(svg, ctx.RequestAborted);
+                    return;
+                }
+                if (profileQrViewAction)
+                {
+                    if (ctx.Request.Query.Count != 0) throw new ValidationException("プロフィールQRの送信形式を確認してください。");
+                    var edit = await ReadThemeAppearanceRequestAsync<ProfileQrResolveRequest>(ctx.Request, ctx.RequestAborted)
+                        ?? throw new ValidationException("入力が必要です。");
+                    var resolved = await service.ResolveProfileQrShareAsync(edit.Token, ctx.RequestAborted);
+                    ctx.Response.Headers["X-Profile-QR-Expires-At"] = resolved.ExpiresAt;
+                    await ctx.Response.WriteAsJsonAsync(resolved.Profile);
+                    return;
                 }
                 if (action == "manual-push-control") {
                     if (post) { ctx.Response.StatusCode = 405; return; }
@@ -383,21 +483,21 @@ public static class CoreEndpoints
         return RequiredThemeQueryValue(query, name);
     }
 
-    private static async Task<T> ReadThemeAppearanceRequestAsync<T>(HttpRequest request, CancellationToken ct) where T : class
+    private static async Task<T> ReadThemeAppearanceRequestAsync<T>(HttpRequest request, CancellationToken ct, int maxBytes = ThemeAppearanceRequestMaxBytes) where T : class
     {
         if (!request.HasJsonContentType()) throw new ValidationException("JSON形式で送信してください。");
-        if (request.ContentLength > ThemeAppearanceRequestMaxBytes) throw new CoreRequestPayloadTooLargeException();
+        if (request.ContentLength > maxBytes) throw new CoreRequestPayloadTooLargeException();
         using var body = new MemoryStream();
         var buffer = new byte[8192];
         while (true)
         {
-            var remaining = ThemeAppearanceRequestMaxBytes + 1 - (int)body.Length;
+            var remaining = maxBytes + 1 - (int)body.Length;
             if (remaining <= 0) throw new CoreRequestPayloadTooLargeException();
             var read = await request.Body.ReadAsync(buffer.AsMemory(0, Math.Min(buffer.Length, remaining)), ct);
             if (read == 0) break;
             await body.WriteAsync(buffer.AsMemory(0, read), ct);
         }
-        if (body.Length > ThemeAppearanceRequestMaxBytes) throw new CoreRequestPayloadTooLargeException();
+        if (body.Length > maxBytes) throw new CoreRequestPayloadTooLargeException();
         return JsonSerializer.Deserialize<T>(body.GetBuffer().AsSpan(0, (int)body.Length), ThemeAppearanceJsonOptions)
             ?? throw new ValidationException("入力が必要です。");
     }

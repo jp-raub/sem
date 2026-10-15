@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';
 const source = await fs.readFile(new URL('../src/Sem.Web/wwwroot/profile-history.js', import.meta.url), 'utf8');
-const { profile, history } = await import('data:text/javascript;base64,' + Buffer.from(source).toString('base64'));
+const { profile, history, profileStream, historyStream } = await import('data:text/javascript;base64,' + Buffer.from(source).toString('base64'));
 let passed = 0;
 const check = (value, label) => { if (!value) throw new Error('FAIL ' + label); passed++; console.log('PASS ' + label); };
 const reject = async (fn, label) => { let rejected = false; try { await fn(); } catch { rejected = true; } check(rejected, label); };
@@ -45,8 +45,8 @@ try {
     await reject(() => history('target'), 'history response above 4 MiB is refused');
     check(cancelled, 'oversize history stream is cancelled immediately');
 
-    globalThis.fetch = async () => new Response(new ReadableStream({ start(controller) { controller.enqueue(new Uint8Array(128 * 1024 + 1)); } }));
-    await reject(() => profile('target'), 'basic profile response above 128 KiB is refused');
+    globalThis.fetch = async () => new Response(new ReadableStream({ start(controller) { controller.enqueue(new Uint8Array(2 * 1024 * 1024 + 1)); } }));
+    await reject(() => profile('target'), 'basic profile response above 2 MiB is refused');
 
     let aborted = false;
     globalThis.setTimeout = callback => { queueMicrotask(callback); return 123; };
@@ -62,6 +62,13 @@ try {
     for (const id of ['', 'x'.repeat(129), 'target\nmember', null]) await reject(() => profile(id), 'invalid client target is refused');
     check(count === 0, 'invalid identifiers make no requests');
     check(source.includes('REQUEST_TIMEOUT_MS = 25_000') && source.includes("new TextDecoder('utf-8', { fatal: true })") && !/localStorage|sessionStorage|console\.|setInterval/.test(source), 'transport bounds timeout, requires strict UTF-8, and does not log/store/poll');
+    globalThis.setTimeout=originalSetTimeout;globalThis.clearTimeout=originalClearTimeout;
+    globalThis.fetch=async()=>new Response(JSON.stringify({userId:'target',answers:Array.from({length:100},(_,i)=>({questionId:String(i),value:'好'.repeat(700)}))}));
+    const profileBytes=await profileStream('target');
+    check(profileBytes instanceof Uint8Array && profileBytes.byteLength>32*1024 && JSON.parse(new TextDecoder().decode(profileBytes)).value.userId==='target', 'large basic profile crosses as bounded stream bytes rather than one SignalR message');
+    globalThis.fetch=async()=>new Response(JSON.stringify({userId:'target',events:Array.from({length:100},(_,i)=>({eventId:String(i),title:'好'.repeat(200)}))}));
+    const historyBytes=await historyStream('target');
+    check(historyBytes instanceof Uint8Array && historyBytes.byteLength>32*1024 && JSON.parse(new TextDecoder().decode(historyBytes)).value.events.length===100, 'large history snapshot crosses as bounded stream bytes');
     console.log(`Profile history transport checks passed: ${passed}`);
 } finally {
     globalThis.fetch = originalFetch;

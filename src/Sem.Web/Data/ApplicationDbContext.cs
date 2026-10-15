@@ -24,6 +24,9 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<RevokedAuthSession> RevokedAuthSessions => Set<RevokedAuthSession>();
     public DbSet<ServiceSettings> ServiceSettings => Set<ServiceSettings>();
     public DbSet<UserProfile> UserProfiles => Set<UserProfile>();
+    public DbSet<ProfileQuestion> ProfileQuestions => Set<ProfileQuestion>();
+    public DbSet<ProfileAnswer> ProfileAnswers => Set<ProfileAnswer>();
+    public DbSet<ProfileQrCredential> ProfileQrCredentials => Set<ProfileQrCredential>();
     public DbSet<SessionEvent> SessionEvents => Set<SessionEvent>();
     public DbSet<EventAdmin> EventAdmins => Set<EventAdmin>();
     public DbSet<EventPhase> Phases => Set<EventPhase>();
@@ -240,7 +243,31 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         b.Entity<UserProfile>().HasKey(x => x.UserId);
         b.Entity<UserProfile>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<UserProfile>().Property(x => x.RowVersion).IsConcurrencyToken();
-        b.Entity<UserProfile>().ToTable("UserProfiles", t => t.HasCheckConstraint("CK_UserProfiles_SocialJson", "json_valid(\"SocialJson\")"));
+        b.Entity<UserProfile>().ToTable("UserProfiles", t => {
+            t.HasCheckConstraint("CK_UserProfiles_SocialJson", "json_valid(\"SocialJson\")");
+            t.HasCheckConstraint("CK_UserProfiles_Icon", "length(\"Icon\")<=64");
+        });
+        b.Entity<ProfileQuestion>().HasKey(x => x.Id);
+        b.Entity<ProfileQuestion>().Property(x => x.RowVersion).IsConcurrencyToken();
+        b.Entity<ProfileQuestion>().HasIndex(x => new { x.SortOrder, x.Id });
+        b.Entity<ProfileQuestion>().ToTable("ProfileQuestions", t => {
+            t.HasCheckConstraint("CK_ProfileQuestions_Type", "\"Type\" IN ('Text','YesNo')");
+            t.HasCheckConstraint("CK_ProfileQuestions_Text", "length(trim(\"Text\")) BETWEEN 1 AND 200");
+            t.HasCheckConstraint("CK_ProfileQuestions_Enabled", "\"Enabled\" IN (0,1)");
+            t.HasCheckConstraint("CK_ProfileQuestions_Order", "\"SortOrder\">=0 AND \"RowVersion\">=0");
+        });
+        b.Entity<ProfileAnswer>().HasKey(x => new { x.UserId, x.QuestionId });
+        b.Entity<ProfileAnswer>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<ProfileAnswer>().HasOne<ProfileQuestion>().WithMany().HasForeignKey(x => x.QuestionId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<ProfileAnswer>().ToTable("ProfileAnswers", t => t.HasCheckConstraint("CK_ProfileAnswers_Value", "length(\"Value\")<=1000"));
+        b.Entity<ProfileQrCredential>().HasKey(x => x.UserId);
+        b.Entity<ProfileQrCredential>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<ProfileQrCredential>().HasIndex(x => x.TokenHash).IsUnique();
+        b.Entity<ProfileQrCredential>().Property(x => x.RowVersion).IsConcurrencyToken();
+        b.Entity<ProfileQrCredential>().ToTable("ProfileQrCredentials", t => {
+            t.HasCheckConstraint("CK_ProfileQrCredentials_Hash", "length(\"TokenHash\")=64");
+            t.HasCheckConstraint("CK_ProfileQrCredentials_Expiry", "\"ExpiresAt\">\"IssuedAt\" AND \"RowVersion\">0");
+        });
         b.Entity<SessionEvent>().Property(x => x.RowVersion).IsConcurrencyToken();
         b.Entity<SessionEvent>().Property(x=>x.DefaultPrepSeconds).HasDefaultValue(600).HasSentinel(-1);
         b.Entity<SessionEvent>().ToTable("SessionEvents", t => t.HasCheckConstraint("CK_SessionEvents_PhaseKind", "\"PhaseKind\" IN ('Hidden','View')"));
