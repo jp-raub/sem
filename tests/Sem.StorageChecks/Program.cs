@@ -78,6 +78,10 @@ try
             row.Id == t.Id && row.Name == t.Name && row.Accent == t.Accent.Value && row.Background == t.Background.Value &&
             row.Surface == t.Surface.Value && row.Text == t.Text.Value && row.BuiltIn && row.RowVersion == 0)),
             "Legacy adoption adds only the ten exact approved catalog seed rows");
+        Check(await fixture.Db.UserThemePreferences.CountAsync() == 0 &&
+              await fixture.Db.EventThemePreferences.CountAsync() == 0 &&
+              await fixture.Db.SiteThemePreferences.CountAsync() == 0,
+            "legacy adoption creates the three selection tables empty without inventing preferences");
         var themeSeedSnapshot = System.Text.Json.JsonSerializer.Serialize(themeSeeds);
         Check((await fixture.Db.Database.GetAppliedMigrationsAsync()).SequenceEqual(fixture.Db.Database.GetMigrations()),
             "Legacy schema receives baseline history and pending migration after validation");
@@ -85,6 +89,10 @@ try
         Check(before == await DumpAsync(legacy), "Migrated DB survives another startup without data changes");
         Check(themeSeedSnapshot == System.Text.Json.JsonSerializer.Serialize(await fixture.Db.ThemeCatalogEntries.AsNoTracking().OrderBy(x => x.Id).ToArrayAsync()),
             "Repeated legacy startup leaves every theme seed field unchanged");
+        Check(await fixture.Db.UserThemePreferences.CountAsync() == 0 &&
+              await fixture.Db.EventThemePreferences.CountAsync() == 0 &&
+              await fixture.Db.SiteThemePreferences.CountAsync() == 0,
+            "repeated startup preserves the empty selection tables without backfill");
     }
     SqliteConnection.ClearAllPools();
     var restored = Path.Combine(root, "restored.db");

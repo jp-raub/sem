@@ -186,6 +186,52 @@ namespace Sem.Web.Data.Migrations
                     });
                 });
 
+            modelBuilder.Entity("Sem.Web.Core.UserThemePreference", b =>
+                {
+                    b.Property<string>("UserId").IsRequired().HasMaxLength(450).HasColumnType("TEXT");
+                    b.Property<string>("ThemeId").HasMaxLength(64).HasColumnType("TEXT");
+                    b.Property<int?>("Mode").HasColumnType("INTEGER");
+                    b.Property<long>("RowVersion").IsConcurrencyToken().HasColumnType("INTEGER");
+                    b.HasKey("UserId");
+                    b.HasIndex("ThemeId");
+                    b.ToTable("UserThemePreferences", t =>
+                    {
+                        t.HasCheckConstraint("CK_UserThemePreferences_Mode", "\"Mode\" IS NULL OR \"Mode\" IN (0,1,2)");
+                        t.HasCheckConstraint("CK_UserThemePreferences_RowVersion", "\"RowVersion\">=0");
+                    });
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.EventThemePreference", b =>
+                {
+                    b.Property<string>("EventId").IsRequired().HasMaxLength(450).HasColumnType("TEXT");
+                    b.Property<string>("ThemeId").HasMaxLength(64).HasColumnType("TEXT");
+                    b.Property<int?>("Mode").HasColumnType("INTEGER");
+                    b.Property<long>("RowVersion").IsConcurrencyToken().HasColumnType("INTEGER");
+                    b.HasKey("EventId");
+                    b.HasIndex("ThemeId");
+                    b.ToTable("EventThemePreferences", t =>
+                    {
+                        t.HasCheckConstraint("CK_EventThemePreferences_Mode", "\"Mode\" IS NULL OR \"Mode\" IN (0,1,2)");
+                        t.HasCheckConstraint("CK_EventThemePreferences_RowVersion", "\"RowVersion\">=0");
+                    });
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.SiteThemePreference", b =>
+                {
+                    b.Property<int>("Id").ValueGeneratedNever().HasColumnType("INTEGER");
+                    b.Property<string>("ThemeId").HasMaxLength(64).HasColumnType("TEXT");
+                    b.Property<int?>("Mode").HasColumnType("INTEGER");
+                    b.Property<long>("RowVersion").IsConcurrencyToken().HasColumnType("INTEGER");
+                    b.HasKey("Id");
+                    b.HasIndex("ThemeId");
+                    b.ToTable("SiteThemePreferences", t =>
+                    {
+                        t.HasCheckConstraint("CK_SiteThemePreferences_Id", "\"Id\"=1");
+                        t.HasCheckConstraint("CK_SiteThemePreferences_Mode", "\"Mode\" IS NULL OR \"Mode\" IN (0,1,2)");
+                        t.HasCheckConstraint("CK_SiteThemePreferences_RowVersion", "\"RowVersion\">=0");
+                    });
+                });
+
             modelBuilder.Entity("Sem.Web.Core.BusinessNotification", b =>
                 {
                     b.Property<string>("Id")
@@ -3215,6 +3261,23 @@ namespace Sem.Web.Data.Migrations
                         .HasForeignKey("EventId", "SongId")
                         .HasPrincipalKey("EventId", "Id")
                         .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.UserThemePreference", b =>
+                {
+                    b.HasOne("Sem.Web.Data.ApplicationUser", null).WithMany().HasForeignKey("UserId").OnDelete(DeleteBehavior.Restrict).IsRequired();
+                    b.HasOne("Sem.Web.Core.ThemeCatalogEntry", null).WithMany().HasForeignKey("ThemeId").OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.EventThemePreference", b =>
+                {
+                    b.HasOne("Sem.Web.Core.SessionEvent", null).WithMany().HasForeignKey("EventId").OnDelete(DeleteBehavior.Restrict).IsRequired();
+                    b.HasOne("Sem.Web.Core.ThemeCatalogEntry", null).WithMany().HasForeignKey("ThemeId").OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.SiteThemePreference", b =>
+                {
+                    b.HasOne("Sem.Web.Core.ThemeCatalogEntry", null).WithMany().HasForeignKey("ThemeId").OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("Sem.Web.Core.UserProfile", b =>
