@@ -161,11 +161,23 @@ try
                   db.Model.FindEntityType(typeof(ThemeCatalogEntry))!.GetProperties().Select(x => x.Name).Order()),
             "migration snapshot and runtime entity properties are in parity");
 
-        // Read from a read-only database connection; service read itself must issue no writes.
-        var readonlyOptions = new DbContextOptionsBuilder<ApplicationDbContext>()
-            .UseSqlite("Data Source=" + Path.Combine(root, "catalog.db") + ";Mode=ReadOnly").Options;
-        await using (var ro = new ApplicationDbContext(readonlyOptions))
-            Check((await ro.ThemeCatalogEntries.AsNoTracking().CountAsync()) == 11, "catalog table is readable from read-only SQLite");
+        await Throws<Microsoft.Data.Sqlite.SqliteException>(() => db.Database.ExecuteSqlRawAsync(
+            "UPDATE ThemeCatalogEntries SET Name={0} WHERE Id='green'", " " + new string('x', 30) + " "),
+            "database constraint rejects oversized names even with surrounding spaces");
+        var beforeRead = System.Text.Json.JsonSerializer.Serialize(await db.ThemeCatalogEntries.AsNoTracking().OrderBy(x => x.Id).ToArrayAsync());
+        var beforeReadAudits = await db.Audits.CountAsync();
+        var readonlyServices = new ServiceCollection();
+        readonlyServices.AddLogging();
+        readonlyServices.AddDbContextFactory<ApplicationDbContext>(options => options.UseSqlite("Data Source=" + Path.Combine(root, "catalog.db") + ";Mode=ReadOnly"), ServiceLifetime.Scoped);
+        readonlyServices.AddIdentityCore<ApplicationUser>(options => options.Stores.SchemaVersion = IdentitySchemaVersions.Version3).AddEntityFrameworkStores<ApplicationDbContext>();
+        using var readonlyProvider = readonlyServices.BuildServiceProvider();
+        using var readonlyScope = readonlyProvider.CreateScope();
+        var readonlyCore = new CoreFoundationService(readonlyScope.ServiceProvider.GetRequiredService<IDbContextFactory<ApplicationDbContext>>(),
+            Options.Create(new IdentityOptions()), TimeProvider.System, new BusinessNotificationStore(new EphemeralDataProtectionProvider()));
+        var actualServiceRead = await readonlyCore.ReadThemeCatalogAsync(Principal("admin"));
+        Check(actualServiceRead.Length == 11, "actual ReadThemeCatalogAsync succeeds through Identity V3 read-only SQLite factory");
+        Check(beforeRead == System.Text.Json.JsonSerializer.Serialize(await db.ThemeCatalogEntries.AsNoTracking().OrderBy(x => x.Id).ToArrayAsync()) &&
+            beforeReadAudits == await db.Audits.CountAsync(), "actual service read leaves catalog and audit data unchanged");
     }
     Console.WriteLine($"PASS all {checks} theme catalog checks");
 }
