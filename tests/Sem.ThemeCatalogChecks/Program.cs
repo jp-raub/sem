@@ -59,11 +59,19 @@ try
             new ApplicationUser { Id = "member", UserName = "member@test", Email = "member@test", DisplayName = "Member", SecurityStamp = "member-stamp", Enabled = true, EmailConfirmed = true },
             new ApplicationUser { Id = "disabled", UserName = "disabled@test", Email = "disabled@test", DisplayName = "Disabled", SecurityStamp = "disabled-stamp", Enabled = false, EmailConfirmed = true });
         db.ServiceSettings.Add(new ServiceSettings { Id = 1, Name = "Legacy setting", Description = "preserve", RowVersion = 7 });
-        db.UserProfiles.Add(new UserProfile { UserId = "member", Reading = "legacy", CallName = "profile", SocialJson = "[]", RowVersion = 4 });
         db.SessionEvents.Add(new SessionEvent { Id = "legacy-event", Title = "Legacy event", ScheduledDate = "2026-10-01T00:00:00.000Z", CreatedAt = "2026-09-01T00:00:00.000Z", PhaseKind = "Hidden" });
         await db.SaveChangesAsync();
+        // Seed only columns present in the historical schema, not the later Icon column.
+        Check(!await db.Database.SqlQueryRaw<string>("SELECT name AS Value FROM pragma_table_info('UserProfiles') WHERE name='Icon'").AnyAsync(),
+            "historical profile fixture genuinely predates the Icon column");
+        await db.Database.ExecuteSqlRawAsync("""
+            INSERT INTO "UserProfiles" ("UserId", "Reading", "CallName", "SocialJson", "RowVersion")
+            VALUES ('member', 'legacy', 'profile', '[]', 4);
+            """);
         await db.Database.ExecuteSqlRawAsync("INSERT INTO AspNetUserPasskeys (CredentialId, UserId, Data) VALUES (X'01020304', 'member', {0})", "{\"Name\":\"synthetic retained passkey\"}");
         await migrator.MigrateAsync();
+        Check(await db.UserProfiles.AnyAsync(x => x.UserId == "member" && x.Icon == ""),
+            "later profile migration adds the empty Icon default without replacing the historical row");
         Check((await db.Database.SqlQueryRaw<string>("SELECT Data AS Value FROM AspNetUserPasskeys WHERE CredentialId=X'01020304'").SingleAsync()) == "{\"Name\":\"synthetic retained passkey\"}",
             "Identity V3 passkey table and synthetic existing credential bytes survive catalog migration");
 

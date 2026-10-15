@@ -13,6 +13,31 @@ public sealed class UserProfile
     public string Reading { get; set; } = "";
     public string CallName { get; set; } = "";
     public string SocialJson { get; set; } = "[]";
+    public string Icon { get; set; } = "";
+    public long RowVersion { get; set; }
+}
+public sealed class ProfileQuestion
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString();
+    public string Text { get; set; } = "";
+    public string Type { get; set; } = "Text";
+    public bool Enabled { get; set; } = true;
+    public int SortOrder { get; set; }
+    public long RowVersion { get; set; }
+}
+public sealed class ProfileAnswer
+{
+    public string UserId { get; set; } = "";
+    public string QuestionId { get; set; } = "";
+    public string Value { get; set; } = "";
+    public string UpdatedAt { get; set; } = "";
+}
+public sealed class ProfileQrCredential
+{
+    public string UserId { get; set; } = "";
+    public string TokenHash { get; set; } = "";
+    public string IssuedAt { get; set; } = "";
+    public string ExpiresAt { get; set; } = "";
     public long RowVersion { get; set; }
 }
 public sealed class SessionEvent

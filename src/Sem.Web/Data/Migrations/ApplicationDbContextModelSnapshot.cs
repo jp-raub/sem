@@ -2074,6 +2074,53 @@ namespace Sem.Web.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Sem.Web.Core.ProfileAnswer", b =>
+                {
+                    b.Property<string>("UserId").HasColumnType("TEXT");
+                    b.Property<string>("QuestionId").HasColumnType("TEXT");
+                    b.Property<string>("UpdatedAt").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("Value").IsRequired().HasColumnType("TEXT");
+                    b.HasKey("UserId", "QuestionId");
+                    b.HasIndex("QuestionId");
+                    b.ToTable("ProfileAnswers", null, t =>
+                        t.HasCheckConstraint("CK_ProfileAnswers_Value", "length(\"Value\")<=1000"));
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.ProfileQrCredential", b =>
+                {
+                    b.Property<string>("UserId").HasColumnType("TEXT");
+                    b.Property<string>("TokenHash").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("IssuedAt").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("ExpiresAt").IsRequired().HasColumnType("TEXT");
+                    b.Property<long>("RowVersion").IsConcurrencyToken().HasColumnType("INTEGER");
+                    b.HasKey("UserId");
+                    b.HasIndex("TokenHash").IsUnique();
+                    b.ToTable("ProfileQrCredentials", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ProfileQrCredentials_Hash", "length(\"TokenHash\")=64");
+                            t.HasCheckConstraint("CK_ProfileQrCredentials_Expiry", "\"ExpiresAt\">\"IssuedAt\" AND \"RowVersion\">0");
+                        });
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.ProfileQuestion", b =>
+                {
+                    b.Property<string>("Id").HasColumnType("TEXT");
+                    b.Property<bool>("Enabled").HasColumnType("INTEGER");
+                    b.Property<int>("SortOrder").HasColumnType("INTEGER");
+                    b.Property<string>("Text").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("Type").IsRequired().HasColumnType("TEXT");
+                    b.Property<long>("RowVersion").IsConcurrencyToken().HasColumnType("INTEGER");
+                    b.HasKey("Id");
+                    b.HasIndex("SortOrder", "Id");
+                    b.ToTable("ProfileQuestions", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ProfileQuestions_Type", "\"Type\" IN ('Text','YesNo')");
+                            t.HasCheckConstraint("CK_ProfileQuestions_Text", "length(trim(\"Text\")) BETWEEN 1 AND 200");
+                            t.HasCheckConstraint("CK_ProfileQuestions_Enabled", "\"Enabled\" IN (0,1)");
+                            t.HasCheckConstraint("CK_ProfileQuestions_Order", "\"SortOrder\">=0 AND \"RowVersion\">=0");
+                        });
+                });
+
             modelBuilder.Entity("Sem.Web.Core.UserProfile", b =>
                 {
                     b.Property<string>("UserId")
@@ -2084,6 +2131,10 @@ namespace Sem.Web.Data.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Reading")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Icon")
                         .IsRequired()
                         .HasColumnType("TEXT");
 
@@ -2100,6 +2151,7 @@ namespace Sem.Web.Data.Migrations
                     b.ToTable("UserProfiles", null, t =>
                         {
                             t.HasCheckConstraint("CK_UserProfiles_SocialJson", "json_valid(\"SocialJson\")");
+                            t.HasCheckConstraint("CK_UserProfiles_Icon", "length(\"Icon\")<=64");
                         });
                 });
 
@@ -3278,6 +3330,17 @@ namespace Sem.Web.Data.Migrations
             modelBuilder.Entity("Sem.Web.Core.SiteThemePreference", b =>
                 {
                     b.HasOne("Sem.Web.Core.ThemeCatalogEntry", null).WithMany().HasForeignKey("ThemeId").OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.ProfileAnswer", b =>
+                {
+                    b.HasOne("Sem.Web.Data.ApplicationUser", null).WithMany().HasForeignKey("UserId").OnDelete(DeleteBehavior.Restrict).IsRequired();
+                    b.HasOne("Sem.Web.Core.ProfileQuestion", null).WithMany().HasForeignKey("QuestionId").OnDelete(DeleteBehavior.Restrict).IsRequired();
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.ProfileQrCredential", b =>
+                {
+                    b.HasOne("Sem.Web.Data.ApplicationUser", null).WithMany().HasForeignKey("UserId").OnDelete(DeleteBehavior.Restrict).IsRequired();
                 });
 
             modelBuilder.Entity("Sem.Web.Core.UserProfile", b =>

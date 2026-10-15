@@ -10,12 +10,17 @@
 @if(ProfileBusy){<p role="status" aria-live="polite">プロフィールを取得しています。</p>}
 <button id="member-profile-refresh" disabled="@ProfileBusy" @onclick="LoadProfile">最新情報を取得</button>
 @if(Profile is not null){
- <section id="member-profile" data-user="@Profile.UserId"><h2>@Profile.DisplayName</h2>
+ <section id="member-profile" data-user="@Profile.UserId"><h2>@(Profile.Icon.Length == 0 ? "" : Profile.Icon + " ")@Profile.DisplayName</h2>
  <dl><dt>読み</dt><dd>@(Profile.Reading.Length==0?"未設定":Profile.Reading)</dd><dt>対面での呼び</dt><dd>@(Profile.CallName.Length==0?"未設定":Profile.CallName)</dd></dl>
  <h3>SNS等</h3>
  @if(Profile.Social.Length==0){<p>リンクは未設定です。</p>}
  @foreach(var link in Profile.Social.Where(Safe)){<p><a href="@link.Url" target="_blank" rel="noopener noreferrer">@link.Service</a></p>}
- <p>認証済みメンバー向けの基本プロフィールです。メール・認証情報は表示しません。</p>
+ <section aria-labelledby="member-profile-answers-heading">
+  <h3 id="member-profile-answers-heading">プロフィール設問</h3>
+  @if(Profile.Answers is null || Profile.Answers.Length == 0){<p>表示できる設問はありません。</p>}
+  else{<dl>@foreach(var answer in Profile.Answers){<dt>@answer.Text</dt><dd>@(answer.Value is null ? "未回答" : answer.Type == "YesNo" ? answer.Value == "YES" ? "はい" : "いいえ" : answer.Value)</dd>}</dl>}
+ </section>
+ <p>メール・認証情報は表示しません。</p>
  <section aria-labelledby="member-profile-history-heading">
   <h3 id="member-profile-history-heading">現在のイベント登録</h3>
   <button id="member-profile-history-load" disabled="@HistoryBusy" @onclick="LoadHistory">登録履歴を取得</button>
@@ -51,16 +56,22 @@
  async Task LoadProfile(){
   if(ProfileBusy||Disposed||Module is null)return;
   var generation=++Generation;var id=UserId;Profile=null;History=null;Error=HistoryError="";HistoryBusy=false;ProfileBusy=true;
-  try{var result=await Module.InvokeAsync<ProfileFetchResult>("profile",id);if(generation!=Generation)return;if(result.Status==403){ClearForDenied();Error="ログイン状態またはプロフィール閲覧条件を確認してください。最新情報を取得できます。";return;}if(result.Value is null||result.Value.UserId!=id)throw new InvalidOperationException();Profile=result.Value;}
+  try{var result=await ReadTransport<ProfileFetchResult>("profileStream",id,2*1024*1024);if(generation!=Generation)return;if(result.Status==403){ClearForDenied();Error="ログイン状態またはプロフィール閲覧条件を確認してください。最新情報を取得できます。";return;}if(result.Value is null||result.Value.UserId!=id)throw new InvalidOperationException();Profile=result.Value;}
   catch{if(generation==Generation){Profile=null;History=null;Error="ログイン状態と現在のプロフィール閲覧条件を確認してください。";}}
   finally{if(generation==Generation)ProfileBusy=false;}
  }
  async Task LoadHistory(){
   if(HistoryBusy||Profile is null||Module is null||Disposed)return;
   var generation=Generation;var id=UserId;History=null;HistoryError="";HistoryBusy=true;
-  try{var result=await Module.InvokeAsync<HistoryFetchResult>("history",id);if(generation!=Generation)return;if(result.Status==403){ClearForDenied();Error="ログイン状態またはプロフィール閲覧条件を確認してください。最新情報を取得できます。";return;}if(result.Value is null||result.Value.UserId!=id||result.Value.Events is null)throw new InvalidOperationException();History=result.Value;}
+  try{var result=await ReadTransport<HistoryFetchResult>("historyStream",id,4*1024*1024);if(generation!=Generation)return;if(result.Status==403){ClearForDenied();Error="ログイン状態またはプロフィール閲覧条件を確認してください。最新情報を取得できます。";return;}if(result.Value is null||result.Value.UserId!=id||result.Value.Events is null)throw new InvalidOperationException();History=result.Value;}
   catch{if(generation==Generation)HistoryError="登録履歴を完全な状態で取得できませんでした。再度ボタンを押して再取得してください。";}
   finally{if(generation==Generation)HistoryBusy=false;}
+ }
+ async Task<T> ReadTransport<T>(string export,string id,long limit) where T:class {
+  using var timeout=new CancellationTokenSource(TimeSpan.FromSeconds(25));
+  await using var reference=await Module!.InvokeAsync<IJSStreamReference>(export,timeout.Token,id);
+  await using var stream=await reference.OpenReadStreamAsync(limit,timeout.Token);
+  return await System.Text.Json.JsonSerializer.DeserializeAsync<T>(stream,new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web){NumberHandling=System.Text.Json.Serialization.JsonNumberHandling.Strict},timeout.Token) ?? throw new InvalidOperationException();
  }
  void ClearForDenied(){Generation++;Profile=null;History=null;HistoryError="";ProfileBusy=HistoryBusy=false;}
  static bool Safe(SocialLink link)=>Uri.TryCreate(link.Url,UriKind.Absolute,out var uri)&&uri.Scheme is "https" or "http"&&uri.UserInfo.Length==0;

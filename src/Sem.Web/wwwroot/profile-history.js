@@ -1,4 +1,4 @@
-const BASIC_PROFILE_LIMIT = 128 * 1024;
+const BASIC_PROFILE_LIMIT = 2 * 1024 * 1024;
 const HISTORY_LIMIT = 4 * 1024 * 1024;
 const REQUEST_TIMEOUT_MS = 25_000;
 
@@ -65,3 +65,7 @@ export async function history(id) {
     validateId(id);
     return getJson('/api/core/profile-registration-history?id=' + encodeURIComponent(id), HISTORY_LIMIT);
 }
+
+// Blazor wraps typed byte arrays as IJSStreamReference, avoiding the default SignalR message cap.
+export async function profileStream(id) { const bytes=new TextEncoder().encode(JSON.stringify(await profile(id)));if(bytes.byteLength>BASIC_PROFILE_LIMIT)throw new Error('Profile transfer exceeds its limit');return bytes; }
+export async function historyStream(id) { const bytes=new TextEncoder().encode(JSON.stringify(await history(id)));if(bytes.byteLength>4*1024*1024)throw new Error('History transfer exceeds its limit');return bytes; }
