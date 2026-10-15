@@ -1,0 +1,43 @@
+using Sem.Web.Core;
+
+var checks = 0;
+void Check(bool condition, string name) { if (!condition) throw new Exception("FAIL " + name); checks++; }
+EventImportPreview Preview(long version = 4, long? overrun = 0) => new("event", version, new string('a',64),
+    [new(2,"Song","Title","Artist",120,null,["Gt"],"Ready",null)],1,0,0,[],DateTimeOffset.UnixEpoch,overrun);
+var s = new EventImportComposerState();
+s.Edit("csv"); s.BeginPreview(); Check(s.Busy && s.Preview is null,"preview clears old result and is busy");
+s.ShowPreview(Preview()); s.Confirm(true); Check(s.CanApply,"valid preview and confirmation allow apply");
+var first=s.BeginOperation("event","actor","11111111-1111-4111-8111-111111111111")!;
+Check(first is not null && first.EventId=="event" && first.ActorId=="actor" && first.Request.Confirmed && first.Request.Csv=="csv" && !s.CanEdit,"operation freezes event, actor, payload, and disables editing");
+s.SubmissionUnknown(); Check(s.Pending?.HadUnknownResult==true && s.NavigationBlocked,"unknown operation remains and blocks navigation");
+s.Edit("changed"); Check(s.Pending?.Request.Csv=="csv","unknown operation retains original CSV");
+var retry=s.BeginRetry()!; Check(retry.Request.RequestId==first!.Request.RequestId && retry.Request.Csv==first!.Request.Csv,"retry preserves exact identity and payload");
+s.SubmissionRejected(409); Check(s.Pending?.Request.RequestId==first!.Request.RequestId,"later conflict does not discard prior unknown");
+s.SubmissionUnknown(); s.SubmissionRejected(400); Check(s.Pending is not null,"later bad request does not discard prior unknown");
+var receipt=new EventImportAcceptance(first!.Request.RequestId,5,1,0,0,100,false);
+Check(s.SubmissionAccepted(receipt) && s.Accepted==receipt && s.Pending is null,"matching receipt accepted");
+s.StartNew(); Check(s.Accepted is null && !s.NavigationBlocked,"explicit new operation clears accepted draft");
+s.Edit("csv"); s.BeginPreview(); s.ShowPreview(Preview()); s.Confirm(true); s.Edit("changed");
+Check(s.Preview is null && !s.Confirmed && !s.ConfirmOverrun,"editing invalidates preview and confirmation checks");
+s.BeginPreview(); s.ShowPreview(Preview()); s.Confirm(true); Check(s.BeginFileRead() && s.Busy && s.Preview is null && !s.Confirmed,"starting file read invalidates old preview before await");
+s.CompleteFileRead("new-file"); Check(!s.Busy && s.Csv=="new-file","file read completion installs selected CSV");
+s.BeginPreview(); s.ShowPreview(Preview());
+s.BeginPreview(); s.ShowPreview(Preview(overrun:12)); s.Confirm(true);
+Check(!s.CanApply,"positive overrun requires separate acknowledgment"); s.AcknowledgeOverrun(true); Check(s.CanApply,"overrun acknowledgment enables apply");
+s.BeginOperation("event","actor","22222222-2222-4222-8222-222222222222");
+s.SubmissionUnknown();
+Check(!s.SubmissionAccepted(new("22222222-2222-4222-8222-222222222222",6,1,0,0,100)),"bad receipt is uncertain");
+Check(s.Pending?.HadUnknownResult==true,"bad receipt retains identity");
+s.SubmissionRejected(403); Check(s.Pending is not null && s.Pending.HadUnknownResult,"forbidden retains pending operation");
+var fresh=new EventImportComposerState(); fresh.Edit("csv"); fresh.BeginPreview(); fresh.ShowPreview(Preview()); fresh.Confirm(true);
+fresh.BeginOperation("event","actor","33333333-3333-4333-8333-333333333333"); fresh.SubmissionRejected(409);
+Check(fresh.Pending is null && fresh.Preview is null,"definitive first conflict requires new preview");
+fresh.Edit("csv"); fresh.BeginPreview(); fresh.ShowPreview(Preview()); fresh.Confirm(true);
+fresh.BeginOperation("event","actor","44444444-4444-4444-8444-444444444444"); fresh.SubmissionRejected(400);
+Check(fresh.Pending is null && fresh.Preview is null,"definitive first bad request clears operation and preview");
+var changedEvent = new EventImportComposerState(); changedEvent.Edit("csv"); changedEvent.BeginPreview(); changedEvent.ShowPreview(Preview()); changedEvent.Confirm(true);
+changedEvent.BeginOperation("event", "actor", "55555555-5555-4555-8555-555555555555");
+Check(changedEvent.SubmissionAccepted(new("55555555-5555-4555-8555-555555555555", 5, 1, 0, 0, 100)), "event change fixture accepted");
+changedEvent.StartNew(); changedEvent.Discard();
+Check(changedEvent.Accepted is null && changedEvent.Pending is null && changedEvent.Preview is null && changedEvent.Csv.Length == 0, "successful receipt cleared before event change");
+Console.WriteLine($"Event import composer checks: {checks} passed");

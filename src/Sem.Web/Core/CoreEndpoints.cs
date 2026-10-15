@@ -43,9 +43,18 @@ public static class CoreEndpoints
                 var post = HttpMethods.IsPost(ctx.Request.Method);
                 var eventImport = action is "event-import-preview" or "event-import-apply";
                 var eventImportSample = action == "event-import-sample";
+                var eventImportContext = action == "event-import-context";
                 if (eventImportSample) ctx.Response.Headers["X-Content-Type-Options"] = "nosniff";
                 if (eventImportSample && !HttpMethods.IsGet(ctx.Request.Method)) { ctx.Response.StatusCode = 405; return; }
+                if (eventImportContext && !HttpMethods.IsGet(ctx.Request.Method)) { ctx.Response.StatusCode = 405; return; }
                 if (eventImport && !post) { ctx.Response.StatusCode = 405; return; }
+                if (eventImportContext)
+                {
+                    var idValues = ctx.Request.Query["id"];
+                    if (idValues.Count != 1 || string.IsNullOrEmpty(idValues[0])) throw new ValidationException("イベントを確認してください。");
+                    await ctx.Response.WriteAsJsonAsync(await service.ReadEventImportContextAsync(ctx.User, idValues[0]!, ctx.RequestAborted));
+                    return;
+                }
                 if (eventImportSample)
                 {
                     var idValues = ctx.Request.Query["id"];
@@ -67,6 +76,15 @@ public static class CoreEndpoints
                         eventImportId = idValues[0]!;
                         // Fail closed on the current cookie principal before antiforgery or any body handling.
                         await service.AuthorizeEventImportRequestAsync(ctx.User, eventImportId, ctx.RequestAborted);
+                        var expectedActor = ctx.Request.Query["expectedActor"];
+                        if (expectedActor.Count > 0)
+                        {
+                            if (expectedActor.Count != 1 || string.IsNullOrEmpty(expectedActor[0]))
+                                throw new ValidationException("操作者を確認してください。");
+                            var actorId = ctx.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                            if (string.IsNullOrEmpty(actorId) || expectedActor[0] != actorId)
+                                throw new UnauthorizedAccessException();
+                        }
                     }
                     var size = ctx.Features.Get<IHttpMaxRequestBodySizeFeature>();
                     if (size is { IsReadOnly: false })

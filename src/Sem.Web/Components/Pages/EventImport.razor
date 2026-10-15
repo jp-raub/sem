@@ -1,0 +1,214 @@
+@page "/events/{EventId}/event-import"
+@rendermode InteractiveServer
+@implements IAsyncDisposable
+@using System.Text
+@using Sem.Web.Core
+@inject IJSRuntime JS
+<NavigationLock ConfirmExternalNavigation="@State.NavigationBlocked" OnBeforeInternalNavigation="BeforeNavigation" />
+<PageTitle>イベントCSV取込</PageTitle>
+<section id="event-import-page" aria-labelledby="event-import-title">
+<h1 id="event-import-title">イベントCSV追記：@Title</h1>
+<p><a href="@($"/events/{Uri.EscapeDataString(EventId)}")">イベント概要へ戻る</a></p>
+<p>UTF-8のCSVを貼り付けるか、1 MiB以下のCSVファイルを選択してください。プレビューは読取専用です。確認後に追加可能な曲・進行枠だけを一括追記します。既存データは更新しません。CSVはブラウザー内メモリだけで扱い、URL取得・外部スプレッドシート読込・自動再送は行いません。</p>
+<p class="event-import-warning">ブラウザーを強制再読み込みしたりタブを閉じたりすると、メモリ内のCSV・保留中操作が失われ、結果不明の取込を照合できなくなる場合があります。結果不明の間は再読み込み・タブ終了をしないでください。</p>
+<p id="event-import-error" role="alert">@Error</p>
+<p id="event-import-message" role="status">@Message</p>
+@if (Ready && Allowed)
+{
+    @if (State.Accepted is { } accepted)
+    {
+        <section id="import-result" role="status" aria-live="polite">
+            <h2>追記を受け付けました</h2>
+            <p>曲 @accepted.NewSongs 件、進行枠 @accepted.NewTransitions 件を追加し、重複等 @accepted.SkippedRows 件をスキップしました。</p>
+            <p>受付日時：@Time(accepted.AcceptedAt) ／ イベント版 @accepted.RowVersion。@(accepted.Replayed ? "同じ操作IDの保存済み結果を再確認しました。" : "")</p>
+            <p>操作ID：<code>@accepted.RequestId</code></p>
+            <button id="event-import-start-new" @onclick="StartNew">新しいCSV取込を始める</button>
+        </section>
+    }
+    else
+    {
+        <section id="event-import-composer" data-busy="@State.Busy.ToString().ToLowerInvariant()" data-pending="@(State.Pending is not null ? "true" : "false")">
+            <p><a id="event-import-sample" href="@($"/api/core/event-import-sample?id={Uri.EscapeDataString(LoadedId)}")">CSVサンプルをダウンロード</a></p>
+            <fieldset disabled="@(!State.CanEdit)">
+                <legend>CSV入力（必須列 Kind, Title, Duration）</legend>
+                <label for="event-import-file">UTF-8 CSVファイル（最大1 MiB）</label>
+                <input id="event-import-file" @ref="FileInput" type="file" accept=".csv,text/csv" @onchange="FileSelected" />
+                <label for="import-csv">CSVを貼り付け</label>
+                <textarea id="import-csv" rows="10" spellcheck="false" autocomplete="off" value="@State.Csv" @oninput="CsvChanged"></textarea>
+            </fieldset>
+            <div class="event-import-actions">
+                <button id="import-preview" disabled="@(!State.CanEdit || State.Csv.Length == 0)" @onclick="Preview">プレビューを検証</button>
+                <button id="event-import-discard" disabled="@(!State.CanEdit || State.Csv.Length == 0 && State.Preview is null)" @onclick="Discard">入力とプレビューを破棄</button>
+            </div>
+            @if (State.Preview is { } preview)
+            {
+                <section id="event-import-preview" aria-labelledby="event-import-preview-title">
+                    <h2 id="event-import-preview-title">プレビュー：@(preview.IsValid ? "確認できます" : "エラーがあります")</h2>
+                    <p>イベント版 @preview.RowVersion ／ 追加予定：曲 @preview.NewSongs 件、進行枠 @preview.NewTransitions 件 ／ スキップ @preview.SkippedRows 件</p>
+                    @if (preview.ProposedEnd is { } end) { <p>追記後の終了予定：@Time(end.ToUnixTimeSeconds())</p> }
+                    @if (preview.OverrunSeconds is > 0) { <p class="event-import-warning">予定終了を @Duration(preview.OverrunSeconds.Value) 超過します。追記後の見込みを確認し、別の確認欄にもチェックしてください。</p> }
+                    @if (preview.Errors.Length > 0) { <ul aria-label="取込全体のエラー">@foreach (var error in preview.Errors) { <li>@error</li> }</ul> }
+                    <div class="event-import-table-wrap"><table id="event-import-rows"><thead><tr><th>CSV行</th><th>種類</th><th>タイトル</th><th>アーティスト</th><th>時間</th><th>状態・エラー</th></tr></thead><tbody>
+                    @foreach (var row in preview.Rows)
+                    {
+                        <tr><td>@row.LineNumber</td><td>@row.Kind</td><td>@row.Title</td><td>@row.Artist</td><td>@(row.DurationSeconds is int seconds ? Duration(seconds) : "—")</td><td>@Disposition(row.Disposition)@(row.Error is null ? "" : "：" + row.Error)</td></tr>
+                    }
+                    </tbody></table></div>
+                    @if (preview.IsValid)
+                    {
+                        <label class="event-import-check"><input id="import-confirm" type="checkbox" checked="@State.Confirmed" disabled="@(!State.CanEdit)" @onchange="ConfirmChanged" />プレビューと追記内容を確認しました。確認後、既存行を変更せず新しい行を追記します。</label>
+                        @if (State.NeedsOverrunAcknowledgement) { <label class="event-import-check event-import-warning"><input id="import-overrun" type="checkbox" checked="@State.ConfirmOverrun" disabled="@(!State.CanEdit)" @onchange="OverrunChanged" />予定終了を超過する見込みを個別に確認しました。</label> }
+                    }
+                </section>
+            }
+            @if (State.Pending is { } pending)
+            {
+                <p id="event-import-pending" role="status">@(State.Busy ? "追記を処理中です。" : pending.HadUnknownResult ? "前回の結果は不明です。" : "処理結果を確認してください。") 同じ操作IDのみで再試行します：<code>@pending.Request.RequestId</code>。別の取込・編集・取消・移動はできません。</p>
+            }
+            <button id="@(State.Pending is null ? "import-apply" : "import-retry")" disabled="@(State.Busy || State.Accepted is not null || State.Pending is null && !State.CanApply)" @onclick="Apply">@(State.Pending is null ? "確認したCSVを一括追記" : "同じ操作IDで結果を確認／再試行")</button>
+        </section>
+    }
+}
+else if (Ready)
+{
+    <p>ログイン状態と現在のイベント管理権限が必要です。結果不明の操作は元のアカウントで再認証後、同じ操作IDで確認してください。ユーザーを切り替えると照合できません。</p>
+    @if (State.Pending is { } pending) { <p>保留中の操作ID：<code>@pending.Request.RequestId</code>。元のCSV・操作はこの画面のメモリに残っています。</p> }
+    <button id="event-import-reauthorize" disabled="@(Initializing || State.Busy)" @onclick="Initialize">同じアカウントの権限を再確認</button>
+}
+</section>
+@code {
+    [Parameter] public string EventId { get; set; } = "";
+    readonly EventImportComposerState State = new();
+    ElementReference FileInput;
+    IJSObjectReference? Module;
+    string LoadedId = "", ActorId = "", Title = "", Error = "", Message = "";
+    bool Ready, Allowed, Disposed, Initializing;
+    long Generation, OperationGeneration;
+    readonly string Owner = Guid.NewGuid().ToString("N");
+    bool Current(long generation, long operation) => !Disposed && generation == Generation && operation == OperationGeneration;
+    sealed record Transport<T>(int Status, T? Value);
+    sealed record FileResult(bool Ok, string? Csv, string? Error);
+    protected override void OnParametersSet()
+    {
+        if (LoadedId == EventId) return;
+        if (State.NavigationBlocked) { Error = "未送信または結果未確認の取込があります。元のイベントで操作結果を確認してください。"; Allowed = false; return; }
+        LoadedId = EventId; Generation++; OperationGeneration++; if (State.Accepted is not null) State.StartNew(); State.Discard(); ActorId = Title = Error = Message = ""; Ready = Allowed = false;
+    }
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (Disposed) return;
+        var generation = Generation;
+        try
+        {
+            if (Module is null)
+            {
+                var imported = await JS.InvokeAsync<IJSObjectReference>("import", "/event-import.js");
+                if (Disposed || generation != Generation) { try { await imported.DisposeAsync(); } catch (JSDisconnectedException) { } return; }
+                Module = imported;
+            }
+            if (!Ready && !Initializing) await Initialize();
+            if (Disposed || generation != Generation || Module is null) return;
+            await Module.InvokeVoidAsync("setNavigationWarning", Owner, State.NavigationBlocked);
+        }
+        catch (JSDisconnectedException) { }
+        catch { if (!Disposed && generation == Generation) { Error = "インポート画面を初期化できません。再読み込みしてください。"; Ready = true; StateHasChanged(); } }
+    }
+    async Task Initialize()
+    {
+        if (Initializing || Disposed || Module is null) return;
+        Initializing = true; var generation = Generation; var operation = OperationGeneration; var id = LoadedId;
+        try
+        {
+            var response = await Module.InvokeAsync<Transport<EventImportContext>>("context", id);
+            if (!Current(generation, operation) || id != EventId) return;
+            if (response.Status != 200 || response.Value is not { } context || context.EventId != id || string.IsNullOrWhiteSpace(context.ActorId) || string.IsNullOrWhiteSpace(context.Title) || ActorId.Length > 0 && ActorId != context.ActorId)
+            { Allowed = false; Title = ""; Error = "ログイン状態と現在のイベント管理権限を確認してください。同じアカウントで再試行してください。"; return; }
+            ActorId = context.ActorId; Title = context.Title; Allowed = true; Error = "";
+        }
+        catch { if (Current(generation, operation)) { Allowed = false; Title = ""; Error = "現在のログイン・イベント管理権限を確認できません。"; } }
+        finally { if (Current(generation, operation)) { Ready = true; Initializing = false; StateHasChanged(); } }
+    }
+    void CsvChanged(ChangeEventArgs e)
+    {
+        if (!State.CanEdit) return;
+        var csv = e.Value?.ToString() ?? "";
+        try
+        {
+            if (new UTF8Encoding(false, true).GetByteCount(csv) > 1048576)
+            { State.Edit(""); Error = "貼り付けCSVはUTF-8で1 MiB以下にしてください。大きい入力は保持しません。"; }
+            else { State.Edit(csv); Error = ""; }
+        }
+        catch (EncoderFallbackException) { State.Edit(""); Error = "貼り付けCSVに不正な文字があります。入力を保持しません。"; }
+        Message = ""; OperationGeneration++;
+    }
+    async Task FileSelected(ChangeEventArgs _)
+    {
+        if (!State.CanEdit || Module is null || !State.BeginFileRead()) return;
+        var generation = Generation; var operation = ++OperationGeneration;
+        try
+        {
+            var file = await Module.InvokeAsync<FileResult>("readCsvInput", FileInput);
+            if (!Current(generation, operation)) return;
+            if (file is not { Ok: true, Csv: not null }) { State.FileReadFailed(); Error = file?.Error ?? "CSVを読み取れません。"; return; }
+            State.CompleteFileRead(file.Csv); Message = Error = "";
+        }
+        catch { if (Current(generation, operation)) { State.FileReadFailed(); Error = "CSVファイルを読み取れません。UTF-8・1 MiB以下か確認してください。"; } }
+    }
+    void BeforeNavigation(LocationChangingContext context)
+    {
+        if (State.NavigationBlocked) { context.PreventNavigation(); Error = "未送信入力、処理中、または結果未確認の操作があります。破棄または同じ操作IDで結果確認後に移動してください。"; }
+    }
+    void ConfirmChanged(ChangeEventArgs e) { if (State.CanEdit) { State.Confirm(e.Value is true); OperationGeneration++; } }
+    void OverrunChanged(ChangeEventArgs e) { if (State.CanEdit) { State.AcknowledgeOverrun(e.Value is true); OperationGeneration++; } }
+    void Discard() { if (State.CanEdit) { State.Discard(); OperationGeneration++; Error = Message = ""; } }
+    async Task Preview()
+    {
+        if (!Allowed || Module is null || !State.CanEdit || State.Csv.Length == 0) return;
+        State.BeginPreview(); var generation = Generation; var operation = ++OperationGeneration; var csv = State.Csv; Error = Message = "";
+        try
+        {
+            var response = await Module.InvokeAsync<Transport<EventImportPreview>>("post", "event-import-preview", LoadedId, ActorId, new { csv });
+            if (!Current(generation, operation)) return;
+            if (response.Status == 200 && response.Value is { } view && ValidPreview(view, LoadedId)) { State.ShowPreview(view); Message = "プレビューを取得しました。まだデータは変更していません。"; }
+            else { State.PreviewFailed(); if (response.Status == 403) { Allowed = false; Title = ""; } Error = "CSV・イベントの取込条件・現在の権限を確認し、必要ならCSVを見直して再プレビューしてください。"; }
+        }
+        catch { if (Current(generation, operation)) { State.PreviewFailed(); Error = "プレビューを取得できませんでした。追記は行っていません。通信を確認して再プレビューしてください。"; } }
+    }
+    async Task Apply()
+    {
+        if (!Allowed || Module is null || State.Busy || State.Accepted is not null) return;
+        EventImportPending? pending;
+        if (State.Pending is null) pending = State.BeginOperation(LoadedId, ActorId, Guid.NewGuid().ToString("D"));
+        else pending = State.BeginRetry();
+        if (pending is null) return;
+        var generation = Generation; var operation = ++OperationGeneration; Error = Message = "";
+        try
+        {
+            var response = await Module.InvokeAsync<Transport<EventImportAcceptance>>("post", "event-import-apply", pending.EventId, pending.ActorId, pending.Request);
+            if (!Current(generation, operation)) return;
+            if (response.Status == 200 && response.Value is { } accepted)
+            {
+                if (State.SubmissionAccepted(accepted)) Message = accepted.Replayed ? "保存済みの受付結果を確認しました。" : "一括追記を受け付けました。";
+                else Error = "応答の内容を検証できません。結果不明として、同じ操作IDで再確認してください。";
+            }
+            else if (response.Status is 400 or 403 or 409)
+            {
+                State.SubmissionRejected(response.Status);
+                if (response.Status == 403) { Allowed = false; Title = ""; }
+                Error = State.Pending is not null ? "以前の要求結果は不明です。新しいCSVや操作IDを作らず、同じアカウントで同じ操作IDを再確認してください。" : "追記は受け付けられませんでした。プレビューを新しく取得して内容を確認してください。";
+            }
+            else throw new InvalidOperationException("Unclassified response");
+        }
+        catch { if (Current(generation, operation)) { State.SubmissionUnknown(); Error = "追記が保存されたか確認できません。入力を変えず、同じ操作IDで明示的に再確認してください。自動再送はしていません。"; } }
+    }
+    void StartNew() { if (State.Accepted is null) return; State.StartNew(); OperationGeneration++; Error = Message = ""; }
+    static bool ValidPreview(EventImportPreview p, string id) => p.EventId == id && p.RowVersion >= 0 && p.Fingerprint.Length == 64 && p.Fingerprint.All(c => c is >= '0' and <= '9' or >= 'a' and <= 'f') && p.Rows is not null && p.Errors is not null && p.NewSongs >= 0 && p.NewTransitions >= 0 && p.SkippedRows >= 0;
+    static string Disposition(string value) => value switch { "Ready"=>"追加予定", "DuplicateSkipped"=>"重複のためスキップ", "AssignedSkipped"=>"担当割当済みのためスキップ", "Invalid"=>"入力エラー", _=>"要確認" };
+    static string Duration(long seconds) => $"{seconds / 3600}:{seconds / 60 % 60:00}:{seconds % 60:00}";
+    static string Time(long seconds) => DateTimeOffset.FromUnixTimeSeconds(seconds).ToOffset(TimeSpan.FromHours(9)).ToString("yyyy/MM/dd HH:mm:ss") + "（日本時間）";
+    public async ValueTask DisposeAsync()
+    {
+        Disposed = true; Generation++; OperationGeneration++;
+        if (Module is not null) { try { await Module.InvokeVoidAsync("setNavigationWarning", Owner, false); await Module.DisposeAsync(); } catch (JSDisconnectedException) { } }
+    }
+}
