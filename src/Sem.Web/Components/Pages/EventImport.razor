@@ -9,8 +9,9 @@
 <section id="event-import-page" aria-labelledby="event-import-title">
 <h1 id="event-import-title">イベントCSV追記：@Title</h1>
 <p><a href="@($"/events/{Uri.EscapeDataString(EventId)}")">イベント概要へ戻る</a></p>
-<p>UTF-8のCSVを貼り付けるか、1 MiB以下のCSVファイルを選択してください。プレビューは読取専用です。確認後に追加可能な曲・進行枠だけを一括追記します。既存データは更新しません。CSVはブラウザー内メモリだけで扱い、URL取得・外部スプレッドシート読込・自動再送は行いません。</p>
-<p class="event-import-warning">ブラウザーを強制再読み込みしたりタブを閉じたりすると、メモリ内のCSV・保留中操作が失われ、結果不明の取込を照合できなくなる場合があります。結果不明の間は再読み込み・タブ終了をしないでください。</p>
+<p>UTF-8のCSVを貼り付けるか、1 MiB以下のCSVファイルを選択してください。公開CSVとして取得できるGoogleスプレッドシートも、ブラウザーから明示操作で読み込めます。URL入力はSignalR経由でBlazor Server回路へ送られ、取得したCSVはストリーム型JS interopで回路へ転送します。URL・CSVはページ／回路の一時メモリで扱い、データベース、ブラウザー保存領域、アプリケーションログには保存しません。Googleへの取得にサーバープロキシは使いません。プレビュー／追記を明示実行するとCSVは既存のアプリ内エンドポイントへ送信します。自動再送は行いません。</p>
+<p>プレビューは読取専用です。確認後に追加可能な曲・進行枠だけを一括追記し、既存データは更新しません。Google取得はブラウザー側で1 MiB以下に制限し、転送に25秒のキャンセル上限を設けます。Google取得の転送はSignalRの小さいメッセージへ分割するストリームを使います。既存のファイル選択／貼り付け経路はストリーム転送へ変更していないため、別のSignalRメッセージサイズ制限を受ける場合があります。</p>
+<p class="event-import-warning">ブラウザーを強制再読み込みしたりタブを閉じたり、Blazor Server回路が終了したりすると、一時メモリ内のCSV・保留中操作が失われ、結果不明の取込を照合できなくなる場合があります。結果不明の間は再読み込み・タブ終了をしないでください。</p>
 <p id="event-import-error" role="alert">@Error</p>
 <p id="event-import-message" role="status">@Message</p>
 @if (Ready && Allowed)
@@ -28,13 +29,17 @@
     else
     {
         <section id="event-import-composer" data-busy="@State.Busy.ToString().ToLowerInvariant()" data-pending="@(State.Pending is not null ? "true" : "false")">
-            <p><a id="event-import-sample" href="@($"/api/core/event-import-sample?id={Uri.EscapeDataString(LoadedId)}")">CSVサンプルをダウンロード</a></p>
+            <p><a id="event-import-sample" download="event-import-sample.csv" href="@($"/api/core/event-import-sample?id={Uri.EscapeDataString(LoadedId)}")">CSVサンプルをダウンロード</a></p>
             <fieldset disabled="@(!State.CanEdit)">
                 <legend>CSV入力（必須列 Kind, Title, Duration）</legend>
                 <label for="event-import-file">UTF-8 CSVファイル（最大1 MiB）</label>
                 <input id="event-import-file" @ref="FileInput" type="file" accept=".csv,text/csv" @onchange="FileSelected" />
                 <label for="import-csv">CSVを貼り付け</label>
                 <textarea id="import-csv" rows="10" spellcheck="false" autocomplete="off" value="@State.Csv" @oninput="CsvChanged"></textarea>
+                <label for="import-sheet-url">GoogleスプレッドシートURL（匿名CSV公開が必要）</label>
+                <input id="import-sheet-url" type="url" inputmode="url" autocomplete="off" spellcheck="false" maxlength="2048" value="@SpreadsheetUrl" @oninput="SpreadsheetUrlChanged" aria-describedby="event-import-sheet-help" />
+                <p id="event-import-sheet-help">docs.google.com のシートURLだけを受け付けます。公開CSVとしてブラウザーから取得できるシートに限ります。Googleログイン・OAuthは使いません。取得に失敗する場合はCSVをダウンロードするか貼り付けてください。</p>
+                <button id="import-sheet-fetch" disabled="@(!State.CanEdit || string.IsNullOrWhiteSpace(SpreadsheetUrl))" @onclick="FetchSpreadsheet">公開CSVを取得して入力へ読み込む</button>
             </fieldset>
             <div class="event-import-actions">
                 <button id="import-preview" disabled="@(!State.CanEdit || State.Csv.Length == 0)" @onclick="Preview">プレビューを検証</button>
@@ -72,7 +77,7 @@
 else if (Ready)
 {
     <p>ログイン状態と現在のイベント管理権限が必要です。結果不明の操作は元のアカウントで再認証後、同じ操作IDで確認してください。ユーザーを切り替えると照合できません。</p>
-    @if (State.Pending is { } pending) { <p>保留中の操作ID：<code>@pending.Request.RequestId</code>。元のCSV・操作はこの画面のメモリに残っています。</p> }
+    @if (State.Pending is { } pending) { <p>保留中の操作ID：<code>@pending.Request.RequestId</code>。元のCSV・操作はページとBlazor Server回路の一時メモリに残っています。</p> }
     <button id="event-import-reauthorize" disabled="@(Initializing || State.Busy)" @onclick="Initialize">同じアカウントの権限を再確認</button>
 }
 </section>
@@ -81,7 +86,7 @@ else if (Ready)
     readonly EventImportComposerState State = new();
     ElementReference FileInput;
     IJSObjectReference? Module;
-    string LoadedId = "", ActorId = "", Title = "", Error = "", Message = "";
+    string LoadedId = "", ActorId = "", Title = "", Error = "", Message = "", SpreadsheetUrl = "";
     bool Ready, Allowed, Disposed, Initializing;
     long Generation, OperationGeneration;
     readonly string Owner = Guid.NewGuid().ToString("N");
@@ -92,7 +97,7 @@ else if (Ready)
     {
         if (LoadedId == EventId) return;
         if (State.NavigationBlocked) { Error = "未送信または結果未確認の取込があります。元のイベントで操作結果を確認してください。"; Allowed = false; return; }
-        LoadedId = EventId; Generation++; OperationGeneration++; if (State.Accepted is not null) State.StartNew(); State.Discard(); ActorId = Title = Error = Message = ""; Ready = Allowed = Initializing = false;
+        LoadedId = EventId; Generation++; OperationGeneration++; if (State.Accepted is not null) State.StartNew(); State.Discard(); ActorId = Title = Error = Message = SpreadsheetUrl = ""; Ready = Allowed = Initializing = false;
     }
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -140,6 +145,77 @@ else if (Ready)
         }
         catch (EncoderFallbackException) { State.Edit(""); Error = "貼り付けCSVに不正な文字があります。入力を保持しません。"; }
         Message = ""; OperationGeneration++;
+    }
+    void SpreadsheetUrlChanged(ChangeEventArgs e)
+    {
+        if (!State.CanEdit) return;
+        SpreadsheetUrl = e.Value?.ToString() ?? "";
+        State.Edit(State.Csv); // A changed source revokes any prior preview/confirmation.
+        Error = Message = ""; OperationGeneration++;
+    }
+    async Task FetchSpreadsheet()
+    {
+        if (!Allowed || Module is null || !State.CanEdit || string.IsNullOrWhiteSpace(SpreadsheetUrl)
+            || !State.BeginFileRead()) return;
+        var generation = Generation;
+        var operation = ++OperationGeneration;
+        var id = LoadedId;
+        var actor = ActorId;
+        var source = SpreadsheetUrl;
+        Error = "";
+        Message = "Googleスプレッドシートの公開CSVを取得しています。追記やプレビューはまだ行いません。";
+        string? csv = null;
+        string? failure = null;
+        IJSStreamReference? jsStream = null;
+        Stream? csvStream = null;
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(25));
+        bool SameRequest() => id == LoadedId && id == EventId && actor == ActorId && source == SpreadsheetUrl && State.Busy;
+        try
+        {
+            jsStream = await Module.InvokeAsync<IJSStreamReference>("fetchSpreadsheetCsvStream", timeout.Token, source);
+            if (!Current(generation, operation)) return;
+            if (!SameRequest()) failure = "stale";
+            else
+            {
+                csvStream = await jsStream.OpenReadStreamAsync(1048576, timeout.Token);
+                if (!Current(generation, operation)) return;
+                if (!SameRequest()) failure = "stale";
+                else
+                {
+                    using var reader = new StreamReader(csvStream, new UTF8Encoding(false, true), true, 4096, leaveOpen: true);
+                    csv = await reader.ReadToEndAsync(timeout.Token);
+                    if (!Current(generation, operation)) return;
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            if (Current(generation, operation)) failure = "failed";
+        }
+        catch { if (Current(generation, operation)) failure = "failed"; }
+        finally
+        {
+            if (csvStream is not null) { try { await csvStream.DisposeAsync(); } catch { } }
+            if (jsStream is not null) { try { await jsStream.DisposeAsync(); } catch (JSDisconnectedException) { } catch { } }
+        }
+        if (!Current(generation, operation)) return;
+        if (!SameRequest()) { State.FileReadFailed(); return; }
+        if (failure is not null || csv is null)
+        {
+            State.FileReadFailed();
+            Error = "公開CSVを取得・転送できませんでした。URL・公開設定・ブラウザーのCORS制限を確認してください。以前のCSV入力は保持しています。ローカルCSVのダウンロードまたは貼り付けも利用できます。";
+            Message = "";
+            return;
+        }
+        if (Encoding.UTF8.GetByteCount(csv) > 1048576)
+        {
+            State.FileReadFailed();
+            Error = "取得したCSVは1 MiBを超えています。以前のCSV入力は保持しています。ダウンロードまたは貼り付けでお試しください。";
+            Message = "";
+            return;
+        }
+        State.CompleteFileRead(csv);
+        Message = "公開CSVを入力へ読み込みました。内容を確認してから「プレビューを検証」を押してください。";
     }
     async Task FileSelected(ChangeEventArgs _)
     {
