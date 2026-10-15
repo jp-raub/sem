@@ -155,7 +155,7 @@ function renderCatalog() {
   for (const t of snapshot.catalog) {
     const li=document.createElement('li'),swatch=document.createElement('span'),label=document.createElement('span'); swatch.className='theme-swatch'; swatch.style.backgroundColor=parseHex(t.accent)||FALLBACK.accent;
     swatch.setAttribute('aria-hidden','true'); label.className='theme-label'; label.textContent=t.name+(t.builtIn?'（組み込み）':''); li.append(swatch,label);
-    if (!t.builtIn && snapshot.canManageSite) { const edit=document.createElement('button'); edit.type='button'; edit.textContent='編集'; edit.dataset.catalogEdit=t.id; edit.addEventListener('click',()=>openCatalog(t)); const del=document.createElement('button'); del.type='button'; del.textContent='削除'; del.dataset.catalogDelete=t.id; del.addEventListener('click',()=>deleteCatalog(t)); li.append(edit,del); }
+    if (snapshot.canManageSite) { const edit=document.createElement('button'); edit.type='button'; edit.textContent='編集'; edit.dataset.catalogEdit=t.id; edit.addEventListener('click',()=>openCatalog(t)); li.append(edit); if (!t.builtIn) { const del=document.createElement('button'); del.type='button'; del.textContent='削除'; del.dataset.catalogDelete=t.id; del.addEventListener('click',()=>deleteCatalog(t)); li.append(del); } }
     list.append(li);
   }
   const details=document.getElementById('theme-catalog-editor'); if (details) details.hidden=!snapshot.canManageSite;

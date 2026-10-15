@@ -25,4 +25,5 @@ assert(app.includes('theme-appearance.css') && app.includes('theme-appearance.js
 assert(docs.includes('localStorage') && docs.includes('exactly-once') && ja.includes('localStorage') && ja.includes('exactly-once'), 'privacy/outcome caveats missing from both docs');
 for (const mode of ['0','1','2']) assert(page.includes(`value="${mode}"`), 'mode options must match numeric HTTP contract');
 assert(js.includes("mode === null ? 0 : mode") && js.includes("t.id==='green'"), 'clearing selections previews catalog Forest/System rather than old resolved values');
+assert(js.includes('li.append(edit); if (!t.builtIn)'), 'all themes editable by admin, only custom deletable');
 console.log('Theme appearance frontend contract checks passed.');
