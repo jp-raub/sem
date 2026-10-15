@@ -121,6 +121,110 @@ try
     }
     var oversizedBody = JsonSerializer.Serialize(new { csv = new string('x', 7 * 1024 * 1024) });
 
+    async Task<HttpResponseMessage> GetSample(string query, string? cookie = "test-auth=manager")
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/core/event-import-sample" + (query.Length == 0 ? "" : "?" + query));
+        if (!string.IsNullOrEmpty(cookie)) request.Headers.TryAddWithoutValidation("Cookie", cookie);
+        return await client.SendAsync(request);
+    }
+
+    // Synthetic legacy/corrupt definitions exercise formula protection and RFC-style CSV quoting;
+    // ordinary definition editing rejects quotes and pipes, but persisted historical data is defensive input.
+    var syntheticDefinitions = new[]
+    {
+        new EventPartDefinition { Id = "sample-formula", EventId = eventId, Name = "=HYPERLINK(\"https://invalid\")", NormalizedName = "=HYPERLINK(\"HTTPS://INVALID\")", Category = "Play", SortOrder = -3 },
+        new EventPartDefinition { Id = "sample-pipe", EventId = eventId, Name = "|Bass", NormalizedName = "|BASS", Category = "Play", SortOrder = -2 },
+        new EventPartDefinition { Id = "sample-comma-quote", EventId = eventId, Name = "Guitar, \"Lead\"", NormalizedName = "GUITAR, \"LEAD\"", Category = "Play", SortOrder = -1 }
+    };
+    await using (var seedDefinitions = app.Services.CreateAsyncScope())
+    {
+        var factory = seedDefinitions.ServiceProvider.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
+        await using var db = await factory.CreateDbContextAsync();
+        db.EventPartDefinitions.AddRange(syntheticDefinitions);
+        await db.SaveChangesAsync();
+    }
+    var beforeSample = await Snapshot(app.Services);
+    string sampleCsv;
+    using (var sample = await GetSample("id=" + Uri.EscapeDataString(eventId)))
+    {
+        Check(sample.StatusCode == HttpStatusCode.OK, "manager can download sample for hidden event without import-history gate");
+        Check(sample.Content.Headers.ContentType?.ToString() == "text/csv; charset=utf-8", "sample uses UTF-8 CSV content type");
+        var disposition = sample.Content.Headers.ContentDisposition;
+        Check(disposition?.DispositionType == "attachment" && disposition.FileName?.Trim('"') == "event-import-sample.csv",
+            "sample has constant ASCII attachment filename");
+        Check(sample.Headers.CacheControl?.NoStore == true && sample.Headers.TryGetValues("X-Content-Type-Options", out var nosniff) && nosniff.Single() == "nosniff", "sample is no-store and nosniff");
+        sampleCsv = await sample.Content.ReadAsStringAsync();
+        Check(sampleCsv.StartsWith("Kind,Title,Artist,Duration,Prep,Parts\r\n", StringComparison.Ordinal)
+            && sampleCsv.Contains("Guitar, \"\"Lead\"\"\"", StringComparison.Ordinal)
+            && !sampleCsv.Contains("=HYPERLINK", StringComparison.Ordinal) && !sampleCsv.Contains("|Bass", StringComparison.Ordinal),
+            "sample uses fixed headers, correctly quotes a local part, and omits formula/pipe-unsafe names");
+    }
+    var parsedSample = EventImportCsvParser.Parse(sampleCsv);
+    Check(parsedSample.Count == 3 && parsedSample[0].DurationSeconds == 270 && parsedSample[0].PrepSeconds == 30
+        && parsedSample[0].PartNames.SequenceEqual(["Guitar, \"Lead\""]) && parsedSample[1].Kind == "Transition"
+        && parsedSample[1].DurationSeconds == 600 && parsedSample[2].DurationSeconds == 3723 && parsedSample[2].PrepSeconds == 0,
+        "sample parses to the approved song/transition timings and exact local definition name");
+    Check(await Snapshot(app.Services) == beforeSample, "sample GET does not mutate any event, definition, song, part, audit, or import data");
+    using (var repeatedSample = await GetSample("id=" + Uri.EscapeDataString(eventId)))
+        Check(repeatedSample.StatusCode == HttpStatusCode.OK && await repeatedSample.Content.ReadAsStringAsync() == sampleCsv, "repeated sample downloads are deterministic");
+    using (var adminSample = await GetSample("id=" + Uri.EscapeDataString(eventId), "test-auth=admin"))
+        Check(adminSample.StatusCode == HttpStatusCode.OK, "authenticated admin can download sample");
+    using (var anonymousSample = await GetSample("id=" + Uri.EscapeDataString(eventId), ""))
+        Check(anonymousSample.StatusCode == HttpStatusCode.Forbidden, "anonymous sample download is denied");
+    using (var memberSample = await GetSample("id=" + Uri.EscapeDataString(eventId), "test-auth=member"))
+        Check(memberSample.StatusCode == HttpStatusCode.Forbidden, "non-manager sample download is denied");
+    using (var staleSample = await GetSample("id=" + Uri.EscapeDataString(eventId), "test-auth=manager-stale"))
+        Check(staleSample.StatusCode == HttpStatusCode.Forbidden, "stale session cookie cannot download sample");
+    using (var repeatedSampleId = await GetSample("id=" + eventId + "&id=" + eventId))
+        Check(repeatedSampleId.StatusCode == HttpStatusCode.BadRequest, "sample id must occur exactly once");
+    using (var emptySampleId = await GetSample("id="))
+        Check(emptySampleId.StatusCode == HttpStatusCode.BadRequest, "sample id must be nonempty");
+    using (var postSampleRequest = new HttpRequestMessage(HttpMethod.Post, "/api/core/event-import-sample?id=" + Uri.EscapeDataString(eventId)))
+    {
+        postSampleRequest.Content = new StringContent("{");
+        using var postSample = await client.SendAsync(postSampleRequest);
+        Check(postSample.StatusCode == HttpStatusCode.MethodNotAllowed && postSample.Headers.CacheControl?.NoStore == true
+            && postSample.Headers.TryGetValues("X-Content-Type-Options", out var postNosniff) && postNosniff.Single() == "nosniff",
+            "sample POST is 405 before body parsing and remains no-store/nosniff");
+    }
+    using (var samplePreview = await Preview(sampleCsv))
+    {
+        Check(samplePreview.StatusCode == HttpStatusCode.OK, "downloaded sample parses and passes existing valid-preview checks with local definitions");
+        using var previewBody = JsonDocument.Parse(await samplePreview.Content.ReadAsStringAsync());
+        Check(previewBody.RootElement.GetProperty("isValid").GetBoolean()
+            && previewBody.RootElement.GetProperty("newSongs").GetInt32() == 2
+            && previewBody.RootElement.GetProperty("newTransitions").GetInt32() == 1, "sample preview contains two songs and one transition without errors");
+    }
+
+    // With every eligible definition removed, only the fixed transition example remains.
+    var activeDefinitionIds = new List<string>();
+    await using (var disableDefinitions = app.Services.CreateAsyncScope())
+    {
+        var factory = disableDefinitions.ServiceProvider.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
+        await using var db = await factory.CreateDbContextAsync();
+        var active = await db.EventPartDefinitions.Where(x => x.EventId == eventId && x.DeletedAt == null).ToArrayAsync();
+        activeDefinitionIds.AddRange(active.Select(x => x.Id));
+        foreach (var definition in active) definition.DeletedAt = "2026-10-14T23:00:00.000Z";
+        await db.SaveChangesAsync();
+    }
+    var beforeFallback = await Snapshot(app.Services);
+    using (var fallback = await GetSample("id=" + Uri.EscapeDataString(eventId)))
+    {
+        var fallbackCsv = await fallback.Content.ReadAsStringAsync();
+        Check(fallback.StatusCode == HttpStatusCode.OK && fallbackCsv.Split("\r\n", StringSplitOptions.RemoveEmptyEntries).Length == 2
+            && fallbackCsv.Contains("Transition,Sample Transition,,10:00,,", StringComparison.Ordinal), "no safe active part yields header plus transition only");
+    }
+    Check(await Snapshot(app.Services) == beforeFallback, "transition-only fallback remains read-only");
+    await using (var cleanupDefinitions = app.Services.CreateAsyncScope())
+    {
+        var factory = cleanupDefinitions.ServiceProvider.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
+        await using var db = await factory.CreateDbContextAsync();
+        foreach (var definition in await db.EventPartDefinitions.Where(x => activeDefinitionIds.Contains(x.Id)).ToArrayAsync())
+            definition.DeletedAt = null;
+        db.EventPartDefinitions.RemoveRange(await db.EventPartDefinitions.Where(x => x.Id.StartsWith("sample-")).ToArrayAsync());
+        await db.SaveChangesAsync();
+    }
+
     using (var get = await client.GetAsync("/api/core/event-import-preview?id=" + Uri.EscapeDataString(eventId)))
         Check(get.StatusCode == HttpStatusCode.MethodNotAllowed && get.Headers.CacheControl?.NoStore == true, "preview GET is 405 and no-store");
     using (var getApply = await client.GetAsync("/api/core/event-import-apply?id=" + Uri.EscapeDataString(eventId)))
@@ -292,6 +396,8 @@ async Task<string> Snapshot(IServiceProvider services)
         Events = await db.SessionEvents.AsNoTracking().OrderBy(x => x.Id).ToArrayAsync(),
         Songs = await db.Songs.AsNoTracking().OrderBy(x => x.Id).ToArrayAsync(),
         Parts = await db.TimeParts.AsNoTracking().OrderBy(x => x.Id).ToArrayAsync(),
+        Definitions = await db.EventPartDefinitions.AsNoTracking().OrderBy(x => x.Id).ToArrayAsync(),
+        Audits = await db.Audits.AsNoTracking().OrderBy(x => x.Id).ToArrayAsync(),
         Operations = await db.Set<EventImportOperation>().AsNoTracking().OrderBy(x => x.Id).ToArrayAsync()
     });
 }

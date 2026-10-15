@@ -42,7 +42,20 @@ public static class CoreEndpoints
                 var action = ctx.Request.RouteValues["action"]?.ToString();
                 var post = HttpMethods.IsPost(ctx.Request.Method);
                 var eventImport = action is "event-import-preview" or "event-import-apply";
+                var eventImportSample = action == "event-import-sample";
+                if (eventImportSample) ctx.Response.Headers["X-Content-Type-Options"] = "nosniff";
+                if (eventImportSample && !HttpMethods.IsGet(ctx.Request.Method)) { ctx.Response.StatusCode = 405; return; }
                 if (eventImport && !post) { ctx.Response.StatusCode = 405; return; }
+                if (eventImportSample)
+                {
+                    var idValues = ctx.Request.Query["id"];
+                    if (idValues.Count != 1 || string.IsNullOrEmpty(idValues[0])) throw new ValidationException("イベントを確認してください。");
+                    var csv = await service.ReadEventImportSampleAsync(ctx.User, idValues[0]!, ctx.RequestAborted);
+                    ctx.Response.ContentType = "text/csv; charset=utf-8";
+                    ctx.Response.Headers["Content-Disposition"] = "attachment; filename=event-import-sample.csv";
+                    await ctx.Response.WriteAsync(csv, System.Text.Encoding.UTF8, ctx.RequestAborted);
+                    return;
+                }
                 string? eventImportId = null;
                 if (post)
                 {
