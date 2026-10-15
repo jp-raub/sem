@@ -53,6 +53,9 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<Song> Songs => Set<Song>();
     public DbSet<SongPart> SongParts => Set<SongPart>();
     public DbSet<ThemeCatalogEntry> ThemeCatalogEntries => Set<ThemeCatalogEntry>();
+    public DbSet<UserThemePreference> UserThemePreferences => Set<UserThemePreference>();
+    public DbSet<EventThemePreference> EventThemePreferences => Set<EventThemePreference>();
+    public DbSet<SiteThemePreference> SiteThemePreferences => Set<SiteThemePreference>();
     protected override void OnModelCreating(ModelBuilder b)
     {
         base.OnModelCreating(b);
@@ -369,6 +372,44 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             t.HasCheckConstraint("CK_ThemeCatalog_Name", "length(\"Name\") BETWEEN 1 AND 30 AND length(trim(\"Name\")) >= 1");
             t.HasCheckConstraint("CK_ThemeCatalog_Colors", "length(\"Accent\")=7 AND \"Accent\" GLOB '#[0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F]' AND length(\"Background\")=7 AND \"Background\" GLOB '#[0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F]' AND length(\"Surface\")=7 AND \"Surface\" GLOB '#[0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F]' AND length(\"Text\")=7 AND \"Text\" GLOB '#[0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F]'");
             t.HasCheckConstraint("CK_ThemeCatalog_FlagsAndVersion", "\"BuiltIn\" IN (0,1) AND \"RowVersion\">=0");
+        });
+        b.Entity<UserThemePreference>().HasKey(x => x.UserId);
+        b.Entity<UserThemePreference>().Property(x => x.UserId).HasMaxLength(450);
+        b.Entity<UserThemePreference>().Property(x => x.ThemeId).HasMaxLength(64);
+        b.Entity<UserThemePreference>().Property(x => x.RowVersion).IsConcurrencyToken();
+        b.Entity<UserThemePreference>().HasOne<ApplicationUser>().WithMany()
+            .HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<UserThemePreference>().HasOne<ThemeCatalogEntry>().WithMany()
+            .HasForeignKey(x => x.ThemeId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<UserThemePreference>().HasIndex(x => x.ThemeId);
+        b.Entity<UserThemePreference>().ToTable("UserThemePreferences", t => {
+            t.HasCheckConstraint("CK_UserThemePreferences_Mode", "\"Mode\" IS NULL OR \"Mode\" IN (0,1,2)");
+            t.HasCheckConstraint("CK_UserThemePreferences_RowVersion", "\"RowVersion\">=0");
+        });
+        b.Entity<EventThemePreference>().HasKey(x => x.EventId);
+        b.Entity<EventThemePreference>().Property(x => x.EventId).HasMaxLength(450);
+        b.Entity<EventThemePreference>().Property(x => x.ThemeId).HasMaxLength(64);
+        b.Entity<EventThemePreference>().Property(x => x.RowVersion).IsConcurrencyToken();
+        b.Entity<EventThemePreference>().HasOne<SessionEvent>().WithMany()
+            .HasForeignKey(x => x.EventId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<EventThemePreference>().HasOne<ThemeCatalogEntry>().WithMany()
+            .HasForeignKey(x => x.ThemeId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<EventThemePreference>().HasIndex(x => x.ThemeId);
+        b.Entity<EventThemePreference>().ToTable("EventThemePreferences", t => {
+            t.HasCheckConstraint("CK_EventThemePreferences_Mode", "\"Mode\" IS NULL OR \"Mode\" IN (0,1,2)");
+            t.HasCheckConstraint("CK_EventThemePreferences_RowVersion", "\"RowVersion\">=0");
+        });
+        b.Entity<SiteThemePreference>().HasKey(x => x.Id);
+        b.Entity<SiteThemePreference>().Property(x => x.Id).ValueGeneratedNever();
+        b.Entity<SiteThemePreference>().Property(x => x.ThemeId).HasMaxLength(64);
+        b.Entity<SiteThemePreference>().Property(x => x.RowVersion).IsConcurrencyToken();
+        b.Entity<SiteThemePreference>().HasOne<ThemeCatalogEntry>().WithMany()
+            .HasForeignKey(x => x.ThemeId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<SiteThemePreference>().HasIndex(x => x.ThemeId);
+        b.Entity<SiteThemePreference>().ToTable("SiteThemePreferences", t => {
+            t.HasCheckConstraint("CK_SiteThemePreferences_Id", "\"Id\"=1");
+            t.HasCheckConstraint("CK_SiteThemePreferences_Mode", "\"Mode\" IS NULL OR \"Mode\" IN (0,1,2)");
+            t.HasCheckConstraint("CK_SiteThemePreferences_RowVersion", "\"RowVersion\">=0");
         });
     }
 }
