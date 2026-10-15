@@ -48,6 +48,17 @@ public static class CoreEndpoints
                 if (eventImportSample && !HttpMethods.IsGet(ctx.Request.Method)) { ctx.Response.StatusCode = 405; return; }
                 if (eventImportContext && !HttpMethods.IsGet(ctx.Request.Method)) { ctx.Response.StatusCode = 405; return; }
                 if (eventImport && !post) { ctx.Response.StatusCode = 405; return; }
+                if (action == "profile-registration-history")
+                {
+                    // This endpoint is read-only; reject writes before inspecting any request body.
+                    if (!HttpMethods.IsGet(ctx.Request.Method)) { ctx.Response.StatusCode = 405; return; }
+                    var ids = ctx.Request.Query["id"];
+                    if (ids.Count != 1 || string.IsNullOrEmpty(ids[0]) || ids[0]!.Length > 128 || ids[0]!.Any(char.IsControl))
+                        throw new ValidationException("プロフィールを確認してください。");
+                    await ctx.Response.WriteAsJsonAsync(
+                        await service.ReadProfileRegistrationHistoryAsync(ctx.User, ids[0]!, ctx.RequestAborted));
+                    return;
+                }
                 if (eventImportContext)
                 {
                     var idValues = ctx.Request.Query["id"];

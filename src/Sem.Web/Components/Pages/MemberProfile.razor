@@ -1,26 +1,70 @@
 @page "/profiles/{UserId}"
 @rendermode InteractiveServer
+@implements IAsyncDisposable
 @using Sem.Web.Core
-@inject AuthenticationStateProvider Authentication
-@inject CoreFoundationService Core
+@using Microsoft.JSInterop
+@inject IJSRuntime JS
 <PageTitle>メンバープロフィール</PageTitle>
 <h1>メンバープロフィール</h1><p><a href="/workspace">業務基盤へ戻る</a></p>
 <p id="member-profile-error" role="alert">@Error</p>
-<button id="member-profile-refresh" disabled="@Busy" @onclick="Load">最新情報を取得</button>
+@if(ProfileBusy){<p role="status" aria-live="polite">プロフィールを取得しています。</p>}
+<button id="member-profile-refresh" disabled="@ProfileBusy" @onclick="LoadProfile">最新情報を取得</button>
 @if(Profile is not null){
  <section id="member-profile" data-user="@Profile.UserId"><h2>@Profile.DisplayName</h2>
  <dl><dt>読み</dt><dd>@(Profile.Reading.Length==0?"未設定":Profile.Reading)</dd><dt>対面での呼び</dt><dd>@(Profile.CallName.Length==0?"未設定":Profile.CallName)</dd></dl>
  <h3>SNS等</h3>
  @if(Profile.Social.Length==0){<p>リンクは未設定です。</p>}
  @foreach(var link in Profile.Social.Where(Safe)){<p><a href="@link.Url" target="_blank" rel="noopener noreferrer">@link.Service</a></p>}
- <p>認証済みメンバー向けの基本プロフィールです。メール・認証情報は表示しません。登録履歴・追加設問・未ログイン用プロフィールQRは別の実装範囲です。</p>
+ <p>認証済みメンバー向けの基本プロフィールです。メール・認証情報は表示しません。</p>
+ <section aria-labelledby="member-profile-history-heading">
+  <h3 id="member-profile-history-heading">現在のイベント登録</h3>
+  <button id="member-profile-history-load" disabled="@HistoryBusy" @onclick="LoadHistory">登録履歴を取得</button>
+  <p id="member-profile-history-error" role="alert">@HistoryError</p>
+  @if(HistoryBusy){<p role="status" aria-live="polite">登録履歴を取得しています。</p>}
+  @if(History is not null){
+   <p>この時点のスナップショットです。現在の登録候補イベントのうち新しい順に最大100件を選び、その後で閲覧権限を確認します。そのため0件または100件未満の場合があり、100件より古い閲覧可能イベントが候補外になることもあります。全履歴・出席記録・削除済みログを示すものではありません。</p>
+   @if(History.Events.Length==0){<p id="member-profile-history">閲覧可能な現在の登録はありません。</p>}
+   else{
+    <ol id="member-profile-history" class="profile-history-list">
+     @foreach(var item in History.Events){
+      <li class="profile-history-event">
+       <h4>@item.Title</h4>
+       <p><time datetime="@item.ScheduledDate">@item.ScheduledDate</time> · @(item.Spectator?"観覧":"演奏")</p>
+       @if(item.Parts.Length>0){<ul>@foreach(var part in item.Parts){<li>@part.SongTitle — @part.PartName (@part.Category)</li>}</ul>}
+      </li>
+     }
+    </ol>
+   }
+  }
+ </section>
  </section>
 }
 @code{
  [Parameter]public string UserId{get;set;}="";
- ProfileView?Profile;string Error="";bool Busy,Ready;long Epoch;
- protected override void OnParametersSet(){Epoch++;Profile=null;Error="";Busy=Ready=false;}
- protected override async Task OnAfterRenderAsync(bool first){if(!Ready){Ready=true;await Load();StateHasChanged();}}
- async Task Load(){if(Busy)return;var epoch=Epoch;var id=UserId;Profile=null;Error="";Busy=true;try{var p=await Core.ReadProfileAsync((await Authentication.GetAuthenticationStateAsync()).User,id);if(epoch==Epoch)Profile=p;}catch{if(epoch==Epoch)Error="ログイン状態と現在のプロフィール閲覧条件を確認してください。";}finally{if(epoch==Epoch)Busy=false;}}
+ ProfileView?Profile;ProfileRegistrationHistoryView?History;string Error="",HistoryError="";bool ProfileBusy,HistoryBusy,InitialLoadStarted,ImportAttempted,Disposed;long Generation;IJSObjectReference?Module;
+ protected override void OnParametersSet(){Generation++;Profile=null;History=null;Error="";HistoryError="";ProfileBusy=HistoryBusy=false;InitialLoadStarted=false;}
+ protected override async Task OnAfterRenderAsync(bool first){
+  if(Disposed)return;
+  if(Module is null){if(ImportAttempted)return;ImportAttempted=true;var importGeneration=Generation;try{var imported=await JS.InvokeAsync<IJSObjectReference>("import","/profile-history.js");if(Disposed||importGeneration!=Generation){await imported.DisposeAsync();if(!Disposed){ImportAttempted=false;StateHasChanged();}return;}Module=imported;}catch{if(!Disposed){if(importGeneration!=Generation)ImportAttempted=false;else Error="プロフィール取得機能を読み込めませんでした。";StateHasChanged();}return;}}
+  if(!Disposed&&!InitialLoadStarted){InitialLoadStarted=true;await LoadProfile();if(!Disposed)StateHasChanged();}
+ }
+ async Task LoadProfile(){
+  if(ProfileBusy||Disposed||Module is null)return;
+  var generation=++Generation;var id=UserId;Profile=null;History=null;Error=HistoryError="";HistoryBusy=false;ProfileBusy=true;
+  try{var result=await Module.InvokeAsync<ProfileFetchResult>("profile",id);if(generation!=Generation)return;if(result.Status==403){ClearForDenied();Error="ログイン状態またはプロフィール閲覧条件を確認してください。最新情報を取得できます。";return;}if(result.Value is null||result.Value.UserId!=id)throw new InvalidOperationException();Profile=result.Value;}
+  catch{if(generation==Generation){Profile=null;History=null;Error="ログイン状態と現在のプロフィール閲覧条件を確認してください。";}}
+  finally{if(generation==Generation)ProfileBusy=false;}
+ }
+ async Task LoadHistory(){
+  if(HistoryBusy||Profile is null||Module is null||Disposed)return;
+  var generation=Generation;var id=UserId;History=null;HistoryError="";HistoryBusy=true;
+  try{var result=await Module.InvokeAsync<HistoryFetchResult>("history",id);if(generation!=Generation)return;if(result.Status==403){ClearForDenied();Error="ログイン状態またはプロフィール閲覧条件を確認してください。最新情報を取得できます。";return;}if(result.Value is null||result.Value.UserId!=id||result.Value.Events is null)throw new InvalidOperationException();History=result.Value;}
+  catch{if(generation==Generation)HistoryError="登録履歴を完全な状態で取得できませんでした。再度ボタンを押して再取得してください。";}
+  finally{if(generation==Generation)HistoryBusy=false;}
+ }
+ void ClearForDenied(){Generation++;Profile=null;History=null;HistoryError="";ProfileBusy=HistoryBusy=false;}
  static bool Safe(SocialLink link)=>Uri.TryCreate(link.Url,UriKind.Absolute,out var uri)&&uri.Scheme is "https" or "http"&&uri.UserInfo.Length==0;
+ public async ValueTask DisposeAsync(){Disposed=true;Generation++;if(Module is not null){try{await Module.DisposeAsync();}catch(JSDisconnectedException){}}}
+ public sealed class ProfileFetchResult{public int Status{get;set;}public ProfileView?Value{get;set;}}
+ public sealed class HistoryFetchResult{public int Status{get;set;}public ProfileRegistrationHistoryView?Value{get;set;}}
 }
