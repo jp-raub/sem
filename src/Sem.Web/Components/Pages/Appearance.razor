@@ -1,0 +1,51 @@
+@page "/appearance"
+<PageTitle>表示設定</PageTitle>
+<div id="appearance-page" class="appearance-page">
+    <header class="appearance-heading">
+        <h1>表示設定</h1>
+        <p>配色と表示モードを設定します。変更は「適用」するまで保存されません。</p>
+    </header>
+    <p id="appearance-status" class="appearance-status" role="status" aria-live="polite">設定を読み込んでいます… JavaScriptが無効な場合、この画面では設定を変更できません。</p>
+    <section id="appearance-editor" class="appearance-panel" aria-labelledby="appearance-editor-title" hidden>
+        <h2 id="appearance-editor-title">表示設定</h2>
+        <label for="appearance-scope">設定する範囲</label>
+        <select id="appearance-scope" disabled>
+            <option value="personal">自分の表示（このアカウント）</option>
+        </select>
+        <label for="appearance-theme">配色</label>
+        <select id="appearance-theme" disabled></select>
+        <label for="appearance-mode">表示モード</label>
+        <select id="appearance-mode" disabled>
+            <option value="inherit">上位設定を継承</option>
+            <option value="0">端末設定に従う</option>
+            <option value="1">ライト</option>
+            <option value="2">ダーク</option>
+        </select>
+        <div class="appearance-actions">
+            <button id="appearance-apply" type="button" disabled>適用</button>
+            <button id="appearance-cancel" type="button" disabled>キャンセル</button>
+            <button id="appearance-refresh" type="button">設定を再読込</button>
+        </div>
+        <p id="appearance-preview-note">プレビュー中の変更はブラウザー内だけに反映されます。</p>
+    </section>
+    <section id="appearance-catalog" class="appearance-panel" aria-labelledby="appearance-catalog-title" hidden>
+        <h2 id="appearance-catalog-title">テーマカタログ</h2>
+        <p>サイト管理者はテーマを追加・編集できます。組み込みテーマは削除できません。</p>
+        <ul id="theme-catalog-list" class="theme-catalog-list"></ul>
+        <details id="theme-catalog-editor">
+            <summary id="theme-catalog-add">テーマを追加</summary>
+            <div class="theme-catalog-fields">
+                <label for="theme-catalog-name">テーマ名（30文字以内）</label>
+                <input id="theme-catalog-name" type="text" maxlength="30" autocomplete="off">
+                <label for="theme-catalog-accent">アクセント色</label><input id="theme-catalog-accent" type="color" value="#1e6557">
+                <label for="theme-catalog-background">背景色</label><input id="theme-catalog-background" type="color" value="#f5f7f3">
+                <label for="theme-catalog-surface">パネル色</label><input id="theme-catalog-surface" type="color" value="#fffefa">
+                <label for="theme-catalog-text">文字色</label><input id="theme-catalog-text" type="color" value="#18312e">
+                <div class="appearance-actions">
+                    <button id="theme-catalog-save" type="button">テーマを保存</button>
+                    <button id="theme-catalog-cancel" type="button">編集をキャンセル</button>
+                </div>
+            </div>
+        </details>
+    </section>
+</div>

@@ -1,0 +1,46 @@
+:root{--appearance-accent:#1e6557;--appearance-background:#f5f7f3;--appearance-surface:#fffefa;--appearance-text:#18312e;--appearance-line:#cbd8ce;color-scheme:light}
+:root[data-appearance-mode="dark"]{--appearance-background:#15201c;--appearance-surface:#202d27;--appearance-text:#e1ebe5;--appearance-line:#3c4c45;color-scheme:dark}
+:root[data-appearance-mode="dark"]{--appearance-accent:#86bd9c}
+body{background:var(--appearance-background)!important;color:var(--appearance-text)!important}
+main{color:var(--appearance-text)}
+.panel,.appearance-panel,article,table,.modal,.dialog{background:var(--appearance-surface);color:var(--appearance-text);border-color:var(--appearance-line)}
+.appearance-page{max-width:1100px;margin:auto;padding:16px;box-sizing:border-box}
+.appearance-heading{border:0;background:transparent;color:inherit;padding:0;margin:0 0 18px}
+.appearance-heading h1{margin:.25em 0}.appearance-heading p,.appearance-panel p{line-height:1.55}
+.appearance-panel{border:1px solid var(--appearance-line);border-radius:12px;padding:18px;margin:16px 0;box-sizing:border-box}
+.appearance-page label,.theme-catalog-fields label{display:block;margin:12px 0 5px;font-weight:600}
+.appearance-page input,.appearance-page select{display:block;box-sizing:border-box;width:100%;max-width:600px;min-height:44px;padding:9px 11px;background:var(--appearance-surface);color:var(--appearance-text);border:1px solid var(--appearance-line);border-radius:6px;font:inherit}
+.appearance-page input[type=color]{width:100px;min-height:44px;padding:3px}
+.appearance-page button{min-height:44px;padding:9px 14px;margin:4px 6px 4px 0;border:1px solid var(--appearance-line);border-radius:7px;background:var(--appearance-surface);color:var(--appearance-text);font:inherit;cursor:pointer}
+.appearance-page button:hover:not(:disabled){background:color-mix(in srgb,var(--appearance-accent) 10%,var(--appearance-surface))}
+.appearance-page button:disabled{opacity:.6;cursor:not-allowed}
+.appearance-page a{color:var(--appearance-accent);overflow-wrap:anywhere}
+.appearance-page :focus-visible{outline:3px solid var(--appearance-accent);outline-offset:3px}
+.appearance-page [hidden]{display:none!important}
+.appearance-status{padding:10px 12px;border-inline-start:4px solid var(--appearance-accent);background:var(--appearance-surface);overflow-wrap:anywhere}
+.appearance-actions{display:flex;flex-wrap:wrap;gap:4px;margin-top:14px}
+.theme-catalog-list{padding:0;list-style:none}.theme-catalog-list li{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--appearance-line);flex-wrap:wrap}
+.theme-swatch{width:25px;height:25px;border:1px solid var(--appearance-line);border-radius:50%;flex:0 0 25px}
+.theme-label{flex:1;min-width:120px}.theme-catalog-fields{padding-top:8px}
+#appearance-catalog details{margin-top:12px}#appearance-catalog summary{cursor:pointer;min-height:36px;align-content:center}
+@media(max-width:480px){.appearance-page{padding:12px}.appearance-panel{padding:14px}.appearance-actions{display:grid;grid-template-columns:1fr}.appearance-actions button{width:100%;margin:2px 0}.theme-catalog-list li{align-items:flex-start}}
+@media(prefers-reduced-motion:reduce){.appearance-page *{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
+@media(forced-colors:active){.appearance-panel,.appearance-status,.appearance-page input,.appearance-page select,.appearance-page button{border:1px solid CanvasText}.appearance-page :focus-visible{outline:3px solid Highlight}.theme-swatch{forced-color-adjust:none}}
+/* Keep the app's legacy OS-dark navigation rules subordinate to explicit user mode. */
+:root[data-appearance-mode="light"] body .service-navigation,:root[data-appearance-mode="light"] body .navigation-panel{background:var(--appearance-surface)!important;color:var(--appearance-text)!important;border-color:var(--appearance-line)!important}
+:root[data-appearance-mode="light"] body .service-navigation a,:root[data-appearance-mode="light"] body .service-navigation button{color:var(--appearance-accent)!important}
+:root[data-appearance-mode="dark"] body .service-navigation,:root[data-appearance-mode="dark"] body .navigation-panel{background:var(--appearance-surface)!important;color:var(--appearance-text)!important;border-color:var(--appearance-line)!important}
+:root[data-appearance-mode="dark"] body .service-navigation a,:root[data-appearance-mode="dark"] body .service-navigation button{color:var(--appearance-accent)!important}
+
+/* Four validated tokens theme existing business surfaces as well as this editor. */
+body{background:var(--appearance-background)!important;color:var(--appearance-text)!important}
+header,.panel,article,table,.modal,.dialog{background-color:var(--appearance-surface);color:var(--appearance-text);border-color:var(--appearance-line)}
+input,select,textarea,.form-control{background-color:var(--appearance-surface);color:var(--appearance-text);border-color:var(--appearance-line)}
+button,.btn{border-color:var(--appearance-line);color:var(--appearance-text)}
+a,.btn-link{color:var(--appearance-accent)}
+button.primary,.primary,.btn-primary{background-color:var(--appearance-accent);border-color:var(--appearance-accent);color:var(--appearance-surface)}
+button:hover:not(:disabled),.btn:hover:not(:disabled){border-color:var(--appearance-accent)}
+table th,table td{border-color:var(--appearance-line)}
+body :focus-visible{outline-color:var(--appearance-accent)}
+
+:root[data-appearance-mode="light"] body .navigation-panel a:hover,:root[data-appearance-mode="light"] body .navigation-panel button:hover,:root[data-appearance-mode="dark"] body .navigation-panel a:hover,:root[data-appearance-mode="dark"] body .navigation-panel button:hover{background:color-mix(in srgb,var(--appearance-accent) 12%,var(--appearance-surface))!important}
