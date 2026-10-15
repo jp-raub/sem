@@ -92,7 +92,7 @@ else if (Ready)
     {
         if (LoadedId == EventId) return;
         if (State.NavigationBlocked) { Error = "未送信または結果未確認の取込があります。元のイベントで操作結果を確認してください。"; Allowed = false; return; }
-        LoadedId = EventId; Generation++; OperationGeneration++; if (State.Accepted is not null) State.StartNew(); State.Discard(); ActorId = Title = Error = Message = ""; Ready = Allowed = false;
+        LoadedId = EventId; Generation++; OperationGeneration++; if (State.Accepted is not null) State.StartNew(); State.Discard(); ActorId = Title = Error = Message = ""; Ready = Allowed = Initializing = false;
     }
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
