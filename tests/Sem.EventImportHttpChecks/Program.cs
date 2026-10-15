@@ -119,11 +119,63 @@ try
         await using var db = await factory.CreateDbContextAsync();
         eventId = await db.SessionEvents.Select(x => x.Id).SingleAsync();
     }
+    var encodedEventId = Uri.EscapeDataString(eventId);
+    using (var contextResponse = await GetImportContext("id=" + encodedEventId))
+    {
+        Check(contextResponse.StatusCode == HttpStatusCode.OK && contextResponse.Headers.CacheControl?.NoStore == true,
+            "manager can read context for hidden event without import-readiness gate");
+        using var context = JsonDocument.Parse(await contextResponse.Content.ReadAsStringAsync());
+        var values = context.RootElement;
+        Check(values.EnumerateObject().Select(x => x.Name).Order().SequenceEqual(["actorId", "eventId", "title"])
+            && values.GetProperty("eventId").GetString() == eventId
+            && values.GetProperty("actorId").GetString() == "manager"
+            && values.GetProperty("title").GetString() == "HTTP import test",
+            "context returns only eventId, authenticated actorId, and actual event title");
+    }
+    using (var adminContext = await GetImportContext("id=" + encodedEventId, "test-auth=admin"))
+        Check(adminContext.StatusCode == HttpStatusCode.OK, "authenticated admin can read event import context");
+    using (var anonymousContext = await GetImportContext("id=" + encodedEventId, ""))
+        Check(anonymousContext.StatusCode == HttpStatusCode.Forbidden, "anonymous context request is denied");
+    using (var memberContext = await GetImportContext("id=" + encodedEventId, "test-auth=member"))
+        Check(memberContext.StatusCode == HttpStatusCode.Forbidden, "non-manager cannot read event import context");
+    using (var staleContext = await GetImportContext("id=" + encodedEventId, "test-auth=manager-stale"))
+        Check(staleContext.StatusCode == HttpStatusCode.Forbidden, "stale session cannot read event import context");
+    using (var missingContextId = await GetImportContext(""))
+        Check(missingContextId.StatusCode == HttpStatusCode.BadRequest, "context requires an id");
+    using (var repeatedContextId = await GetImportContext("id=" + encodedEventId + "&id=" + encodedEventId))
+        Check(repeatedContextId.StatusCode == HttpStatusCode.BadRequest, "context id must occur exactly once");
+    using (var emptyContextId = await GetImportContext("id="))
+        Check(emptyContextId.StatusCode == HttpStatusCode.BadRequest, "context id must be nonempty");
+    using (var postContextRequest = new HttpRequestMessage(HttpMethod.Post, "/api/core/event-import-context?id=" + encodedEventId))
+    {
+        postContextRequest.Content = new StringContent("{");
+        using var postContext = await client.SendAsync(postContextRequest);
+        Check(postContext.StatusCode == HttpStatusCode.MethodNotAllowed && postContext.Headers.CacheControl?.NoStore == true,
+            "context POST is 405 without parsing a body and remains no-store");
+    }
+    using (var mismatchedActor = await Send("event-import-preview", "{",
+        "id=" + encodedEventId + "&expectedActor=member"))
+        Check(mismatchedActor.StatusCode == HttpStatusCode.Forbidden, "expectedActor mismatch rejects before malformed body parsing");
+    using (var repeatedExpectedActor = await Send("event-import-preview", "{",
+        "id=" + encodedEventId + "&expectedActor=manager&expectedActor=manager"))
+        Check(repeatedExpectedActor.StatusCode == HttpStatusCode.BadRequest, "expectedActor must occur exactly once when present");
+    using (var emptyExpectedActor = await Send("event-import-preview", "{",
+        "id=" + encodedEventId + "&expectedActor="))
+        Check(emptyExpectedActor.StatusCode == HttpStatusCode.BadRequest, "expectedActor must be nonempty when present");
+    using (var correctExpectedActorPreview = await Preview(Csv, "id=" + encodedEventId + "&expectedActor=manager"))
+        Check(correctExpectedActorPreview.StatusCode == HttpStatusCode.OK,
+            "preview accepts expectedActor matching the current authenticated actor");
     var oversizedBody = JsonSerializer.Serialize(new { csv = new string('x', 7 * 1024 * 1024) });
 
     async Task<HttpResponseMessage> GetSample(string query, string? cookie = "test-auth=manager")
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, "/api/core/event-import-sample" + (query.Length == 0 ? "" : "?" + query));
+        if (!string.IsNullOrEmpty(cookie)) request.Headers.TryAddWithoutValidation("Cookie", cookie);
+        return await client.SendAsync(request);
+    }
+    async Task<HttpResponseMessage> GetImportContext(string query, string? cookie = "test-auth=manager")
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/core/event-import-context" + (query.Length == 0 ? "" : "?" + query));
         if (!string.IsNullOrEmpty(cookie)) request.Headers.TryAddWithoutValidation("Cookie", cookie);
         return await client.SendAsync(request);
     }
@@ -315,7 +367,11 @@ try
         Check(applyUnknown.StatusCode == HttpStatusCode.BadRequest, "apply unknown actor field rejected");
     using (var applyMalformed = await Send("event-import-apply", "{\"requestId\":", "id=" + eventId))
         Check(applyMalformed.StatusCode == HttpStatusCode.BadRequest, "apply malformed JSON rejected");
-    using var accepted = await Send("event-import-apply", applyJson, "id=" + eventId);
+    using (var applyActorMismatch = await Send("event-import-apply", "{",
+        "id=" + eventId + "&expectedActor=member"))
+        Check(applyActorMismatch.StatusCode == HttpStatusCode.Forbidden,
+            "apply expectedActor mismatch rejects before malformed request body");
+    using var accepted = await Send("event-import-apply", applyJson, "id=" + eventId + "&expectedActor=manager");
     Check(accepted.StatusCode == HttpStatusCode.OK && accepted.Headers.CacheControl?.NoStore == true, "apply accepted and no-store");
     var acceptance = JsonDocument.Parse(await accepted.Content.ReadAsStringAsync());
     Check(!acceptance.RootElement.GetProperty("replayed").GetBoolean(), "first apply returns a new receipt");
