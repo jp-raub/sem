@@ -25,6 +25,24 @@ if (args.Contains("--generate-vapid"))
     Console.WriteLine("PUSH_PRIVATE_KEY=" + keys.PrivateKey);
     return;
 }
+// Native decoder smoke check: no deployment configuration, database, HTTP, or workers.
+if (args.Length == 1 && args[0] == "--profile-image-self-test")
+{
+    try
+    {
+        var sample = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAIAAAB7QOjdAAAAD0lEQVR4nGNkjNJgYGAAAAJ2AIXm5L7XAAAAAElFTkSuQmCC");
+        var normalized = await ProfileImageNormalizer.NormalizeAsync(sample, "image/png");
+        if (normalized.Width != 2 || normalized.Height != 1 || normalized.Png.Length > ProfileImageNormalizer.MaxOutputBytes)
+            throw new InvalidOperationException("Unexpected image normalization result.");
+        Console.WriteLine("Profile image native PNG normalization passed; no database or HTTP was opened.");
+    }
+    catch (Exception error)
+    {
+        Console.Error.WriteLine("Profile image native normalization failed: " + error.GetType().Name);
+        Environment.ExitCode = 1;
+    }
+    return;
+}
 var builder = WebApplication.CreateBuilder(args);
 var deployment = builder.AddSemDeployment();
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();

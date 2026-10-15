@@ -1,3 +1,7 @@
+const SAVED_IMAGE_LIMIT = 1024 * 1024;
+const PNG_DATA_PREFIX = 'data:image/png;base64,';
+const PNG_SIGNATURE = [137, 80, 78, 71, 13, 10, 26, 10];
+
 async function boundedJson(response, limit) {
     if (!(response.headers.get('Content-Type') || '').toLowerCase().startsWith('application/json')) throw new Error('JSON応答を確認できません。');
     const length=response.headers.get('Content-Length');
@@ -26,6 +30,19 @@ function safeSocial(url) {
         return (parsed.protocol === 'https:' || parsed.protocol === 'http:') && !parsed.username && !parsed.password ? parsed : null;
     } catch { return null; }
 }
+function savedPngDataUrl(value) {
+    if (typeof value !== 'string' || !value.startsWith(PNG_DATA_PREFIX) ||
+        value.length > PNG_DATA_PREFIX.length + 4 * Math.ceil(SAVED_IMAGE_LIMIT / 3)) return null;
+    const encoded=value.slice(PNG_DATA_PREFIX.length);
+    if (!encoded || encoded.length % 4 !== 0 ||
+        !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(encoded)) return null;
+    try {
+        const binary=atob(encoded);
+        if (!binary.length || binary.length>SAVED_IMAGE_LIMIT || btoa(binary)!==encoded || binary.length<PNG_SIGNATURE.length) return null;
+        for (let i=0;i<PNG_SIGNATURE.length;i++) if (binary.charCodeAt(i)!==PNG_SIGNATURE[i]) return null;
+        return value;
+    } catch { return null; }
+}
 async function csrf(signal) {
     const response = await fetch('/api/csrf', {
         method: 'GET', credentials: 'same-origin', mode: 'same-origin', cache: 'no-store',
@@ -39,7 +56,22 @@ async function csrf(signal) {
 function render(profile) {
     const root = document.getElementById('profile-qr-share-result');
     root.replaceChildren();
-    const heading = element('h2', `${profile.icon || ''}${profile.icon ? ' ' : ''}${profile.displayName}`);
+    const imageDataUrl=savedPngDataUrl(profile.imageDataUrl);
+    const avatar=element('div');
+    const image=element('img');
+    image.id='profile-qr-share-image';
+    image.alt=`${profile.displayName}のプロフィール画像`;
+    image.hidden=!imageDataUrl;
+    image.style.maxWidth='8rem';
+    image.style.maxHeight='8rem';
+    image.style.objectFit='contain';
+    if(imageDataUrl)image.src=imageDataUrl;
+    const fallback=element('span',imageDataUrl?'':(profile.icon||'🙂'));
+    fallback.id='profile-qr-share-image-fallback';
+    fallback.hidden=Boolean(imageDataUrl);
+    avatar.append(image,fallback);
+    root.append(avatar);
+    const heading = element('h2', profile.displayName);
     root.append(heading);
     const details = element('dl');
     for (const [title, value] of [['読み', profile.reading], ['対面での呼び', profile.callName]]) {
@@ -93,7 +125,7 @@ export async function init() {
         if (!response.ok || response.redirected) throw new Error();
         const expiresAt=Date.parse(response.headers.get('X-Profile-QR-Expires-At'));
         if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) throw new Error();
-        const profile = await boundedJson(response,2*1024*1024);
+        const profile = await boundedJson(response,4*1024*1024);
         if (myGeneration!==generation || location.pathname!=='/profile/share') return;
         if (!profile || typeof profile.userId !== 'string' || typeof profile.displayName !== 'string' ||
             !Array.isArray(profile.answers) || !Array.isArray(profile.social)) throw new Error();

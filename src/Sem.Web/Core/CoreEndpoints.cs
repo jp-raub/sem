@@ -52,11 +52,13 @@ public static class CoreEndpoints
                 var profileQrAction = action == "profile-qr";
                 var profileQrSvgAction = action == "profile-qr-svg";
                 var profileQrViewAction = action == "profile-qr-view";
+                var profileImageAction = action is "profile-image" or "profile-image-delete";
                 if (profileEditorAction && !HttpMethods.IsGet(ctx.Request.Method) && !post ||
                     profileQuestionsAction && !HttpMethods.IsGet(ctx.Request.Method) && !post ||
                     profileQrAction && !HttpMethods.IsGet(ctx.Request.Method) && !post ||
                     profileQrSvgAction && !HttpMethods.IsGet(ctx.Request.Method) ||
-                    profileQrViewAction && !post)
+                    profileQrViewAction && !post ||
+                    profileImageAction && !post)
                 {
                     ctx.Response.StatusCode = 405;
                     return;
@@ -114,9 +116,22 @@ public static class CoreEndpoints
                     return;
                 }
                 string? eventImportId = null;
+                string? profileImageExpectedActor = null;
+                long? profileImageExpectedVersion = null;
                 if (post)
                 {
                     if (ctx.Request.Headers.Origin.ToString() != deployment.PublicUrl.TrimEnd('/')) throw new UnauthorizedAccessException();
+                    if (profileImageAction)
+                    {
+                        (profileImageExpectedActor, profileImageExpectedVersion) = RequiredProfileImageQuery(ctx.Request.Query, action == "profile-image");
+                        await service.AuthorizeProfileImageRequestAsync(ctx.User, profileImageExpectedActor, ctx.RequestAborted);
+                        if (action == "profile-image")
+                        {
+                            if (!ProfileImageNormalizer.IsAllowedMime(ctx.Request.ContentType)) throw new ValidationException("PNG、JPEG、WebP画像のみ利用できます。");
+                            if (ctx.Request.ContentLength > ProfileImageNormalizer.MaxInputBytes) throw new CoreRequestPayloadTooLargeException();
+                        }
+                        else if (!ctx.Request.HasJsonContentType()) throw new ValidationException("JSON形式で送信してください。");
+                    }
                     if (action is "profile-editor" or "profile-questions" or "profile-qr")
                     {
                         var expectedActor = RequiredThemeQueryValue(ctx.Request.Query, "expectedActor");
@@ -160,11 +175,37 @@ public static class CoreEndpoints
                         // deterministic 413 without buffering beyond their effective request limits.
                         size.MaxRequestBodySize = eventImport ? EventImportRequestMaxBytes + 16 * 1024L :
                             themeAppearanceWrite ? ThemeAppearanceRequestMaxBytes + 16 * 1024L :
+                            action == "profile-image" ? ProfileImageNormalizer.MaxInputBytes + 16 * 1024L :
+                            action == "profile-image-delete" ? 65536 + 16 * 1024L :
                             profileEditorAction ? 1024 * 1024L + 16 * 1024L :
                             profileQuestionsAction || profileQrAction || profileQrViewAction ? 65536 + 16 * 1024L : 65536;
                     }
                     await csrf.ValidateRequestAsync(ctx);
                     if (eventImport && ctx.Request.ContentLength > EventImportRequestMaxBytes) throw new EventImportPayloadTooLargeException();
+                }
+                if (profileImageAction)
+                {
+                    var uploadSlot = false;
+                    try
+                    {
+                        if (action == "profile-image")
+                        {
+                            uploadSlot = ProfileImageNormalizer.TryAcquireUploadSlot();
+                            if (!uploadSlot) throw new ProfileImageBusyException();
+                            var input = await ReadProfileImageBodyAsync(ctx.Request, ctx.RequestAborted);
+                            var normalized = await ProfileImageNormalizer.NormalizeAsync(input, ctx.Request.ContentType!, ctx.RequestAborted);
+                            var saved = await service.SaveProfileImageAsync(ctx.User, profileImageExpectedVersion!.Value, normalized.Png, normalized.Width, normalized.Height, ctx.RequestAborted);
+                            await ctx.Response.WriteAsJsonAsync(saved);
+                        }
+                        else
+                        {
+                            var edit = await ReadThemeAppearanceRequestAsync<ProfileImageDeleteEdit>(ctx.Request, ctx.RequestAborted, 65536);
+                            var deleted = await service.DeleteProfileImageAsync(ctx.User, edit.RowVersion, ctx.RequestAborted);
+                            await ctx.Response.WriteAsJsonAsync(deleted);
+                        }
+                    }
+                    finally { if (uploadSlot) ProfileImageNormalizer.ReleaseUploadSlot(); }
+                    return;
                 }
                 if (eventImport)
                 {
@@ -455,6 +496,7 @@ public static class CoreEndpoints
             }
             catch (EventImportPayloadTooLargeException) { ctx.Response.StatusCode = 413; await ctx.Response.WriteAsJsonAsync(new { error = "取込リクエストが大きすぎます。" }); }
             catch (CoreRequestPayloadTooLargeException) { ctx.Response.StatusCode = 413; await ctx.Response.WriteAsJsonAsync(new { error = "リクエストが大きすぎます。" }); }
+            catch (ProfileImageBusyException) { ctx.Response.StatusCode = 429; await ctx.Response.WriteAsJsonAsync(new { error = "画像処理が混み合っています。しばらくしてから再試行してください。" }); }
             catch (UnauthorizedAccessException) { ctx.Response.StatusCode = 403; await ctx.Response.WriteAsJsonAsync(new { error = "ログイン状態と操作権限を確認してください。" }); }
             catch (CoreConflictException e) { ctx.Response.StatusCode = 409; await ctx.Response.WriteAsJsonAsync(new { error = e.Message }); }
             catch (DbUpdateConcurrencyException) { ctx.Response.StatusCode = 409; await ctx.Response.WriteAsJsonAsync(new { error = "更新が競合しました。最新状態を確認してください。" }); }
@@ -481,6 +523,40 @@ public static class CoreEndpoints
     {
         if (!query.ContainsKey(name)) return null;
         return RequiredThemeQueryValue(query, name);
+    }
+
+    private static (string Actor, long? Version) RequiredProfileImageQuery(IQueryCollection query, bool upload)
+    {
+        var expectedKeys = upload ? new[] { "expectedActor", "rowVersion" } : new[] { "expectedActor" };
+        if (query.Keys.Count != expectedKeys.Length || expectedKeys.Any(k => !query.ContainsKey(k)) || query.Keys.Any(k => !expectedKeys.Contains(k, StringComparer.Ordinal)) ||
+            query["expectedActor"].Count != 1 || string.IsNullOrEmpty(query["expectedActor"][0]) || query["expectedActor"][0]!.Length > 128 || query["expectedActor"][0]!.Any(char.IsControl))
+            throw new ValidationException("操作者または更新版を確認してください。");
+        long? version = null;
+        if (upload)
+        {
+            if (query["rowVersion"].Count != 1 || !long.TryParse(query["rowVersion"][0], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var parsed) || parsed < 0)
+                throw new ValidationException("画像の更新版を確認してください。");
+            version = parsed;
+        }
+        return (query["expectedActor"][0]!, version);
+    }
+
+    private static async Task<byte[]> ReadProfileImageBodyAsync(HttpRequest request, CancellationToken ct)
+    {
+        if (request.ContentLength is > ProfileImageNormalizer.MaxInputBytes) throw new CoreRequestPayloadTooLargeException();
+        if (request.ContentLength == 0) throw new ValidationException("画像データがありません。");
+        using var body = new MemoryStream((int)Math.Min(request.ContentLength ?? 0, ProfileImageNormalizer.MaxInputBytes));
+        var buffer = new byte[32 * 1024];
+        while (true)
+        {
+            var remaining = ProfileImageNormalizer.MaxInputBytes + 1 - (int)body.Length;
+            if (remaining <= 0) throw new CoreRequestPayloadTooLargeException();
+            var read = await request.Body.ReadAsync(buffer.AsMemory(0, Math.Min(buffer.Length, remaining)), ct);
+            if (read == 0) break;
+            await body.WriteAsync(buffer.AsMemory(0, read), ct);
+        }
+        if (body.Length is 0 or > ProfileImageNormalizer.MaxInputBytes) throw new CoreRequestPayloadTooLargeException();
+        return body.ToArray();
     }
 
     private static async Task<T> ReadThemeAppearanceRequestAsync<T>(HttpRequest request, CancellationToken ct, int maxBytes = ThemeAppearanceRequestMaxBytes) where T : class

@@ -1,11 +1,18 @@
 const API = '/api/core/';
+const JSON_LIMIT = 4 * 1024 * 1024;
+const IMAGE_FILE_LIMIT = 10 * 1024 * 1024;
+const SAVED_IMAGE_LIMIT = 1024 * 1024;
+const PNG_DATA_PREFIX = 'data:image/png;base64,';
+const PNG_SIGNATURE = [137, 80, 78, 71, 13, 10, 26, 10];
+const ALLOWED_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
 let state = null;
 let busy = false;
 let qrObjectUrl = null;
+let imageWriteNeedsRefresh = false;
 let ownerGeneration=0, ownerRoot=null;
 const activeRequests=new Set();
 const currentOwner=mine=>mine===ownerGeneration && ownerRoot?.isConnected && ownerRoot===document.getElementById('profile-settings');
-export function cleanup(){ ownerGeneration++;for(const c of activeRequests)c.abort();activeRequests.clear();state=null;busy=false;if(qrObjectUrl){URL.revokeObjectURL(qrObjectUrl);qrObjectUrl=null;}ownerRoot=null; }
+export function cleanup(){ ownerGeneration++;for(const c of activeRequests)c.abort();activeRequests.clear();state=null;busy=false;imageWriteNeedsRefresh=false;if(qrObjectUrl){URL.revokeObjectURL(qrObjectUrl);qrObjectUrl=null;}ownerRoot=null; }
 
 const $ = id => document.getElementById(id);
 const elem = (tag, text = null) => {
@@ -15,6 +22,64 @@ const elem = (tag, text = null) => {
 };
 function setError(text = '') { const node=$('profile-settings-error');if(node)node.textContent=text; }
 function setStatus(text) { const node=$('profile-settings-status');if(node)node.textContent=text; }
+function savedPngDataUrl(value) {
+    if (typeof value !== 'string' || !value.startsWith(PNG_DATA_PREFIX) ||
+        value.length > PNG_DATA_PREFIX.length + 4 * Math.ceil(SAVED_IMAGE_LIMIT / 3)) return null;
+    const encoded = value.slice(PNG_DATA_PREFIX.length);
+    if (!encoded || encoded.length % 4 !== 0 ||
+        !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(encoded)) return null;
+    try {
+        const binary = atob(encoded);
+        if (!binary.length || binary.length > SAVED_IMAGE_LIMIT || btoa(binary) !== encoded ||
+            binary.length < PNG_SIGNATURE.length) return null;
+        for (let index = 0; index < PNG_SIGNATURE.length; index++)
+            if (binary.charCodeAt(index) !== PNG_SIGNATURE[index]) return null;
+        return value;
+    } catch { return null; }
+}
+function imageRowVersion() {
+    const version = state?.profile?.imageRowVersion;
+    if (version === undefined || version === null) return 0;
+    if (!Number.isSafeInteger(version) || version < 0) throw new Error('画像の更新番号を確認できません。プロフィールを再取得してください。');
+    return version;
+}
+function renderSavedImage() {
+    const image = $('profile-image-preview');
+    const fallback = $('profile-image-fallback');
+    if (!image || !fallback || !state) return;
+    const dataUrl = savedPngDataUrl(state.profile.imageDataUrl);
+    image.removeAttribute('src');
+    image.hidden = !dataUrl;
+    fallback.hidden = Boolean(dataUrl);
+    fallback.textContent = state.profile.icon || '🙂';
+    if (dataUrl) image.src = dataUrl;
+}
+function setImageControls() {
+    const disabled = !state || busy || imageWriteNeedsRefresh;
+    for (const id of ['profile-image-file', 'profile-image-upload', 'profile-image-delete'])
+        if ($(id)) $(id).disabled = disabled;
+    const hasSavedImage = Boolean(state?.profile?.imageDataUrl);
+    if ($('profile-image-delete')) $('profile-image-delete').disabled = disabled || !hasSavedImage;
+    if ($('profile-save')) $('profile-save').disabled = disabled;
+    if ($('profile-social-add')) $('profile-social-add').disabled = disabled;
+    if ($('profile-qr-issue')) $('profile-qr-issue').disabled = disabled;
+    const questionForm = $('profile-question-add');
+    if (questionForm) {
+        const submit = questionForm.querySelector('button[type="submit"]') || questionForm.querySelector('button');
+        if (submit) submit.disabled = disabled;
+    }
+    const refresh = $('profile-image-refresh');
+    if (refresh) {
+        refresh.hidden = !imageWriteNeedsRefresh && Boolean(state);
+        refresh.disabled = busy;
+    }
+}
+function clearSelectedImage() {
+    const input = $('profile-image-file');
+    const detail = $('profile-image-selection');
+    if (input) input.value = '';
+    if (detail) detail.textContent = '画像は選択されていません。';
+}
 function endpoint(name, params = {}) {
     const url = new URL(API + name, location.origin);
     for (const [key, value] of Object.entries(params)) url.searchParams.set(key, String(value));
@@ -31,7 +96,17 @@ async function boundedJson(response, limit) {
     const data=new Uint8Array(size);let offset=0;for(const chunk of chunks){data.set(chunk,offset);offset+=chunk.byteLength;}
     return JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(data));
 }
-function clearIdentity() { state=null; const root=$('profile-settings');if(root)root.hidden=true;const image=$('profile-qr-image');if(image)image.replaceChildren(); if(qrObjectUrl){URL.revokeObjectURL(qrObjectUrl);qrObjectUrl=null;} }
+function clearIdentity() {
+    state=null;
+    const root=$('profile-settings');if(root)root.hidden=true;
+    const image=$('profile-qr-image');if(image)image.replaceChildren();
+    const preview=$('profile-image-preview');if(preview){preview.removeAttribute('src');preview.hidden=true;}
+    const fallback=$('profile-image-fallback');if(fallback){fallback.textContent='🙂';fallback.hidden=false;}
+    clearSelectedImage();
+    if(qrObjectUrl){URL.revokeObjectURL(qrObjectUrl);qrObjectUrl=null;}
+    const refresh=$('profile-image-refresh');if(refresh)refresh.hidden=false;
+    setImageControls();
+}
 async function csrf(signal) {
     const response=await fetch('/api/csrf',{method:'GET',credentials:'same-origin',mode:'same-origin',cache:'no-store',redirect:'error',headers:{Accept:'application/json'},signal});
     if(!response.ok)throw new Error('CSRF確認に失敗しました。再読込してください。');
@@ -43,13 +118,13 @@ async function post(url,body,headers={}) {
         const token=await csrf(controller.signal);
         const response=await fetch(url,{method:'POST',credentials:'same-origin',mode:'same-origin',cache:'no-store',redirect:'error',headers:{Accept:'application/json','Content-Type':'application/json','X-CSRF-TOKEN':token,...headers},body:JSON.stringify(body),signal:controller.signal});
         if(!response.ok||response.redirected){if(currentOwner(mine)&&(response.status===401||response.status===403))clearIdentity();await response.body?.cancel();throw new Error(`処理に失敗しました（${response.status}）。再読込して状態を確認してください。`);}
-        const value=await boundedJson(response,2*1024*1024);return {json:async()=>value};
+        const value=await boundedJson(response,JSON_LIMIT);return {json:async()=>value};
     } finally {clearTimeout(timer);activeRequests.delete(controller);}
 }
 async function readJson(url) {
     const mine=ownerGeneration,controller=new AbortController(),timer=setTimeout(()=>controller.abort(),25000);activeRequests.add(controller);
     try {const response=await fetch(url,{method:'GET',credentials:'same-origin',mode:'same-origin',cache:'no-store',redirect:'error',headers:{Accept:'application/json'},signal:controller.signal});
-        if(!response.ok||response.redirected){if(currentOwner(mine)&&(response.status===401||response.status===403))clearIdentity();await response.body?.cancel();throw new Error('ログイン状態または閲覧権限を確認してください。');}return await boundedJson(response,2*1024*1024);
+        if(!response.ok||response.redirected){if(currentOwner(mine)&&(response.status===401||response.status===403))clearIdentity();await response.body?.cancel();throw new Error('ログイン状態または閲覧権限を確認してください。');}return await boundedJson(response,JSON_LIMIT);
     } finally {clearTimeout(timer);activeRequests.delete(controller);}
 }
 function input(labelText, value, maxLength, type = 'text') {
@@ -179,25 +254,31 @@ async function load(mine=ownerGeneration) {
     $('profile-reading').value = state.profile.reading;
     $('profile-call-name').value = state.profile.callName;
     $('profile-icon').value = state.profile.icon || '';
+    renderSavedImage();
     renderSocial(); renderAnswers(); renderQuestionAdmin();
     $('profile-settings').hidden = false;
+    imageWriteNeedsRefresh = false;
+    clearSelectedImage();
+    setImageControls();
+    const refresh = $('profile-image-refresh'); if (refresh) refresh.hidden = true;
     await loadQrStatus(mine);if(!currentOwner(mine))return;
     setStatus('現在のプロフィールを読み込みました。');
 }
 async function mutate(action) {
-    if (busy) return;
-    const mine=ownerGeneration;busy = true; setError(''); setStatus('保存しています…');
+    if (busy || imageWriteNeedsRefresh) return;
+    const mine=ownerGeneration;busy = true; setImageControls();setError(''); setStatus('保存しています…');
     try { await action();if(!currentOwner(mine))return;await load(mine);if(currentOwner(mine))setStatus('保存しました。'); }
     catch (error) { if(currentOwner(mine)){setError(error.message || '保存できませんでした。再読込して状態を確認してください。');setStatus('');} }
-    finally { if(currentOwner(mine))busy = false; }
+    finally { if(currentOwner(mine)){busy = false;setImageControls();} }
 }
 async function saveProfile(event) {
     event.preventDefault();
-    if (!state || busy) return;
+    if (!state || busy || imageWriteNeedsRefresh) return;
     await mutate(() => post(endpoint('profile-editor', { expectedActor: state.actorId }), collectProfile()));
 }
 async function addQuestion(event) {
     event.preventDefault();
+    if (!state || busy || imageWriteNeedsRefresh) return;
     const text = $('profile-question-new-text').value;
     const type = $('profile-question-new-type').value;
     await mutate(async () => {
@@ -215,10 +296,10 @@ async function boundedSvg(response) {
     return new Blob(chunks,{type:'image/svg+xml'});
 }
 async function issueQr() {
-    if (!state || busy) return;
+    if (!state || busy || imageWriteNeedsRefresh) return;
     const reissue = state.qr.exists;
     if (reissue && !confirm('以前のQRを無効にして、新しい24時間QRを発行しますか？')) return;
-    const mine=ownerGeneration;let svgController=null,svgTimer=null;busy = true; setError(''); setStatus('QRを発行しています…');
+    const mine=ownerGeneration;let svgController=null,svgTimer=null;busy = true;setImageControls(); setError(''); setStatus('QRを発行しています…');
     try {
         const response = await post(endpoint('profile-qr', { expectedActor: state.actorId }), {
             rowVersion: state.qr.rowVersion, reissue
@@ -249,7 +330,105 @@ async function issueQr() {
         if(!currentOwner(mine))return;
         setError(error.message || 'QRを発行できませんでした。'); setStatus('');
         try { await loadQrStatus(); } catch { /* keep the current state and never retry issuance */ }
-    } finally { clearTimeout(svgTimer);activeRequests.delete(svgController);if(currentOwner(mine))busy = false; }
+    } finally { clearTimeout(svgTimer);activeRequests.delete(svgController);if(currentOwner(mine)){busy = false;setImageControls();} }
+}
+function selectedImage() {
+    const file = $('profile-image-file')?.files?.[0] || null;
+    const detail = $('profile-image-selection');
+    if (!file) {
+        if (detail) detail.textContent = '画像は選択されていません。';
+        return null;
+    }
+    if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
+        if (detail) detail.textContent = 'PNG・JPEG・WebP形式の静止画像を選択してください。SVG・GIF・アニメーション画像は使用できません。';
+        return null;
+    }
+    if (!Number.isSafeInteger(file.size) || file.size <= 0 || file.size > IMAGE_FILE_LIMIT) {
+        if (detail) detail.textContent = '画像ファイルは10 MiB以下である必要があります。';
+        return null;
+    }
+    if (detail) detail.textContent = `${file.name || '選択した画像'}（${file.size.toLocaleString('ja-JP')} bytes）`;
+    return file;
+}
+async function changeImage(operation) {
+    if (!state || busy || imageWriteNeedsRefresh) return;
+    let file = null;
+    if (operation === 'upload') {
+        file = selectedImage();
+        if (!file) { setError('PNG・JPEG・WebP形式の10 MiB以下の画像を選択してください。'); return; }
+    } else if (!state.profile.imageDataUrl) {
+        setError('削除するプロフィール画像がありません。'); return;
+    } else if (!confirm('保存済みのプロフィール画像を削除しますか？')) return;
+
+    let rowVersion;
+    try { rowVersion = imageRowVersion(); }
+    catch (error) { setError(error.message); return; }
+    const mine=ownerGeneration, actor=state.actorId;
+    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),25000);
+    activeRequests.add(controller);
+    busy=true;setImageControls();setError('');setStatus(operation==='upload'?'画像をアップロードしています…':'画像を削除しています…');
+    try {
+        const token=await csrf(controller.signal);
+        if (!currentOwner(mine) || !state) return;
+        const url=endpoint(operation==='upload'?'profile-image':'profile-image-delete',{
+            expectedActor:actor,...(operation==='upload'?{rowVersion}:{})
+        });
+        const headers={Accept:'application/json','X-CSRF-TOKEN':token};
+        let body;
+        if (operation==='upload') {
+            headers['Content-Type']=file.type;
+            body=file;
+        } else {
+            headers['Content-Type']='application/json';
+            body=JSON.stringify({rowVersion});
+        }
+        const response=await fetch(url,{method:'POST',credentials:'same-origin',mode:'same-origin',cache:'no-store',redirect:'error',headers,body,signal:controller.signal});
+        if (!currentOwner(mine)) return;
+        if (!response.ok || response.redirected) {
+            if (response.status===401 || response.status===403) clearIdentity();
+            await response.body?.cancel();
+            throw new Error(`画像の更新結果を確認できません（${response.status}）。`);
+        }
+        const result=await boundedJson(response,JSON_LIMIT);
+        if (!Number.isSafeInteger(result?.rowVersion) || result.rowVersion<0 ||
+            !Number.isSafeInteger(result?.width) || result.width<0 || result.width>512 ||
+            !Number.isSafeInteger(result?.height) || result.height<0 || result.height>512 ||
+            (operation==='upload' && (!result.width || !result.height)))
+            throw new Error('画像更新の応答が不正です。');
+        if (!currentOwner(mine)) return;
+        imageWriteNeedsRefresh=false;
+        clearSelectedImage();
+        setStatus(operation==='upload'
+            ? `画像を保存しました（正規化後 ${result.width} × ${result.height}px）。プロフィールを再読み込みしています。`
+            : '画像を削除しました。プロフィールを再読み込みしています。');
+        await load(mine);
+        if (currentOwner(mine)) setStatus(operation==='upload'
+            ? `画像を保存しました（正規化後 ${result.width} × ${result.height}px）。`
+            : '画像を削除しました。');
+    } catch (error) {
+        if (currentOwner(mine)) {
+            // A failed/aborted write may have committed. Never replay it automatically.
+            imageWriteNeedsRefresh=true;
+            clearSelectedImage();
+            setImageControls();
+            const refresh=$('profile-image-refresh');if(refresh)refresh.hidden=false;
+            setError(error.message || '画像の更新結果を確認できません。');
+            setStatus('結果が不明です。再アップロードせず、「プロフィールを再取得」を押して状態を確認してください。');
+        }
+    } finally {
+        clearTimeout(timer);activeRequests.delete(controller);
+        if(currentOwner(mine)){busy=false;setImageControls();}
+    }
+}
+async function manualRefresh() {
+    if (busy) return;
+    const mine=ownerGeneration;busy=true;setImageControls();setError('');setStatus('プロフィールを再取得しています…');
+    try {
+        await load(mine);
+        if (currentOwner(mine)) setStatus('プロフィールを再取得しました。画像を必要に応じて確認してください。');
+    } catch (error) {
+        if (currentOwner(mine)) { setError(error.message || 'プロフィールを再取得できません。');setStatus(''); }
+    } finally { if(currentOwner(mine)){busy=false;setImageControls();} }
 }
 function bind() {
     $('profile-editor-form').addEventListener('submit', saveProfile);
@@ -258,6 +437,12 @@ function bind() {
     });
     $('profile-qr-issue').addEventListener('click', issueQr);
     $('profile-question-add').addEventListener('submit', addQuestion);
+    $('profile-image-file').addEventListener('change', () => {
+        selectedImage();setError('');setImageControls();
+    });
+    $('profile-image-upload').addEventListener('click', () => changeImage('upload'));
+    $('profile-image-delete').addEventListener('click', () => changeImage('delete'));
+    $('profile-image-refresh').addEventListener('click', () => manualRefresh());
 }
 export async function init() {
     cleanup();ownerRoot=$('profile-settings');const mine=ownerGeneration;if(!ownerRoot)return;

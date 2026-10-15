@@ -10,7 +10,11 @@
 @if(ProfileBusy){<p role="status" aria-live="polite">プロフィールを取得しています。</p>}
 <button id="member-profile-refresh" disabled="@ProfileBusy" @onclick="LoadProfile">最新情報を取得</button>
 @if(Profile is not null){
- <section id="member-profile" data-user="@Profile.UserId"><h2>@(Profile.Icon.Length == 0 ? "" : Profile.Icon + " ")@Profile.DisplayName</h2>
+ <section id="member-profile" data-user="@Profile.UserId"><h2>
+ @if(ProfileImageDataUrl is string imageDataUrl){<img id="profile-member-image" class="profile-avatar" src="@imageDataUrl" alt="" />}
+ else{<img id="profile-member-image" class="profile-avatar" alt="" hidden />}
+ <span id="profile-member-image-fallback" aria-hidden="true" hidden="@(ProfileImageDataUrl is not null)">@ProfileFallbackIcon</span>
+ @Profile.DisplayName</h2>
  <dl><dt>読み</dt><dd>@(Profile.Reading.Length==0?"未設定":Profile.Reading)</dd><dt>対面での呼び</dt><dd>@(Profile.CallName.Length==0?"未設定":Profile.CallName)</dd></dl>
  <h3>SNS等</h3>
  @if(Profile.Social.Length==0){<p>リンクは未設定です。</p>}
@@ -56,7 +60,7 @@
  async Task LoadProfile(){
   if(ProfileBusy||Disposed||Module is null)return;
   var generation=++Generation;var id=UserId;Profile=null;History=null;Error=HistoryError="";HistoryBusy=false;ProfileBusy=true;
-  try{var result=await ReadTransport<ProfileFetchResult>("profileStream",id,2*1024*1024);if(generation!=Generation)return;if(result.Status==403){ClearForDenied();Error="ログイン状態またはプロフィール閲覧条件を確認してください。最新情報を取得できます。";return;}if(result.Value is null||result.Value.UserId!=id)throw new InvalidOperationException();Profile=result.Value;}
+  try{var result=await ReadTransport<ProfileFetchResult>("profileStream",id,4*1024*1024);if(generation!=Generation)return;if(result.Status==403){ClearForDenied();Error="ログイン状態またはプロフィール閲覧条件を確認してください。最新情報を取得できます。";return;}if(result.Value is null||result.Value.UserId!=id)throw new InvalidOperationException();Profile=result.Value;}
   catch{if(generation==Generation){Profile=null;History=null;Error="ログイン状態と現在のプロフィール閲覧条件を確認してください。";}}
   finally{if(generation==Generation)ProfileBusy=false;}
  }
@@ -67,11 +71,30 @@
   catch{if(generation==Generation)HistoryError="登録履歴を完全な状態で取得できませんでした。再度ボタンを押して再取得してください。";}
   finally{if(generation==Generation)HistoryBusy=false;}
  }
+ string? ProfileImageDataUrl=>SafeProfileImage(Profile?.ImageDataUrl);
+ string ProfileFallbackIcon=>string.IsNullOrEmpty(Profile?.Icon)?"🙂":Profile.Icon;
  async Task<T> ReadTransport<T>(string export,string id,long limit) where T:class {
   using var timeout=new CancellationTokenSource(TimeSpan.FromSeconds(25));
   await using var reference=await Module!.InvokeAsync<IJSStreamReference>(export,timeout.Token,id);
   await using var stream=await reference.OpenReadStreamAsync(limit,timeout.Token);
   return await System.Text.Json.JsonSerializer.DeserializeAsync<T>(stream,new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web){NumberHandling=System.Text.Json.Serialization.JsonNumberHandling.Strict},timeout.Token) ?? throw new InvalidOperationException();
+ }
+ static string? SafeProfileImage(string? value){
+  const string prefix="data:image/png;base64,";
+  const int maxBytes=1024*1024;
+  if(value is null||!value.StartsWith(prefix,StringComparison.Ordinal)||value.Length>prefix.Length+4*((maxBytes+2)/3))return null;
+  var encoded=value[prefix.Length..];
+  if(encoded.Length==0||encoded.Length%4!=0)return null;
+  foreach(var c in encoded){
+   var valid=(c>='A'&&c<='Z')||(c>='a'&&c<='z')||(c>='0'&&c<='9')||c=='+'||c=='/'||c=='=';
+   if(!valid)return null;
+  }
+  try{
+   var bytes=Convert.FromBase64String(encoded);
+   if(bytes.Length<8||bytes.Length>maxBytes||Convert.ToBase64String(bytes)!=encoded)return null;
+   byte[] signature=new byte[]{137,80,78,71,13,10,26,10};
+   return bytes.AsSpan(0,8).SequenceEqual(signature)?value:null;
+  }catch(FormatException){return null;}
  }
  void ClearForDenied(){Generation++;Profile=null;History=null;HistoryError="";ProfileBusy=HistoryBusy=false;}
  static bool Safe(SocialLink link)=>Uri.TryCreate(link.Url,UriKind.Absolute,out var uri)&&uri.Scheme is "https" or "http"&&uri.UserInfo.Length==0;

@@ -79,3 +79,13 @@ public sealed class RevokedAuthSession
     public string UserId { get; set; } = "";
     public string RevokedAt { get; set; } = "";
 }
+
+/// <summary>Per-user normalized image and independent optimistic-concurrency version.</summary>
+public sealed class ProfileImage
+{
+    public string UserId { get; set; } = "";
+    public byte[] Data { get; set; } = [];
+    public int Width { get; set; }
+    public int Height { get; set; }
+    public long RowVersion { get; set; }
+}
