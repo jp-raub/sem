@@ -1,0 +1,8 @@
+.profile-history-list{margin:0;padding-inline-start:1.5rem;}
+.profile-history-event{min-width:0;overflow-wrap:anywhere;margin-block:.75rem;padding:.75rem;border:1px solid var(--color-border,#bbb);border-radius:.5rem;}
+.profile-history-event h4{margin-block:.1rem .35rem;}
+.profile-history-event p{margin-block:.25rem;}
+@media(max-width:420px){
+ .profile-history-event{padding:.6rem;margin-inline-start:-.15rem;}
+ #member-profile-history-load,#member-profile-refresh{max-width:100%;white-space:normal;}
+}
