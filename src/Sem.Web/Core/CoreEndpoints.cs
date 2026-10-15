@@ -44,10 +44,28 @@ public static class CoreEndpoints
                 var eventImport = action is "event-import-preview" or "event-import-apply";
                 var eventImportSample = action == "event-import-sample";
                 var eventImportContext = action == "event-import-context";
+                var themeAppearanceRead = action == "theme-appearance";
+                var themeAppearanceWrite = action is "theme-personal" or "theme-event" or "theme-site" or
+                    "theme-catalog-save" or "theme-catalog-delete";
+                if (themeAppearanceRead && !HttpMethods.IsGet(ctx.Request.Method) ||
+                    themeAppearanceWrite && !post)
+                {
+                    ctx.Response.StatusCode = 405;
+                    return;
+                }
                 if (eventImportSample) ctx.Response.Headers["X-Content-Type-Options"] = "nosniff";
                 if (eventImportSample && !HttpMethods.IsGet(ctx.Request.Method)) { ctx.Response.StatusCode = 405; return; }
                 if (eventImportContext && !HttpMethods.IsGet(ctx.Request.Method)) { ctx.Response.StatusCode = 405; return; }
                 if (eventImport && !post) { ctx.Response.StatusCode = 405; return; }
+                string? themeEventId = null;
+                string? themeCatalogId = null;
+                if (themeAppearanceRead)
+                {
+                    var eventId = OptionalThemeQueryValue(ctx.Request.Query, "id");
+                    var appearance = await service.ReadThemeAppearanceAsync(ctx.User, eventId, ctx.RequestAborted);
+                    await ctx.Response.WriteAsJsonAsync(new ThemeAppearanceHttpResponse(eventId, appearance));
+                    return;
+                }
                 if (action == "profile-registration-history")
                 {
                     // This endpoint is read-only; reject writes before inspecting any request body.
@@ -80,6 +98,17 @@ public static class CoreEndpoints
                 if (post)
                 {
                     if (ctx.Request.Headers.Origin.ToString() != deployment.PublicUrl.TrimEnd('/')) throw new UnauthorizedAccessException();
+                    if (themeAppearanceWrite)
+                    {
+                        if (action == "theme-event") themeEventId = RequiredThemeQueryValue(ctx.Request.Query, "id");
+                        if (action == "theme-catalog-save") themeCatalogId = OptionalThemeQueryValue(ctx.Request.Query, "id");
+                        if (action == "theme-catalog-delete") themeCatalogId = RequiredThemeQueryValue(ctx.Request.Query, "id");
+                        var expectedActor = RequiredThemeQueryValue(ctx.Request.Query, "expectedActor");
+                        await service.AuthorizeThemeAppearanceRequestAsync(ctx.User, action!, themeEventId, ctx.RequestAborted);
+                        var cookieActor = ctx.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                        if (string.IsNullOrEmpty(cookieActor) || !string.Equals(expectedActor, cookieActor, StringComparison.Ordinal))
+                            throw new UnauthorizedAccessException();
+                    }
                     if (eventImport)
                     {
                         var idValues = ctx.Request.Query["id"];
@@ -100,9 +129,10 @@ public static class CoreEndpoints
                     var size = ctx.Features.Get<IHttpMaxRequestBodySizeFeature>();
                     if (size is { IsReadOnly: false })
                     {
-                        // Keep a read buffer of headroom so Kestrel can deliver the first over-limit byte;
-                        // the bounded reader below stops at 7 MiB + 1 and never buffers beyond it.
-                        size.MaxRequestBodySize = eventImport ? EventImportRequestMaxBytes + 16 * 1024L : 65536;
+                        // Leave Kestrel chunk headroom while bounded readers retain their probe limit, so they can return a
+                        // deterministic 413 without buffering beyond their effective request limits.
+                        size.MaxRequestBodySize = eventImport ? EventImportRequestMaxBytes + 16 * 1024L :
+                            themeAppearanceWrite ? ThemeAppearanceRequestMaxBytes + 16 * 1024L : 65536;
                     }
                     await csrf.ValidateRequestAsync(ctx);
                     if (eventImport && ctx.Request.ContentLength > EventImportRequestMaxBytes) throw new EventImportPayloadTooLargeException();
@@ -123,6 +153,35 @@ public static class CoreEndpoints
                         await ctx.Response.WriteAsJsonAsync(await service.ApplyEventImportAsync(ctx.User, id, request, ctx.RequestAborted));
                     }
                     return;
+                }
+                if (themeAppearanceWrite)
+                {
+                    if (action is "theme-personal" or "theme-event" or "theme-site")
+                    {
+                        var edit = await ReadThemeAppearanceRequestAsync<ThemePreferenceHttpEdit>(ctx.Request, ctx.RequestAborted);
+                        ThemePreferenceView saved = action switch
+                        {
+                            "theme-personal" => await service.SaveUserThemePreferenceAsync(ctx.User, edit.ToEdit(), ctx.RequestAborted),
+                            "theme-event" => await service.SaveEventThemePreferenceAsync(ctx.User, themeEventId!, edit.ToEdit(), ctx.RequestAborted),
+                            _ => await service.SaveSiteThemePreferenceAsync(ctx.User, edit.ToEdit(), ctx.RequestAborted)
+                        };
+                        await ctx.Response.WriteAsJsonAsync(saved);
+                        return;
+                    }
+                    if (action == "theme-catalog-save")
+                    {
+                        var edit = await ReadThemeAppearanceRequestAsync<ThemeCatalogHttpEdit>(ctx.Request, ctx.RequestAborted);
+                        await ctx.Response.WriteAsJsonAsync(await service.AddOrUpdateThemeAsync(
+                            ctx.User, themeCatalogId, edit.ToEdit(), ctx.RequestAborted));
+                        return;
+                    }
+                    if (action == "theme-catalog-delete")
+                    {
+                        var edit = await ReadThemeAppearanceRequestAsync<ThemeCatalogDeleteHttpEdit>(ctx.Request, ctx.RequestAborted);
+                        await service.DeleteThemeAsync(ctx.User, themeCatalogId!, edit.RowVersion, ctx.RequestAborted);
+                        await ctx.Response.WriteAsJsonAsync(new { message = "削除しました。" });
+                        return;
+                    }
                 }
                 if (action == "manual-push-control") {
                     if (post) { ctx.Response.StatusCode = 405; return; }
@@ -295,6 +354,7 @@ public static class CoreEndpoints
                 await ctx.Response.WriteAsJsonAsync(new { message = "保存しました。" });
             }
             catch (EventImportPayloadTooLargeException) { ctx.Response.StatusCode = 413; await ctx.Response.WriteAsJsonAsync(new { error = "取込リクエストが大きすぎます。" }); }
+            catch (CoreRequestPayloadTooLargeException) { ctx.Response.StatusCode = 413; await ctx.Response.WriteAsJsonAsync(new { error = "リクエストが大きすぎます。" }); }
             catch (UnauthorizedAccessException) { ctx.Response.StatusCode = 403; await ctx.Response.WriteAsJsonAsync(new { error = "ログイン状態と操作権限を確認してください。" }); }
             catch (CoreConflictException e) { ctx.Response.StatusCode = 409; await ctx.Response.WriteAsJsonAsync(new { error = e.Message }); }
             catch (DbUpdateConcurrencyException) { ctx.Response.StatusCode = 409; await ctx.Response.WriteAsJsonAsync(new { error = "更新が競合しました。最新状態を確認してください。" }); }
@@ -304,4 +364,43 @@ public static class CoreEndpoints
             catch (AntiforgeryValidationException) { ctx.Response.StatusCode = 400; await ctx.Response.WriteAsJsonAsync(new { error = "ページを再読み込みしてください。" }); }
             catch (JsonException) { ctx.Response.StatusCode = 400; await ctx.Response.WriteAsJsonAsync(new { error = "入力形式を確認してください。" }); }
         });
+
+    private const int ThemeAppearanceRequestMaxBytes = 65_536;
+    private static readonly JsonSerializerOptions ThemeAppearanceJsonOptions = new(JsonSerializerDefaults.Web)
+    { NumberHandling = System.Text.Json.Serialization.JsonNumberHandling.Strict };
+
+    private static string RequiredThemeQueryValue(IQueryCollection query, string name)
+    {
+        var values = query[name];
+        if (values.Count != 1 || string.IsNullOrEmpty(values[0]) || values[0]!.Length > 128 || values[0]!.Any(char.IsControl))
+            throw new ValidationException(name == "expectedActor" ? "操作者を確認してください。" : "識別子を確認してください。");
+        return values[0]!;
+    }
+
+    private static string? OptionalThemeQueryValue(IQueryCollection query, string name)
+    {
+        if (!query.ContainsKey(name)) return null;
+        return RequiredThemeQueryValue(query, name);
+    }
+
+    private static async Task<T> ReadThemeAppearanceRequestAsync<T>(HttpRequest request, CancellationToken ct) where T : class
+    {
+        if (!request.HasJsonContentType()) throw new ValidationException("JSON形式で送信してください。");
+        if (request.ContentLength > ThemeAppearanceRequestMaxBytes) throw new CoreRequestPayloadTooLargeException();
+        using var body = new MemoryStream();
+        var buffer = new byte[8192];
+        while (true)
+        {
+            var remaining = ThemeAppearanceRequestMaxBytes + 1 - (int)body.Length;
+            if (remaining <= 0) throw new CoreRequestPayloadTooLargeException();
+            var read = await request.Body.ReadAsync(buffer.AsMemory(0, Math.Min(buffer.Length, remaining)), ct);
+            if (read == 0) break;
+            await body.WriteAsync(buffer.AsMemory(0, read), ct);
+        }
+        if (body.Length > ThemeAppearanceRequestMaxBytes) throw new CoreRequestPayloadTooLargeException();
+        return JsonSerializer.Deserialize<T>(body.GetBuffer().AsSpan(0, (int)body.Length), ThemeAppearanceJsonOptions)
+            ?? throw new ValidationException("入力が必要です。");
+    }
+
+    private sealed class CoreRequestPayloadTooLargeException : Exception { }
 }
