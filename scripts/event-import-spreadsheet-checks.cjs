@@ -2,7 +2,7 @@
 
 const assert = require('node:assert/strict');
 (async () => {
-const { fetchSpreadsheetCsv, normalizeSpreadsheetCsvUrl } =
+const { fetchSpreadsheetCsv, fetchSpreadsheetCsvStream, normalizeSpreadsheetCsvUrl, setNavigationWarning } =
     await import('../src/Sem.Web/wwwroot/event-import.js');
 
 let checks = 0;
@@ -92,6 +92,28 @@ checks++;
 }
 
 {
+    const csv = 'Kind,Title,Duration\\nSong,Streamed,00:03:00\\n';
+    let captured = null;
+    const streamRef = await fetchSpreadsheetCsvStream(
+        'https://docs.google.com/spreadsheets/d/id/edit',
+        async () => response(csv));
+    captured = streamRef;
+    check(streamRef.byteLength === bytes(csv).byteLength && captured instanceof Uint8Array, 'small CSV returns typed bytes for runtime stream wrapping');
+    check(new TextDecoder().decode(captured) === csv, 'stream reference contains exact UTF-8 CSV bytes');
+}
+
+{
+    const oneMiB = 'x'.repeat(1048576);
+    let captured = null;
+    const streamRef = await fetchSpreadsheetCsvStream(
+        'https://docs.google.com/spreadsheets/d/id/edit',
+        async () => response(oneMiB));
+    captured = streamRef;
+    check(streamRef.byteLength === 1048576 && captured.byteLength === 1048576, '1 MiB CSV fits streamed JS interop envelope');
+    check(captured[0] === 120 && captured[captured.length - 1] === 120, '1 MiB stream retains boundary bytes');
+}
+
+{
     let reads = 0;
     const tooLarge = {
         status: 200, redirected: false, headers: headers('text/csv', '1048577'),
@@ -148,6 +170,62 @@ for (const [item, message] of [
             new Promise((_, reject) => options.signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true }))), /aborted/);
         checks++;
     } finally { global.setTimeout = old; }
+}
+
+{
+    const originalWindow = global.window;
+    const originalDocument = global.document;
+    const docListeners = new Map();
+    const windowListeners = new Map();
+    const add = store => (type, listener, capture = false) => store.set(`${type}:${capture}`, listener);
+    const remove = store => (type, listener, capture = false) => {
+        const key = `${type}:${capture}`;
+        if (store.get(key) === listener) store.delete(key);
+    };
+    global.window = {
+        location: { href: 'https://app.example/events/1/event-import', origin: 'https://app.example' },
+        addEventListener: add(windowListeners), removeEventListener: remove(windowListeners)
+    };
+    global.document = { addEventListener: add(docListeners), removeEventListener: remove(docListeners) };
+    const click = ({ href = 'https://app.example/workspace', target = '', id = '', download = null, button = 0, ctrlKey = false, shiftKey = false } = {}) => {
+        let prevented = false, stopped = false;
+        const anchor = { href, id, hasAttribute(name) { return name === 'download' && download !== null; }, getAttribute(name) { return name === 'target' ? target : name === 'download' ? download : null; } };
+        const event = {
+            button, ctrlKey, shiftKey, altKey: false, metaKey: false, defaultPrevented: false,
+            target: { closest(selector) { return selector === 'a[href]' ? anchor : null; } },
+            preventDefault() { prevented = true; }, stopImmediatePropagation() { stopped = true; }
+        };
+        docListeners.get('click:true')(event);
+        return { prevented, stopped };
+    };
+    try {
+        setNavigationWarning('owner-one', true);
+        check(docListeners.has('click:true'), 'busy-navigation capture guard is attached');
+        let result = click();
+        check(result.prevented && result.stopped, 'unmodified same-origin anchor is blocked while an owner is busy');
+        result = click({ href: 'https://app.example/api/core/event-import-sample?id=1', id: 'event-import-sample', download: 'event-import-sample.csv' });
+        check(!result.prevented && !result.stopped, 'known authenticated sample attachment remains downloadable');
+        result = click({ href: 'https://app.example/workspace', id: 'event-import-sample', download: 'event-import-sample.csv' });
+        check(result.prevented && result.stopped, 'attachment exception cannot bypass navigation for another route');
+        result = click({ href: 'https://other.example/path' });
+        check(!result.prevented && !result.stopped, 'cross-origin anchors are not intercepted');
+        result = click({ ctrlKey: true });
+        check(!result.prevented && !result.stopped, 'modified new-tab click is not intercepted');
+        result = click({ target: '_blank' });
+        check(!result.prevented && !result.stopped, 'target blank is not intercepted');
+        result = click({ button: 1 });
+        check(!result.prevented && !result.stopped, 'non-primary click is not intercepted');
+        setNavigationWarning('owner-two', true);
+        setNavigationWarning('owner-one', false);
+        check(docListeners.has('click:true') && click().prevented, 'guard remains active while another owner is busy');
+        setNavigationWarning('owner-two', false);
+        check(!docListeners.has('click:true') && !windowListeners.has('beforeunload:false'), 'last owner removal unregisters capture and unload guards');
+    } finally {
+        setNavigationWarning('owner-one', false);
+        setNavigationWarning('owner-two', false);
+        if (originalWindow === undefined) delete global.window; else global.window = originalWindow;
+        if (originalDocument === undefined) delete global.document; else global.document = originalDocument;
+    }
 }
 
 console.log(`event-import-spreadsheet-checks: ${checks} assertions passed (mock responses only)`);

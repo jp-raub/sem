@@ -2,6 +2,7 @@
 const MAX_BYTES = 1048576;
 const MAX_RESPONSE_BYTES = 7 * 1024 * 1024;
 const navigationWarnings = new Map();
+let navigationGuardAttached = false;
 
 const SPREADSHEET_ID = '[A-Za-z0-9_-]{1,256}';
 const SAFE_QUERY_OPTIONS = new Set(['sharing', 'drive_link']);
@@ -101,6 +102,12 @@ export async function fetchSpreadsheetCsv(input, fetchImpl = globalThis.fetch) {
     } finally { clearTimeout(timer); }
 }
 
+// IJSStreamReference return types are wrapped by the Blazor runtime itself.
+// Return the typed byte array, not an already-created JS stream-reference object.
+export async function fetchSpreadsheetCsvStream(input, fetchImpl = globalThis.fetch) {
+    return new TextEncoder().encode(await fetchSpreadsheetCsv(input, fetchImpl));
+}
+
 async function readJson(response, maxBytes) {
     const declared = Number(response.headers.get('Content-Length') || 0);
     if (declared > maxBytes) throw new Error('Response too large');
@@ -168,9 +175,36 @@ export async function post(action, eventId, actorId, payload) {
     } finally { clearTimeout(timer); }
 }
 function beforeUnload(event) { if (navigationWarnings.size > 0) { event.preventDefault(); event.returnValue = ''; } }
+function guardBusySameOriginAnchor(event) {
+    if (navigationWarnings.size === 0 || event.defaultPrevented || event.button !== 0
+        || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+    const anchor = event.target?.closest?.('a[href]');
+    if (!anchor) return;
+    const target = (anchor.getAttribute('target') || '').trim().toLowerCase();
+    if (target && target !== '_self') return;
+    let destination;
+    try { destination = new URL(anchor.href, window.location.href); } catch { return; }
+    if (destination.origin !== window.location.origin) return;
+    // This authenticated attachment does not replace the current page.
+    if (anchor.id === 'event-import-sample' && anchor.hasAttribute?.('download')
+        && destination.pathname === '/api/core/event-import-sample') return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+}
+function syncNavigationGuards() {
+    const enabled = navigationWarnings.size > 0;
+    if (enabled && !navigationGuardAttached) {
+        document.addEventListener('click', guardBusySameOriginAnchor, true);
+        navigationGuardAttached = true;
+    } else if (!enabled && navigationGuardAttached) {
+        document.removeEventListener('click', guardBusySameOriginAnchor, true);
+        navigationGuardAttached = false;
+    }
+    window.removeEventListener('beforeunload', beforeUnload);
+    if (enabled) window.addEventListener('beforeunload', beforeUnload);
+}
 export function setNavigationWarning(owner, enabled) {
     if (enabled) navigationWarnings.set(owner, true);
     else navigationWarnings.delete(owner);
-    window.removeEventListener('beforeunload', beforeUnload);
-    if (navigationWarnings.size > 0) window.addEventListener('beforeunload', beforeUnload);
+    syncNavigationGuards();
 }
