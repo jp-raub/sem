@@ -13,9 +13,9 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Sem.Web.Data;
 using Sem.Web.Runtime;
 
-var root = Path.Combine("/data", ".test-work", "sem-passkey-recovery-" + Guid.NewGuid().ToString("N"));
+var root = Path.Combine(Path.GetTempPath(), "sem-passkey-recovery-" + Guid.NewGuid().ToString("N"));
 Directory.CreateDirectory(root);
-var evidence = "/data/evidence";
+var evidence = Path.Combine(Directory.GetCurrentDirectory(), "verification");
 Directory.CreateDirectory(evidence);
 var backup = Path.Combine(evidence, "passkey-recovery-before-tests-" +
     DateTimeOffset.UtcNow.ToString("yyyyMMddTHHmmssZ") + ".db");
