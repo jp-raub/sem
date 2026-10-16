@@ -1,0 +1,79 @@
+@page "/service/passkey-recovery"
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@implements IAsyncDisposable
+@using Microsoft.JSInterop
+@inject IJSRuntime JS
+
+<PageTitle>パスキー認証の復旧 — 管理</PageTitle>
+<main @ref="_root" id="recovery-admin-root" class="panel" style="max-width:800px;margin:24px auto;">
+    <h1 id="recovery-admin-title">パスキー認証の復旧</h1>
+    <p>管理者が対象ユーザーの本人確認とパスキー復旧を開始します。復旧の確定時に、対象アカウントの既存パスキーと全セッションが無効になります。</p>
+    <p>復旧案内は保存済みメールアドレスだけに送られます。新しいパスキーの登録が終わってもログイン状態は発行されず、本人が通常のログイン画面からログインし直します。</p>
+    <p id="recovery-admin-status" role="status" aria-live="polite">画面を準備しています。</p>
+    <p id="recovery-admin-error" role="alert"></p>
+    <button id="recovery-admin-refresh" type="button" hidden>状況を再取得</button>
+    <section id="recovery-admin-panel" hidden>
+        <form id="recovery-admin-lookup-form" method="post">
+            <label for="recovery-admin-target-id">対象ユーザーID（明示入力）</label>
+            <input id="recovery-admin-target-id" maxlength="128" autocomplete="off" required />
+            <button id="recovery-admin-load-target" type="submit">対象を確認</button>
+        </form>
+        <section id="recovery-admin-target-summary" aria-labelledby="recovery-admin-target-heading" hidden>
+            <h2 id="recovery-admin-target-heading">確認した対象</h2>
+            <p>表示名：<span id="recovery-admin-target-name"></span></p>
+            <p>保存済みメール：<span id="recovery-admin-target-recipient"></span></p>
+            <p>アカウント：<span id="recovery-admin-target-enabled"></span></p>
+            <p>復旧状態：<span id="recovery-admin-target-recovery"></span></p>
+            <p id="recovery-admin-target-expiry" hidden></p>
+            <form id="recovery-admin-actions-form" method="post">
+                <label for="recovery-admin-reason">復旧理由（前後の空白を除き3〜500文字）</label>
+                <textarea id="recovery-admin-reason" minlength="3" maxlength="500" rows="4" required></textarea>
+                <p>理由は新しい復旧開始時だけ記録します。進行中の案内を再送する場合、初回に記録された理由が保持され、新しい理由は受け付けません。</p>
+                <label for="recovery-admin-confirm">
+                    <input id="recovery-admin-confirm" type="checkbox" />
+                    既存の全パスキーと全セッションが無効になり、案内は保存済みメールだけに送られることを確認しました。
+                </label>
+                <button id="recovery-admin-start" type="submit" disabled>本人確認して復旧を開始</button>
+            </form>
+            <button id="recovery-admin-resend" type="button" disabled>本人確認して復旧案内を再送</button>
+        </section>
+        <p id="recovery-admin-readonly" hidden>直前の送信結果を確認できません。書き込みは停止しています。「状況を再取得」でサーバー状態を読み直してください。処理を自動再送することはありません。</p>
+    </section>
+    @if (_moduleUnavailable)
+    {
+        <p role="alert">復旧画面を読み込めませんでした。操作は有効になっていません。ページを再読み込みするか、通常の運用手順を利用してください。</p>
+    }
+    <p><a href="/workspace">業務基盤へ戻る</a></p>
+</main>
+
+@code {
+    private IJSObjectReference? _module;
+    private ElementReference _root;
+    private bool _disposed;
+    private bool _moduleUnavailable;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try
+        {
+            var module = await JS.InvokeAsync<IJSObjectReference>("import", "/passkey-recovery-admin.js");
+            if (_disposed) { await module.DisposeAsync(); return; }
+            _module = module;
+            await _module.InvokeVoidAsync("init", _root);
+        }
+        catch
+        {
+            _moduleUnavailable = true;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _disposed = true;
+        if (_module is null) return;
+        try { await _module.InvokeVoidAsync("cleanup", _root); await _module.DisposeAsync(); }
+        catch (JSDisconnectedException) { }
+    }
+}

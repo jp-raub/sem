@@ -2483,6 +2483,121 @@ namespace Sem.Web.Data.Migrations
                     b.ToTable("Participations");
                 });
 
+            modelBuilder.Entity("Sem.Web.Runtime.PasskeyRecoveryAdminChallenge", b =>
+                {
+                    b.Property<string>("Id").HasColumnType("TEXT");
+                    b.Property<string>("AdminId").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("TargetUserId").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("SessionHash").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("ContextHash").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("ChallengeHash").IsRequired().HasColumnType("TEXT");
+                    b.Property<long>("CreatedAt").HasColumnType("INTEGER");
+                    b.Property<long>("ExpiresAt").HasColumnType("INTEGER");
+                    b.Property<long?>("UsedAt").HasColumnType("INTEGER");
+                    b.HasKey("Id");
+                    b.HasIndex("TargetUserId");
+                    b.HasIndex("AdminId", "TargetUserId", "SessionHash", "ExpiresAt");
+                    b.ToTable("PasskeyRecoveryAdminChallenges", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_PasskeyRecoveryAdminChallenge_Hashes", "length(\"SessionHash\")=64 AND length(\"ContextHash\")=64 AND length(\"ChallengeHash\")=64");
+                            t.HasCheckConstraint("CK_PasskeyRecoveryAdminChallenge_Time", "\"ExpiresAt\">\"CreatedAt\"");
+                        });
+                });
+
+            modelBuilder.Entity("Sem.Web.Runtime.PasskeyRecoveryAudit", b =>
+                {
+                    b.Property<string>("Id").HasColumnType("TEXT");
+                    b.Property<string>("OperationId").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("AdminId").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("TargetUserId").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("Action").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("Reason").IsRequired().HasColumnType("TEXT");
+                    b.Property<long>("At").HasColumnType("INTEGER");
+                    b.HasKey("Id");
+                    b.HasIndex("AdminId");
+                    b.HasIndex("TargetUserId");
+                    b.HasIndex("OperationId", "At");
+                    b.ToTable("PasskeyRecoveryAudits", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_PasskeyRecoveryAudit_Action", "\"Action\" IN ('RecoveryStarted','RecoveryMailResent','RecoveryEmailConfirmed','RecoveryCompleted')");
+                            t.HasCheckConstraint("CK_PasskeyRecoveryAudit_Reason", "length(trim(\"Reason\")) BETWEEN 3 AND 500");
+                        });
+                });
+
+            modelBuilder.Entity("Sem.Web.Runtime.PasskeyRecoveryMail", b =>
+                {
+                    b.Property<string>("Id").HasColumnType("TEXT");
+                    b.Property<string>("UserId").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("OperationId").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("Kind").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("ProtectedPayload").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("ProofHash").HasColumnType("TEXT");
+                    b.Property<long>("Due").HasColumnType("INTEGER");
+                    b.Property<long>("ExpiresAt").HasColumnType("INTEGER");
+                    b.Property<string>("Status").IsRequired().HasColumnType("TEXT");
+                    b.Property<int>("Attempts").HasColumnType("INTEGER");
+                    b.Property<long?>("SentAt").HasColumnType("INTEGER");
+                    b.Property<string>("Claim").HasColumnType("TEXT");
+                    b.Property<long?>("LeaseUntil").HasColumnType("INTEGER");
+                    b.Property<string>("Error").HasColumnType("TEXT");
+                    b.HasKey("Id");
+                    b.HasIndex("OperationId", "Kind");
+                    b.HasIndex("Status", "Due");
+                    b.HasIndex("UserId");
+                    b.ToTable("PasskeyRecoveryMails", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_PasskeyRecoveryMail_Kind", "\"Kind\" IN ('RecoveryLink','RecoveryComplete')");
+                            t.HasCheckConstraint("CK_PasskeyRecoveryMail_State", "\"Status\" IN ('Pending','Sending','Sent','Failed','Cancelled') AND \"Attempts\" BETWEEN 0 AND 5");
+                            t.HasCheckConstraint("CK_PasskeyRecoveryMail_Claim", "(\"Status\"='Sending' AND \"Claim\" IS NOT NULL AND \"LeaseUntil\" IS NOT NULL) OR (\"Status\"<>'Sending' AND \"Claim\" IS NULL AND \"LeaseUntil\" IS NULL)");
+                            t.HasCheckConstraint("CK_PasskeyRecoveryMail_ProofHash", "\"ProofHash\" IS NULL OR length(\"ProofHash\")=64");
+                        });
+                });
+
+            modelBuilder.Entity("Sem.Web.Runtime.PasskeyRecoveryOperation", b =>
+                {
+                    b.Property<string>("Id").HasColumnType("TEXT");
+                    b.Property<string>("UserId").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("AdminId").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("Reason").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("Status").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("EmailHash").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("SecurityStamp").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("TokenHash").HasColumnType("TEXT");
+                    b.Property<string>("GrantHash").HasColumnType("TEXT");
+                    b.Property<string>("CreationChallengeHash").HasColumnType("TEXT");
+                    b.Property<long>("CreatedAt").HasColumnType("INTEGER");
+                    b.Property<long>("ExpiresAt").HasColumnType("INTEGER");
+                    b.Property<long?>("EmailVerifiedAt").HasColumnType("INTEGER");
+                    b.Property<long?>("GrantExpiresAt").HasColumnType("INTEGER");
+                    b.Property<long?>("LastSentAt").HasColumnType("INTEGER");
+                    b.Property<bool>("DisabledForRecovery").HasColumnType("INTEGER");
+                    b.Property<long>("RowVersion").IsConcurrencyToken().HasColumnType("INTEGER");
+                    b.HasKey("Id");
+                    b.HasIndex("AdminId");
+                    b.HasIndex("UserId").IsUnique();
+                    b.ToTable("PasskeyRecoveryOperations", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_PasskeyRecoveryOperation_Hashes", "length(\"EmailHash\")=64 AND length(\"SecurityStamp\")>0 AND (\"TokenHash\" IS NULL OR length(\"TokenHash\")=64) AND (\"GrantHash\" IS NULL OR length(\"GrantHash\")=64) AND (\"CreationChallengeHash\" IS NULL OR length(\"CreationChallengeHash\")=64)");
+                            t.HasCheckConstraint("CK_PasskeyRecoveryOperation_Reason", "length(trim(\"Reason\")) BETWEEN 3 AND 500");
+                            t.HasCheckConstraint("CK_PasskeyRecoveryOperation_State", "\"Status\" IN ('Pending','EmailConfirmed','Completed','Expired','Cancelled','Invalidated') AND \"RowVersion\">0");
+                        });
+                });
+
+            modelBuilder.Entity("Sem.Web.Runtime.PasskeyRecoveryRateState", b =>
+                {
+                    b.Property<string>("UserId").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("Purpose").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("SendTimes").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("ProofFailures").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("EmailFailures").IsRequired().HasColumnType("TEXT");
+                    b.Property<long>("RowVersion").IsConcurrencyToken().HasColumnType("INTEGER");
+                    b.HasKey("UserId", "Purpose");
+                    b.ToTable("PasskeyRecoveryRateStates", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_PasskeyRecoveryRateState_Version", "\"RowVersion\">0");
+                        });
+                });
+
             modelBuilder.Entity("Sem.Web.Runtime.PasskeyAddition", b =>
                 {
                     b.Property<string>("Id")
@@ -3568,6 +3683,36 @@ namespace Sem.Web.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
+            modelBuilder.Entity("Sem.Web.Runtime.PasskeyRecoveryAdminChallenge", b =>
+                {
+                    b.HasOne("Sem.Web.Data.ApplicationUser", null).WithMany().HasForeignKey("AdminId").OnDelete(DeleteBehavior.Restrict).IsRequired();
+                    b.HasOne("Sem.Web.Data.ApplicationUser", null).WithMany().HasForeignKey("TargetUserId").OnDelete(DeleteBehavior.Restrict).IsRequired();
+                });
+
+            modelBuilder.Entity("Sem.Web.Runtime.PasskeyRecoveryAudit", b =>
+                {
+                    b.HasOne("Sem.Web.Data.ApplicationUser", null).WithMany().HasForeignKey("AdminId").OnDelete(DeleteBehavior.Restrict).IsRequired();
+                    b.HasOne("Sem.Web.Data.ApplicationUser", null).WithMany().HasForeignKey("TargetUserId").OnDelete(DeleteBehavior.Restrict).IsRequired();
+                    b.HasOne("Sem.Web.Runtime.PasskeyRecoveryOperation", null).WithMany().HasForeignKey("OperationId").OnDelete(DeleteBehavior.Restrict).IsRequired();
+                });
+
+            modelBuilder.Entity("Sem.Web.Runtime.PasskeyRecoveryMail", b =>
+                {
+                    b.HasOne("Sem.Web.Data.ApplicationUser", null).WithMany().HasForeignKey("UserId").OnDelete(DeleteBehavior.Restrict).IsRequired();
+                    b.HasOne("Sem.Web.Runtime.PasskeyRecoveryOperation", null).WithMany().HasForeignKey("OperationId").OnDelete(DeleteBehavior.Restrict).IsRequired();
+                });
+
+            modelBuilder.Entity("Sem.Web.Runtime.PasskeyRecoveryOperation", b =>
+                {
+                    b.HasOne("Sem.Web.Data.ApplicationUser", null).WithMany().HasForeignKey("AdminId").OnDelete(DeleteBehavior.Restrict).IsRequired();
+                    b.HasOne("Sem.Web.Data.ApplicationUser", null).WithMany().HasForeignKey("UserId").OnDelete(DeleteBehavior.Restrict).IsRequired();
+                });
+
+            modelBuilder.Entity("Sem.Web.Runtime.PasskeyRecoveryRateState", b =>
+                {
+                    b.HasOne("Sem.Web.Data.ApplicationUser", null).WithMany().HasForeignKey("UserId").OnDelete(DeleteBehavior.Restrict).IsRequired();
+                });
+
 #pragma warning restore 612, 618
         }
     }
