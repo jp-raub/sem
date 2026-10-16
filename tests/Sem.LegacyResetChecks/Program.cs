@@ -169,6 +169,7 @@ async Task<string> RetainedAsync(string path)
         """);
     var names = JsonSerializer.Deserialize<string[][]>(namesJson)!;
     var result = new SortedDictionary<string, string>();
+    // These fixtures remain at historical migration targets; SELECT * compares the complete old invitation row.
     foreach (var row in names)
         result[row[0]] = await QueryAsync(path, $"SELECT * FROM \"{row[0].Replace("\"", "\"\"")}\" ORDER BY rowid;");
     return JsonSerializer.Serialize(result);
@@ -188,8 +189,6 @@ async Task SeedAsync(string path, string version)
     db.Users.Add(new ApplicationUser { Id = "user", UserName = "fixture@example.test",
         Email = "fixture@example.test", EmailConfirmed = true, Enabled = true, IsAdmin = true, SecurityStamp = "retained-stamp" });
     db.SiteStates.Add(new SiteState { Initialized = true, Name = "Retained service" });
-    db.Invitations.Add(new Invitation { Id = "invite", OwnerId = "user", IssuerId = "user", Uses = 1,
-        TokenHash = "invitation-hash", ProtectedToken = "encrypted-token" });
     db.InvitationRequests.Add(new InvitationRequest { UserId = "user", Reason = "retained", Status = "Approved" });
     db.EmailTickets.Add(new EmailTicket { UserId = "user", Hash = "ticket-hash", Used = true });
     db.Messages.Add(new Message { UserId = "user", Body = "Old event reference must not cause unrelated deletion." });
@@ -204,6 +203,18 @@ async Task SeedAsync(string path, string version)
         db.PasskeyAdditions.Add(new PasskeyAddition { UserId = "user", SessionHash = "retained-session",
             Email = "fixture@example.test", SecurityStamp = "retained-stamp", Cancelled = true });
     await db.SaveChangesAsync();
+    string? requestId = null;
+    string? revokedBy = null;
+    string? revocationReason = null;
+    long? revokedAt = null;
+    await db.Database.ExecuteSqlInterpolatedAsync($"""
+        INSERT INTO "Invitations"
+            ("Id","TokenHash","OwnerId","IssuerId","RequestId","Limit","Uses","Expires","Created",
+             "Disabled","RevokedBy","RevocationReason","RevokedAt","ProtectedToken")
+        VALUES
+            ({"invite"},{"invitation-hash"},{"user"},{"user"},{requestId},0,1,0,0,
+             0,{revokedBy},{revocationReason},{revokedAt},{"encrypted-token"});
+        """);
     await db.Database.ExecuteSqlRawAsync("INSERT INTO PushDevices(Id,UserId,Endpoint,P256dh,Auth) VALUES ('fixture-device','user','https://example.test/fixture','fixture-public','fixture-auth')");
     await db.Database.ExecuteSqlRawAsync("""
         INSERT INTO "AspNetUserPasskeys" ("CredentialId","UserId","Data")

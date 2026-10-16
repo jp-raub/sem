@@ -22,9 +22,12 @@ public static class SemEndpoints
         {
             ctx.Response.Headers.CacheControl = "no-store";
             try {
-                if ((ctx.Request.RouteValues["action"]?.ToString() ?? "").StartsWith("email-change-", StringComparison.Ordinal))
+                var action = ctx.Request.RouteValues["action"]?.ToString() ?? "";
+                if (action is "login-options" or "login")
+                    await ApplicationLoginEndpoints.Handle(ctx, users, signin, csrf, settings);
+                else if (action.StartsWith("email-change-", StringComparison.Ordinal))
                     await EmailChangeEndpoints.Handle(ctx, ctx.RequestServices.GetRequiredService<EmailChangeService>(), csrf, settings);
-                else if ((ctx.Request.RouteValues["action"]?.ToString() ?? "").StartsWith("passkey-recovery-", StringComparison.Ordinal))
+                else if (action.StartsWith("passkey-recovery-", StringComparison.Ordinal))
                     await PasskeyRecoveryEndpoints.Handle(ctx, ctx.RequestServices.GetRequiredService<PasskeyRecoveryService>(), csrf, settings);
                 else await Handle(ctx, db, users, signin, csrf, dp.CreateProtector("SEM.Tokens.v1"), settings, notifications, additions);
             }
@@ -37,20 +40,14 @@ public static class SemEndpoints
             catch (JsonException) { ctx.Response.StatusCode = 400; await ctx.Response.WriteAsJsonAsync(new { error = "入力形式を確認してください。" }); }
             catch (UnauthorizedAccessException) { ctx.Response.StatusCode = 403; await ctx.Response.WriteAsJsonAsync(new { error = "この操作の権限がありません。" }); }
         });
-        app.MapGet("/verify", async (string token, HttpContext ctx, ApplicationDbContext db) =>
+        app.MapGet("/verify", async (string token, HttpContext ctx, ApplicationDbContext db,
+            UserManager<ApplicationUser> users, NotificationService notifications, DeploymentSettings settings) =>
         {
-            var hash = Hash(token);
-            var ticket = await db.EmailTickets.FirstOrDefaultAsync(t => t.Hash == hash && !t.Used && t.Expires > Now);
-            if (ticket is null) return Results.Content("確認リンクは無効・期限切れ・使用済みです。", "text/plain", statusCode: 400);
-            await using var tx = await db.Database.BeginTransactionAsync();
-            var changed = await db.EmailTickets.Where(t => t.Id == ticket.Id && !t.Used && t.Expires > Now).ExecuteUpdateAsync(s => s.SetProperty(t => t.Used, true));
-            if (changed != 1) return Results.BadRequest();
-            var user = await db.Users.FindAsync(ticket.UserId);
-            if (user is null || user.Enabled) return Results.BadRequest();
-            user.EmailConfirmed = true;
-            await db.SaveChangesAsync();
-            await tx.CommitAsync();
-            await ctx.SignInAsync("SEM.Enrollment", new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, user.Id)], "SEM.Enrollment")), new AuthenticationProperties { IsPersistent = false, ExpiresUtc = DateTimeOffset.UtcNow.AddMinutes(20) });
+            var service = new ApplicationJoinService(db);
+            var result = await service.ConfirmAndIssueEnrollmentAsync(ctx, token, ctx.RequestAborted);
+            if (result == ApplicationJoinConfirmationResult.InvalidTicket)
+                return Results.Content(ApplicationJoinService.InvalidTicketMessage, "text/plain", statusCode: 400);
+            if (result != ApplicationJoinConfirmationResult.Confirmed) return Results.BadRequest();
             return Results.Redirect("/?enroll=1");
         });
     }
@@ -106,6 +103,18 @@ public static class SemEndpoints
         }
         if ((action == "setup" || action == "register") && post)
         {
+            if (action == "register")
+            {
+                if (!notify.EmailConfigured) throw new ValidationException("SMTPを設定してから登録してください。");
+                var emailAddress = Text("email", 254).ToLowerInvariant();
+                if (emailAddress.Any(char.IsControl) || !new EmailAddressAttribute().IsValid(emailAddress)) throw new ValidationException("メールアドレスを確認してください。");
+                var displayName = Text("name", 60);
+                var join = new ApplicationJoinService(db);
+                var message = await join.BeginLegacyRegistrationAsync(users, notify, cfg, displayName,
+                    emailAddress, () => Text("invite", 128), c.RequestAborted);
+                await Reply(new { message }); return;
+            }
+
             if (!notify.EmailConfigured) throw new ValidationException("SMTPを設定してから登録してください。");
             var email = Text("email", 254).ToLowerInvariant();
             if (email.Any(char.IsControl) || !new EmailAddressAttribute().IsValid(email)) throw new ValidationException("メールアドレスを確認してください。");
@@ -201,26 +210,6 @@ public static class SemEndpoints
             await signin.SignInWithClaimsAsync(owner, false,
                 [new Claim(PasskeyAdditionService.SessionClaim, Secret())]);
             await Reply(new { message = "パスキーを登録しました。" }); return;
-        }
-        if (action == "login-options" && post)
-        {
-            var owner = await users.FindByEmailAsync(Text("email", 254));
-            if (owner is not { Enabled: true }) throw new ValidationException("ログインできませんでした。");
-            c.Response.ContentType = "application/json"; await c.Response.WriteAsync(await signin.MakePasskeyRequestOptionsAsync(owner)); return;
-        }
-        if (action == "login" && post)
-        {
-            var result = await signin.PasskeySignInAsync(Text("credential", 50000));
-            if (!result.Succeeded) throw new ValidationException("パスキーでログインできませんでした。");
-            var authenticated = await users.GetUserAsync(c.User);
-            if (authenticated is not { Enabled: true })
-            {
-                await signin.SignOutAsync();
-                throw new UnauthorizedAccessException();
-            }
-            await signin.SignInWithClaimsAsync(authenticated, false,
-                [new Claim(PasskeyAdditionService.SessionClaim, Secret())]);
-            await Reply(new { message = "ログインしました。" }); return;
         }
         if (user is null) throw new UnauthorizedAccessException();
         void Admin() { if (!user.IsAdmin) throw new UnauthorizedAccessException(); }
