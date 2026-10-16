@@ -2,8 +2,9 @@ using Microsoft.EntityFrameworkCore;
 using Sem.Web.Data;
 namespace Sem.Web.Core;
 
-// No production writer, DI, endpoint or dispatcher is connected in this foundation.
-// Missing state is OFF. A future audited activation transition MUST use a fresh,
+// Program registers pipeline DI/runtime/worker through the composition extension
+// and maps the Core HTTP endpoints separately.
+// Missing durable activation state is OFF. Every audited activation transition MUST use a fresh,
 // monotonically increasing Epoch, including when re-enabling after a disable.
 public sealed class ManualNotificationPushActivation
 {
