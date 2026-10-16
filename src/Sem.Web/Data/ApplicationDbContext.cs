@@ -98,10 +98,12 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             .HasForeignKey(x => x.AdminId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<PasskeyRecoveryOperation>().ToTable("PasskeyRecoveryOperations", t => {
             t.HasCheckConstraint("CK_PasskeyRecoveryOperation_State",
-                "\"Status\" IN ('Pending','EmailConfirmed','Completed','Expired','Cancelled','Invalidated') AND \"RowVersion\">0");
+                "\"Status\" IN ('Pending','HostPrepared','EmailConfirmed','Completed','Expired','Cancelled','Invalidated') AND \"RowVersion\">0");
             t.HasCheckConstraint("CK_PasskeyRecoveryOperation_Hashes",
                 "length(\"EmailHash\")=64 AND length(\"SecurityStamp\")>0 AND (\"TokenHash\" IS NULL OR length(\"TokenHash\")=64) AND (\"GrantHash\" IS NULL OR length(\"GrantHash\")=64) AND (\"CreationChallengeHash\" IS NULL OR length(\"CreationChallengeHash\")=64)");
             t.HasCheckConstraint("CK_PasskeyRecoveryOperation_Reason", "length(trim(\"Reason\")) BETWEEN 3 AND 500");
+            t.HasCheckConstraint("CK_PasskeyRecoveryOperation_Actor",
+                "((\"RecoveryMode\"='Administrator' AND \"ActorType\"='Administrator' AND \"AdminId\" IS NOT NULL AND \"ActorId\"=\"AdminId\" AND \"BackupId\" IS NULL) OR (\"RecoveryMode\"='HostEmergency' AND \"ActorType\"='HostOperator' AND \"AdminId\" IS NULL AND length(trim(\"ActorId\")) BETWEEN 1 AND 128 AND \"BackupId\" IS NOT NULL AND length(\"BackupId\")=64))");
         });
         b.Entity<PasskeyRecoveryAdminChallenge>().HasOne<ApplicationUser>().WithMany()
             .HasForeignKey(x => x.AdminId).OnDelete(DeleteBehavior.Restrict);
@@ -146,9 +148,11 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         b.Entity<PasskeyRecoveryAudit>().HasIndex(x => new { x.OperationId, x.At });
         b.Entity<PasskeyRecoveryAudit>().ToTable("PasskeyRecoveryAudits", t => {
             t.HasCheckConstraint("CK_PasskeyRecoveryAudit_Action",
-                "\"Action\" IN ('RecoveryStarted','RecoveryMailResent','RecoveryEmailConfirmed','RecoveryCompleted')");
+                "\"Action\" IN ('RecoveryStarted','RecoveryMailResent','RecoveryEmailConfirmed','RecoveryCompleted','RecoveryHostPrepared','RecoveryHostReset')");
             t.HasCheckConstraint("CK_PasskeyRecoveryAudit_Reason",
                 "length(trim(\"Reason\")) BETWEEN 3 AND 500");
+            t.HasCheckConstraint("CK_PasskeyRecoveryAudit_Actor",
+                "((\"ActorType\"='Administrator' AND \"AdminId\" IS NOT NULL AND \"ActorId\"=\"AdminId\" AND \"BackupId\" IS NULL) OR (\"ActorType\"='HostOperator' AND \"AdminId\" IS NULL AND length(trim(\"ActorId\")) BETWEEN 1 AND 128 AND \"BackupId\" IS NOT NULL AND length(\"BackupId\")=64))");
         });
         b.Entity<EventImportOperation>().HasOne<SessionEvent>().WithMany()
             .HasForeignKey(x => x.EventId).OnDelete(DeleteBehavior.Restrict);

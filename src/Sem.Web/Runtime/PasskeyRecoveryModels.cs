@@ -10,7 +10,11 @@ public sealed class PasskeyRecoveryOperation
 {
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
     public string UserId { get; set; } = "";
-    public string AdminId { get; set; } = "";
+    public string? AdminId { get; set; }
+    public string RecoveryMode { get; set; } = "Administrator";
+    public string ActorType { get; set; } = "Administrator";
+    public string ActorId { get; set; } = "";
+    public string? BackupId { get; set; }
     public string Reason { get; set; } = "";
     public string Status { get; set; } = "Pending";
     public string EmailHash { get; set; } = "";
@@ -72,7 +76,10 @@ public sealed class PasskeyRecoveryAudit
 {
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
     public string OperationId { get; set; } = "";
-    public string AdminId { get; set; } = "";
+    public string? AdminId { get; set; }
+    public string ActorType { get; set; } = "Administrator";
+    public string ActorId { get; set; } = "";
+    public string? BackupId { get; set; }
     public string TargetUserId { get; set; } = "";
     public string Action { get; set; } = "";
     public string Reason { get; set; } = "";

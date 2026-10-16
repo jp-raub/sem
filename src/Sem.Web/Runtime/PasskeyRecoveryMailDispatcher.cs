@@ -62,6 +62,9 @@ public sealed class PasskeyRecoveryMailDispatcher(
                 var user = await db.Users.AsNoTracking().SingleOrDefaultAsync(x => x.Id == item.UserId, ct);
                 var active = operation is not null && user is not null &&
                     IsActive(item, operation, user, now);
+                if (active && operation!.RecoveryMode == "HostEmergency" && user!.Enabled)
+                    active = user.IsAdmin && await db.Users.AsNoTracking().CountAsync(
+                        x => x.Enabled && x.EmailConfirmed && x.IsAdmin, ct) == 1;
                 if (!active)
                 {
                     await Finish(db, id, claim, "Cancelled", null, ct);
@@ -100,10 +103,19 @@ public sealed class PasskeyRecoveryMailDispatcher(
             operation.EmailHash != SemEndpoints.Hash(user.NormalizedEmail ?? ""))
             return false;
         if (item.Kind == "RecoveryLink")
+        {
+            var adminPending = operation.RecoveryMode == "Administrator" &&
+                operation.Status == "Pending" && operation.DisabledForRecovery && !user.Enabled;
+            var hostPrepared = operation.RecoveryMode == "HostEmergency" &&
+                operation.Status == "HostPrepared" &&
+                operation.SecurityStamp == user.SecurityStamp &&
+                ((!user.Enabled && operation.DisabledForRecovery) ||
+                 (user.Enabled && !operation.DisabledForRecovery));
             return item.ExpiresAt > now && operation.ExpiresAt > now &&
-                operation.Status == "Pending" && operation.DisabledForRecovery && !user.Enabled &&
-                operation.SecurityStamp == user.SecurityStamp && item.ProofHash is not null &&
+                (adminPending && operation.SecurityStamp == user.SecurityStamp || hostPrepared) &&
+                item.ProofHash is not null &&
                 item.ProofHash == operation.TokenHash;
+        }
         if (item.Kind == "RecoveryComplete")
             return item.ExpiresAt > now && operation.Status == "Completed" &&
                 !operation.DisabledForRecovery && user.Enabled;
