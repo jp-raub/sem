@@ -1,0 +1,50 @@
+@page "/join"
+@using Microsoft.AspNetCore.Authorization
+@attribute [AllowAnonymous]
+
+<PageTitle>招待から登録</PageTitle>
+<h1>招待から登録</h1>
+<section id="join-page" class="panel" aria-labelledby="join-title">
+    <h2 id="join-title">招待を使ってアカウントを登録</h2>
+    <p id="join-module-error" role="alert" aria-live="assertive">画面機能を読み込めない場合、登録・確認・パスキー操作は無効のままです。ページを再読み込みしてください。</p>
+    <p id="join-status" role="status" aria-live="polite">登録画面を準備しています。</p>
+    <p id="join-error" role="alert" aria-live="assertive"></p>
+
+    <form id="join-register-form" method="post" action="/join" autocomplete="off" novalidate>
+        <fieldset id="join-register-fields" disabled>
+            <legend>招待コードと登録情報</legend>
+            <label for="join-invite">招待コード</label>
+            <input id="join-invite" type="text" maxlength="128" autocomplete="off" autocapitalize="off" spellcheck="false" required />
+            <label for="join-name">表示名</label>
+            <input id="join-name" type="text" maxlength="60" autocomplete="name" required />
+            <label for="join-email">メールアドレス</label>
+            <input id="join-email" type="email" maxlength="254" autocomplete="email" inputmode="email" required />
+            <button id="join-register-submit" type="submit" disabled>確認メールを依頼</button>
+        </fieldset>
+    </form>
+
+    <form id="join-confirm-form" method="post" action="/join" hidden>
+        <fieldset id="join-confirm-fields" disabled>
+            <legend>メールアドレス確認</legend>
+            <p>確認リンクをこのページで受け取りました。ボタンを押すと、リンクをサーバーで確認します。</p>
+            <button id="join-confirm-submit" type="submit" disabled>メール確認を続ける</button>
+        </fieldset>
+    </form>
+
+    <form id="join-passkey-form" method="post" action="/join" hidden>
+        <fieldset id="join-passkey-fields" disabled>
+            <legend>パスキー登録</legend>
+            <p>登録対象の識別情報は表示しません。サーバーの登録確認セッションが登録先を決定します。別タブや前回の登録と混同していないことを確認してください。</p>
+            <label for="join-enrollment-consent">
+                <input id="join-enrollment-consent" type="checkbox" />
+                このブラウザーで自分が確認した登録を続けることを確認します。
+            </label>
+            <button id="join-passkey-register" type="submit" disabled>パスキーを登録して完了</button>
+        </fieldset>
+    </form>
+
+    <button id="join-reconcile" type="button" hidden disabled>ログイン・登録状態を読み取り専用で確認</button>
+    <p id="join-workspace-note" hidden>このブラウザーはログイン済みです。登録操作は行いません。</p>
+    <a id="join-workspace-link" href="/workspace" data-enhance-nav="false" hidden>ワークスペースへ</a>
+</section>
+<script src="/join.js" defer></script>

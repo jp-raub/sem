@@ -1,13 +1,22 @@
-﻿@page "/auth"
-
+@page "/auth"
 @using Microsoft.AspNetCore.Authorization
+@attribute [AllowAnonymous]
 
-@attribute [Authorize]
-
-<PageTitle>Auth</PageTitle>
-
-<h1>You are authenticated</h1>
-
-<AuthorizeView>
-    Hello @context.User.Identity?.Name!
-</AuthorizeView>
+<PageTitle>パスキーでログイン</PageTitle>
+<h1>パスキーでログイン</h1>
+<section class="panel" aria-labelledby="auth-heading">
+    <h2 id="auth-heading">アカウント確認</h2>
+    <p>登録済みメールアドレスとパスキーを使ってログインします。パスワードは使用しません。</p>
+    <p id="auth-status" role="status" aria-live="polite">ログイン画面を準備しています。JavaScript または画面スクリプトを読み込めない場合、ログイン操作は無効のままです。再読み込みしても改善しない場合は管理者に連絡してください。</p>
+    <p id="auth-error" role="alert" aria-live="assertive"></p>
+    <form id="auth-form" method="post" action="/auth" autocomplete="on" novalidate>
+        <fieldset id="auth-fields" disabled>
+            <label for="auth-email">登録済みメールアドレス</label>
+            <input id="auth-email" type="email" autocomplete="username webauthn" maxlength="254" required inputmode="email" />
+            <button id="auth-submit" type="submit" disabled>パスキーでログイン</button>
+        </fieldset>
+    </form>
+    <button id="auth-reconcile" type="button" hidden disabled>ログイン状態を確認</button>
+    <p>招待を受け取った方は、<a href="/join" data-enhance-nav="false">招待コードで新規登録</a>へ進んでください。</p>
+</section>
+<script src="/auth.js" defer></script>

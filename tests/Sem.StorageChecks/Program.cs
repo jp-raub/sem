@@ -50,9 +50,6 @@ try
             SecurityStamp = "synthetic-security-stamp"
         });
         fixture.Db.SiteStates.Add(new SiteState { Initialized = true, Name = "Synthetic site" });
-        fixture.Db.Invitations.Add(new Invitation { Id = "fixture-invite", OwnerId = "fixture-user",
-            IssuerId = "fixture-user", Uses = 1, Limit = 1, Disabled = true,
-            RevocationReason = "synthetic reason", ProtectedToken = "synthetic-protected-token" });
         fixture.Db.InvitationRequests.Add(new InvitationRequest { Id = "fixture-request",
             UserId = "fixture-user", Status = "Rejected", DecidedBy = "fixture-user", DecidedAt = 100 });
         fixture.Db.EmailTickets.Add(new EmailTicket { UserId = "fixture-user", Hash = "fixture-ticket", Used = true });
@@ -62,6 +59,18 @@ try
 
         fixture.Db.Audits.Add(new Audit { ActorId = "fixture-user", Action = "Synthetic" });
         await fixture.Db.SaveChangesAsync();
+        string? inviteRequestId = null;
+        string? revokedBy = null;
+        string? revocationReason = "synthetic reason";
+        long? revokedAt = null;
+        await fixture.Db.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO "Invitations"
+                ("Id","TokenHash","OwnerId","IssuerId","RequestId","Limit","Uses","Expires","Created",
+                 "Disabled","RevokedBy","RevocationReason","RevokedAt","ProtectedToken")
+            VALUES
+                ({"fixture-invite"},{""},{"fixture-user"},{"fixture-user"},{inviteRequestId},1,1,0,0,
+                 1,{revokedBy},{revocationReason},{revokedAt},{"synthetic-protected-token"});
+            """);
         await fixture.Db.Database.ExecuteSqlRawAsync("""
             INSERT INTO "AspNetUserPasskeys" ("CredentialId","UserId","Data")
             VALUES (X'01020304','fixture-user',{0});
@@ -72,6 +81,12 @@ try
     {
         await SqliteStorageInitializer.InitializeAsync(fixture.Db);
         Check(before == await DumpAsync(legacy), "Legacy adoption preserves every pre-existing business row including passkey bytes");
+        Check(await fixture.Db.Invitations.AsNoTracking().Where(i => i.Id == "fixture-invite")
+                .Select(i => i.Purpose).SingleAsync() is null,
+            "Legacy invitation purpose remains null after adoption");
+        Check(await fixture.Db.Invitations.AsNoTracking().Where(i => i.Id == "fixture-invite")
+                .Select(i => i.IssuanceSource).SingleAsync() is null,
+            "Legacy invitation issuance source remains null after adoption");
         Check(await fixture.Db.PartPresets.CountAsync()==6 && (await fixture.Db.PartPresetStates.SingleAsync()).RowVersion==0, "Legacy adoption preserves the six explicit preset seed rows");
         var themeSeeds = await fixture.Db.ThemeCatalogEntries.AsNoTracking().OrderBy(x => x.Id).ToArrayAsync();
         Check(themeSeeds.Length == 10 && Sem.Web.Core.ThemeCatalog.Default.Themes.All(t => themeSeeds.Any(row =>
@@ -212,6 +227,12 @@ static async Task<string> DumpAsync(string path)
         command.CommandText = "SELECT * FROM \"" + table.Replace("\"", "\"\"") + "\" ORDER BY rowid";
         // Compare every original subscription value; new nullable security bindings are tested separately.
         if (table == "PushDevices") command.CommandText = "SELECT Id,UserId,Endpoint,P256dh,Auth FROM PushDevices ORDER BY rowid";
+        if (table == "Invitations")
+            command.CommandText = """
+                SELECT "Id","TokenHash","OwnerId","IssuerId","RequestId","Limit","Uses","Expires","Created","Disabled",
+                       "RevokedBy","RevocationReason","RevokedAt","ProtectedToken"
+                FROM "Invitations" ORDER BY rowid
+                """;
         using var reader = await command.ExecuteReaderAsync();
         while (await reader.ReadAsync())
         {

@@ -13,6 +13,21 @@ fi
 node --check src/Sem.Web/wwwroot/passkey-recovery-admin.js
 node --check src/Sem.Web/wwwroot/passkey-recovery.js
 node scripts/passkey-recovery-ui-checks.mjs 2>&1 | tee verification/passkey-recovery-ui.log
+node --check src/Sem.Web/wwwroot/auth.js
+node --check scripts/application-auth-checks.mjs
+node scripts/application-auth-checks.mjs 2>&1 | tee verification/application-auth-ui.log
+node --check src/Sem.Web/wwwroot/device-notifications.js
+node --check scripts/device-notification-ui-checks.mjs
+node scripts/device-notification-ui-checks.mjs 2>&1 | tee verification/device-notification-ui.log
+node --check src/Sem.Web/wwwroot/invitation-management.js
+node --check scripts/invitation-management-ui-checks.mjs
+node scripts/invitation-management-ui-checks.mjs 2>&1 | tee verification/invitation-management-ui.log
+node --check src/Sem.Web/wwwroot/join.js
+node --check scripts/application-join-ui-checks.mjs
+node scripts/application-join-ui-checks.mjs 2>&1 | tee verification/application-join-ui.log
+node --check src/Sem.Web/wwwroot/inbox.js
+node --check scripts/application-inbox-ui-checks.mjs
+node scripts/application-inbox-ui-checks.mjs 2>&1 | tee verification/application-inbox-ui.log
 # Use default NuGet auditing. Historical dependency warnings are recorded, not suppressed.
 dotnet build src/Sem.Web/Sem.Web.csproj -c Release 2>&1 | tee verification/build.log
 suites=0

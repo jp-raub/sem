@@ -1,0 +1,94 @@
+@page "/inbox"
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+<PageTitle>メッセージ受信箱</PageTitle>
+<main id="inbox-root" @ref="Root" class="panel" aria-labelledby="inbox-title" style="max-width:1100px;margin:24px auto;">
+    <h1 id="inbox-title">メッセージ受信箱</h1>
+    <p>ログイン中の本人宛てメッセージを表示します。本文はプレーンテキストとして表示し、開いただけでは既読にしません。</p>
+    <p id="inbox-navigation-guidance">既読にした後も、共通メニューの未読数は古い場合があります。ページを再読み込みすると更新されます。</p>
+    <p id="inbox-status" role="status" aria-live="polite">受信箱を準備しています。</p>
+    <p id="inbox-error" role="alert"></p>
+    <p id="inbox-module-error" role="alert" hidden="@(!ModuleUnavailable)">受信箱の画面機能を読み込めませんでした。操作は有効になっていません。ページを再読み込みしてください。</p>
+    <button id="inbox-refresh" type="button" disabled>一覧を再読込</button>
+
+    <section aria-labelledby="inbox-list-heading">
+        <h2 id="inbox-list-heading">メッセージ</h2>
+        <div style="overflow-x:auto">
+            <table id="inbox-list" aria-describedby="inbox-list-heading">
+                <thead>
+                    <tr><th scope="col">ID</th><th scope="col">件名</th><th scope="col">受信日時</th><th scope="col">状態</th><th scope="col">操作</th></tr>
+                </thead>
+                <tbody id="inbox-list-body"></tbody>
+            </table>
+        </div>
+    </section>
+
+    <nav id="inbox-pagination" aria-label="受信箱のページ">
+        <button id="inbox-previous" type="button" disabled>前のページ</button>
+        <span id="inbox-page">ページ —</span>
+        <button id="inbox-next" type="button" disabled>次のページ</button>
+    </nav>
+
+    <p id="inbox-unknown" role="alert" hidden></p>
+
+    <section id="inbox-detail" aria-labelledby="inbox-detail-heading" hidden>
+        <h2 id="inbox-detail-heading">メッセージ本文</h2>
+        <p id="inbox-detail-status" role="status" aria-live="polite"></p>
+        <p id="inbox-detail-error" role="alert"></p>
+        <p><strong>件名：</strong><span id="inbox-detail-title"></span></p>
+        <p><strong>受信日時：</strong><span id="inbox-detail-created"></span></p>
+        <p><strong>状態：</strong><span id="inbox-detail-read-state"></span></p>
+        <pre id="inbox-detail-body" style="white-space:pre-wrap;overflow-wrap:anywhere;"></pre>
+        <button id="inbox-detail-refresh" type="button" disabled>本文の状態を再確認</button>
+        <button id="inbox-mark-read" type="button" disabled>既読にする</button>
+    </section>
+</main>
+
+@code {
+    private ElementReference Root;
+    private IJSObjectReference? Module;
+    private readonly string Owner = Guid.NewGuid().ToString("N");
+    private bool Disposed;
+    private bool ModuleUnavailable;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || Disposed || Module is not null) return;
+        try
+        {
+            var imported = await JS.InvokeAsync<IJSObjectReference>("import", "/inbox.js");
+            if (Disposed) { await imported.DisposeAsync(); return; }
+            Module = imported;
+            await Module.InvokeVoidAsync("initialize", Root, Owner);
+        }
+        catch (JSDisconnectedException) { }
+        catch
+        {
+            if (!Disposed)
+            {
+                ModuleUnavailable = true;
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (Disposed) return;
+        Disposed = true;
+        if (Module is null) return;
+        try { await Module.InvokeVoidAsync("dispose", Owner); }
+        catch (JSDisconnectedException) { }
+        catch (ObjectDisposedException) { }
+        finally
+        {
+            try { await Module.DisposeAsync(); }
+            catch (JSDisconnectedException) { }
+            catch (ObjectDisposedException) { }
+            Module = null;
+        }
+    }
+}

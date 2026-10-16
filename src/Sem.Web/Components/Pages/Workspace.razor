@@ -8,7 +8,7 @@
 <h1 id="core-title">@Title</h1>
 @if (View is not null) { <p>@(Editing == "service" ? ServiceDescription : View.Service.Description)</p> }
 <p>サービス・プロフィール・イベント概要の実DB基盤です。カスタムフェーズは専用画面で管理できます。曲・参加登録・当日進行・受付等の実装済み画面は、イベント一覧から開けます。画面の統合と実機受入は別工程です。</p>
-<p><a href="/">認証・招待・通知の画面へ</a></p>
+<p><a id="workspace-auth-link" data-enhance-nav="false" href="/auth?returnUrl=%2Fworkspace">ログイン画面へ</a> ／ <a href="/">外部テスト画面</a></p>
 <p id="core-error" role="alert">@Error</p><p id="core-message" role="status">@Message</p>
 @if (View is null)
 {
@@ -19,7 +19,7 @@ else
     <button id="core-refresh" disabled="@(Busy || Editing is not null)" @onclick="Load">最新状態を取得</button>
     <section class="panel" id="core-account"><h2>自分のアカウント</h2>
         <p>@View.Profile.DisplayName ／ @(View.IsAdmin ? "全体管理者" : "一般ユーザー・担当イベント管理")</p>
-        <p>認証メール：@View.Email（読取専用）</p><p>メール変更・認証復旧は後続実装です。パスキー追加は認証画面で行います。</p>
+        <p>認証メール：@View.Email（読取専用）</p>
     </section>
     <section class="panel" id="core-profile"><h2>本人の基本プロフィール</h2>
     @if (Editing == "profile")
