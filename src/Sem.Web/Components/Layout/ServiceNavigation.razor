@@ -2,7 +2,7 @@
     <div class="service-navigation-inner">
         <a href="/workspace" class="service-brand"><strong id="navigation-name">SEM</strong><span id="navigation-description"></span><small id="navigation-draft" hidden>未保存プレビュー</small></a>
         <div id="navigation-controls" class="navigation-controls" hidden>
-            <a id="navigation-inbox" href="/?messages=1" aria-label="メッセージボックス">通知 <span id="navigation-unread">—</span></a>
+            <a id="navigation-inbox" href="/inbox" aria-label="メッセージボックス">通知 <span id="navigation-unread">—</span></a>
             <button id="navigation-toggle" type="button" aria-expanded="false" aria-controls="navigation-panel" aria-label="メニューを開く"><svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M2 4h16M2 10h16M2 16h16" fill="none" stroke="currentColor" stroke-width="2" /></svg> <span>メニュー</span></button>
         </div>
         <nav id="navigation-panel" class="navigation-panel" aria-label="共通メニュー" hidden>
@@ -11,9 +11,9 @@
             <a href="/workspace#core-events">イベント一覧</a>
             <a href="/workspace#core-profile">プロフィール管理</a>
             <a href="/?panel=account">アカウント管理</a>
-            <a href="/?panel=notifications">通知管理</a>
+            <a id="navigation-notifications-link" href="/notifications" data-enhance-nav="false">通知管理</a>
             <a href="/appearance">表示設定</a>
-            <a href="/?panel=invitations">招待管理</a>
+            <a id="navigation-invitations-link" href="/invitations" data-enhance-nav="false">招待管理</a>
             <button id="navigation-logout" type="button">ログアウト</button>
         </nav>
     </div>

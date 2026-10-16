@@ -479,6 +479,8 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         b.Entity<EventAdmin>().HasKey(x => new { x.EventId, x.UserId });
         b.Entity<EventAdmin>().HasOne<SessionEvent>().WithMany(x => x.Admins).HasForeignKey(x => x.EventId).OnDelete(DeleteBehavior.Cascade);
         b.Entity<EventAdmin>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<Invitation>().Property(i => i.Purpose).HasMaxLength(500);
+        b.Entity<Invitation>().Property(i => i.IssuanceSource).HasMaxLength(32);
         b.Entity<Invitation>().HasIndex(i => i.TokenHash).IsUnique();
         b.Entity<EmailTicket>().HasIndex(t => t.Hash).IsUnique();
         b.Entity<PushDevice>().HasIndex(d => d.Endpoint).IsUnique();

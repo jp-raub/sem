@@ -1,0 +1,74 @@
+@page "/notifications"
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+<PageTitle>通知管理</PageTitle>
+<section id="device-notifications-page" @ref="Root" aria-labelledby="device-notifications-title">
+    <h1 id="device-notifications-title">このブラウザーの通知設定</h1>
+    <p>このページは、現在使用しているブラウザーのPush登録だけを管理します。端末・ブラウザーごとに登録してください。ページを開いただけでは通知許可を求めず、Push登録・更新もしません。</p>
+    <p>登録は「このブラウザーでPushを登録」ボタンを押したときだけ開始します。ブラウザーの通知許可が未決定の場合、その操作中に許可を確認します。</p>
+    <p id="device-notifications-capability" role="status" aria-live="polite">ブラウザー機能を確認しています。</p>
+    <p id="device-notifications-permission">通知許可状態を確認しています。</p>
+    <p id="device-notifications-status" role="status" aria-live="polite">ログイン状態とこのブラウザーの登録状態を確認しています。</p>
+    <p id="device-notifications-error" role="alert"></p>
+    <p id="device-notifications-module-error" role="alert" hidden="@(!ModuleFailed)">通知設定の画面機能を読み込めませんでした。このページを再読み込みしてください。読み込みに失敗した状態では登録操作を有効にしません。</p>
+    <div class="panel" aria-label="このブラウザーのPush操作">
+        <button id="device-notifications-register" type="button" disabled>このブラウザーでPushを登録</button>
+        <button id="device-notifications-unregister" type="button" disabled>このブラウザーのPush登録を解除</button>
+        <button id="device-notifications-refresh" type="button" disabled>状態を手動で再確認</button>
+    </div>
+    <p id="device-notifications-guidance">ブラウザーの通知許可は、Push登録を解除しても取り消されません。ログアウト時にはサーバー側の端末紐付けが解除されます。再ログイン後、このページで改めて明示的に登録してください。</p>
+    <p>ここではテスト通知を送信しません。テスト送信はアカウント全体へ影響するため、この端末だけの管理画面には含めていません。</p>
+</section>
+
+@code {
+    private ElementReference Root;
+    private IJSObjectReference? Module;
+    private readonly string Owner = Guid.NewGuid().ToString("N");
+    private bool Disposed;
+    private bool ModuleFailed;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || Disposed || Module is not null) return;
+        try
+        {
+            var imported = await JS.InvokeAsync<IJSObjectReference>("import", "/device-notifications.js");
+            if (Disposed)
+            {
+                await imported.DisposeAsync();
+                return;
+            }
+            Module = imported;
+            await Module.InvokeVoidAsync("initialize", Root, Owner);
+        }
+        catch (JSDisconnectedException) { }
+        catch
+        {
+            if (!Disposed)
+            {
+                ModuleFailed = true;
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (Disposed) return;
+        Disposed = true;
+        if (Module is null) return;
+        try { await Module.InvokeVoidAsync("dispose", Owner); }
+        catch (JSDisconnectedException) { }
+        catch (ObjectDisposedException) { }
+        finally
+        {
+            try { await Module.DisposeAsync(); }
+            catch (JSDisconnectedException) { }
+            catch (ObjectDisposedException) { }
+            Module = null;
+        }
+    }
+}
