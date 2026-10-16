@@ -1,0 +1,56 @@
+@page "/recovery"
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@implements IAsyncDisposable
+@attribute [Microsoft.AspNetCore.Authorization.AllowAnonymous]
+@using Microsoft.JSInterop
+@inject IJSRuntime JS
+
+<PageTitle>パスキー認証の復旧</PageTitle>
+<main @ref="_root" id="recovery-root" class="panel" style="max-width:720px;margin:24px auto;">
+    <h1>パスキー認証の復旧</h1>
+    <p id="recovery-status" role="status" aria-live="polite">復旧リンクを確認しています。</p>
+    <p id="recovery-error" role="alert"></p>
+    @if (_moduleUnavailable)
+    {
+        <p role="alert">復旧画面を読み込めませんでした。復旧リンクは操作されていません。リンクを再度開くか、運用窓口へ連絡してください。</p>
+    }
+    <section id="recovery-grant-panel" hidden>
+        <p>確認が完了しました。期限内にこのブラウザーで新しいパスキーを登録してください。</p>
+        <p id="recovery-expiry"></p>
+        <button id="recovery-register" type="button" disabled>新しいパスキーを登録</button>
+    </section>
+    <p id="recovery-complete" hidden>登録後は通常のログイン画面から、新しいパスキーでログインしてください。</p>
+    <p><a id="recovery-login-link" href="/" hidden>通常のログイン画面へ</a></p>
+</main>
+
+@code {
+    private IJSObjectReference? _module;
+    private ElementReference _root;
+    private bool _disposed;
+    private bool _moduleUnavailable;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try
+        {
+            var module = await JS.InvokeAsync<IJSObjectReference>("import", "/passkey-recovery.js");
+            if (_disposed) { await module.DisposeAsync(); return; }
+            _module = module;
+            await _module.InvokeVoidAsync("init", _root);
+        }
+        catch
+        {
+            _moduleUnavailable = true;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _disposed = true;
+        if (_module is null) return;
+        try { await _module.InvokeVoidAsync("cleanup", _root); await _module.DisposeAsync(); }
+        catch (JSDisconnectedException) { }
+    }
+}

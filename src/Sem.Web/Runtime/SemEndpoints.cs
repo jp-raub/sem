@@ -24,8 +24,11 @@ public static class SemEndpoints
             try {
                 if ((ctx.Request.RouteValues["action"]?.ToString() ?? "").StartsWith("email-change-", StringComparison.Ordinal))
                     await EmailChangeEndpoints.Handle(ctx, ctx.RequestServices.GetRequiredService<EmailChangeService>(), csrf, settings);
+                else if ((ctx.Request.RouteValues["action"]?.ToString() ?? "").StartsWith("passkey-recovery-", StringComparison.Ordinal))
+                    await PasskeyRecoveryEndpoints.Handle(ctx, ctx.RequestServices.GetRequiredService<PasskeyRecoveryService>(), csrf, settings);
                 else await Handle(ctx, db, users, signin, csrf, dp.CreateProtector("SEM.Tokens.v1"), settings, notifications, additions);
             }
+            catch (PasskeyRecoveryRateLimitException e) { ctx.Response.StatusCode = 429; ctx.Response.Headers.RetryAfter = e.RetryAfter.ToString(System.Globalization.CultureInfo.InvariantCulture); await ctx.Response.WriteAsJsonAsync(new { error = e.Message, retryAfter = e.RetryAfter }); }
             catch (EmailChangeRateLimitException e) { ctx.Response.StatusCode = 429; ctx.Response.Headers.RetryAfter = e.RetryAfter.ToString(System.Globalization.CultureInfo.InvariantCulture); await ctx.Response.WriteAsJsonAsync(new { error = e.Message, retryAfter = e.RetryAfter }); }
             catch (DbUpdateConcurrencyException) { ctx.Response.StatusCode = 409; await ctx.Response.WriteAsJsonAsync(new { error = "ほかの画面で更新されています。最新状態を取得してください。" }); }
             catch (DbUpdateException) { ctx.Response.StatusCode = 409; await ctx.Response.WriteAsJsonAsync(new { error = "変更を確定できません。最新状態を取得してください。" }); }
@@ -156,6 +159,7 @@ public static class SemEndpoints
             var id = user?.Id ?? (pending.Succeeded ? pending.Principal?.FindFirstValue(ClaimTypes.NameIdentifier) : null);
             var owner = id is null ? null : await users.FindByIdAsync(id);
             if (owner is null || owner.Enabled || !owner.EmailConfirmed) throw new UnauthorizedAccessException();
+            if (await db.PasskeyRecoveryOperations.AnyAsync(x => x.UserId == owner.Id && x.DisabledForRecovery)) throw new UnauthorizedAccessException();
             var options = await signin.MakePasskeyCreationOptionsAsync(new() { Id = owner.Id, Name = owner.UserName!, DisplayName = owner.DisplayName });
             c.Response.ContentType = "application/json"; await c.Response.WriteAsync(options); return;
         }
@@ -170,9 +174,11 @@ public static class SemEndpoints
             var id = user?.Id ?? (pending.Succeeded ? pending.Principal?.FindFirstValue(ClaimTypes.NameIdentifier) : null);
             var owner = id is null ? null : await users.FindByIdAsync(id);
             if (owner is null || owner.Enabled || !owner.EmailConfirmed) throw new UnauthorizedAccessException();
+            if (await db.PasskeyRecoveryOperations.AnyAsync(x => x.UserId == owner.Id && x.DisabledForRecovery)) throw new UnauthorizedAccessException();
             var result = await signin.PerformPasskeyAttestationAsync(Text("credential", 50000));
             if (!result.Succeeded || result.UserEntity.Id != owner.Id) throw new ValidationException("パスキー登録を確認できませんでした。");
             await using var tx = await db.Database.BeginTransactionAsync();
+            if (await db.PasskeyRecoveryOperations.AnyAsync(x => x.UserId == owner.Id && x.DisabledForRecovery)) throw new UnauthorizedAccessException();
             if (!owner.Enabled)
             {
                 if (owner.Bootstrap)

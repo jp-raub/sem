@@ -10,6 +10,9 @@ if [[ ! -f src/Sem.Web/Sem.Web.csproj ]]; then
   echo 'CI bootstrap only: no application exists at this tree; no application acceptance claimed.' | tee verification/bootstrap.txt
   exit 0
 fi
+node --check src/Sem.Web/wwwroot/passkey-recovery-admin.js
+node --check src/Sem.Web/wwwroot/passkey-recovery.js
+node scripts/passkey-recovery-ui-checks.mjs 2>&1 | tee verification/passkey-recovery-ui.log
 # Use default NuGet auditing. Historical dependency warnings are recorded, not suppressed.
 dotnet build src/Sem.Web/Sem.Web.csproj -c Release 2>&1 | tee verification/build.log
 suites=0

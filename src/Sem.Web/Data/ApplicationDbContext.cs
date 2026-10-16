@@ -24,6 +24,11 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<EmailChangeOperation> EmailChangeOperations => Set<EmailChangeOperation>();
     public DbSet<EmailChangeRateState> EmailChangeRateStates => Set<EmailChangeRateState>();
     public DbSet<EmailChangeMail> EmailChangeMails => Set<EmailChangeMail>();
+    public DbSet<PasskeyRecoveryOperation> PasskeyRecoveryOperations => Set<PasskeyRecoveryOperation>();
+    public DbSet<PasskeyRecoveryAdminChallenge> PasskeyRecoveryAdminChallenges => Set<PasskeyRecoveryAdminChallenge>();
+    public DbSet<PasskeyRecoveryRateState> PasskeyRecoveryRateStates => Set<PasskeyRecoveryRateState>();
+    public DbSet<PasskeyRecoveryMail> PasskeyRecoveryMails => Set<PasskeyRecoveryMail>();
+    public DbSet<PasskeyRecoveryAudit> PasskeyRecoveryAudits => Set<PasskeyRecoveryAudit>();
     public DbSet<RevokedAuthSession> RevokedAuthSessions => Set<RevokedAuthSession>();
     public DbSet<ServiceSettings> ServiceSettings => Set<ServiceSettings>();
     public DbSet<UserProfile> UserProfiles => Set<UserProfile>();
@@ -84,6 +89,66 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             t.HasCheckConstraint("CK_EmailChangeMail_Kind", "\"Kind\" IN ('Verification','OldAddressNotice')");
             t.HasCheckConstraint("CK_EmailChangeMail_State", "\"Status\" IN ('Pending','Sending','Sent','Failed','Cancelled') AND \"Attempts\" BETWEEN 0 AND 5");
             t.HasCheckConstraint("CK_EmailChangeMail_Claim", "(\"Status\"='Sending' AND \"Claim\" IS NOT NULL AND \"LeaseUntil\" IS NOT NULL) OR (\"Status\"<>'Sending' AND \"Claim\" IS NULL AND \"LeaseUntil\" IS NULL)");
+        });
+        b.Entity<PasskeyRecoveryOperation>().HasIndex(x => x.UserId).IsUnique();
+        b.Entity<PasskeyRecoveryOperation>().Property(x => x.RowVersion).IsConcurrencyToken();
+        b.Entity<PasskeyRecoveryOperation>().HasOne<ApplicationUser>().WithMany()
+            .HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<PasskeyRecoveryOperation>().HasOne<ApplicationUser>().WithMany()
+            .HasForeignKey(x => x.AdminId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<PasskeyRecoveryOperation>().ToTable("PasskeyRecoveryOperations", t => {
+            t.HasCheckConstraint("CK_PasskeyRecoveryOperation_State",
+                "\"Status\" IN ('Pending','EmailConfirmed','Completed','Expired','Cancelled','Invalidated') AND \"RowVersion\">0");
+            t.HasCheckConstraint("CK_PasskeyRecoveryOperation_Hashes",
+                "length(\"EmailHash\")=64 AND length(\"SecurityStamp\")>0 AND (\"TokenHash\" IS NULL OR length(\"TokenHash\")=64) AND (\"GrantHash\" IS NULL OR length(\"GrantHash\")=64) AND (\"CreationChallengeHash\" IS NULL OR length(\"CreationChallengeHash\")=64)");
+            t.HasCheckConstraint("CK_PasskeyRecoveryOperation_Reason", "length(trim(\"Reason\")) BETWEEN 3 AND 500");
+        });
+        b.Entity<PasskeyRecoveryAdminChallenge>().HasOne<ApplicationUser>().WithMany()
+            .HasForeignKey(x => x.AdminId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<PasskeyRecoveryAdminChallenge>().HasOne<ApplicationUser>().WithMany()
+            .HasForeignKey(x => x.TargetUserId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<PasskeyRecoveryAdminChallenge>().HasIndex(x =>
+            new { x.AdminId, x.TargetUserId, x.SessionHash, x.ExpiresAt });
+        b.Entity<PasskeyRecoveryAdminChallenge>().ToTable("PasskeyRecoveryAdminChallenges", t => {
+            t.HasCheckConstraint("CK_PasskeyRecoveryAdminChallenge_Hashes",
+                "length(\"SessionHash\")=64 AND length(\"ContextHash\")=64 AND length(\"ChallengeHash\")=64");
+            t.HasCheckConstraint("CK_PasskeyRecoveryAdminChallenge_Time",
+                "\"ExpiresAt\">\"CreatedAt\"");
+        });
+        b.Entity<PasskeyRecoveryRateState>().HasKey(x => new { x.UserId, x.Purpose });
+        b.Entity<PasskeyRecoveryRateState>().Property(x => x.RowVersion).IsConcurrencyToken();
+        b.Entity<PasskeyRecoveryRateState>().HasOne<ApplicationUser>().WithMany()
+            .HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<PasskeyRecoveryRateState>().ToTable("PasskeyRecoveryRateStates", t =>
+            t.HasCheckConstraint("CK_PasskeyRecoveryRateState_Version", "\"RowVersion\">0"));
+        b.Entity<PasskeyRecoveryMail>().HasOne<ApplicationUser>().WithMany()
+            .HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<PasskeyRecoveryMail>().HasOne<PasskeyRecoveryOperation>().WithMany()
+            .HasForeignKey(x => x.OperationId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<PasskeyRecoveryMail>().HasIndex(x => new { x.Status, x.Due });
+        b.Entity<PasskeyRecoveryMail>().HasIndex(x => new { x.OperationId, x.Kind });
+        b.Entity<PasskeyRecoveryMail>().ToTable("PasskeyRecoveryMails", t => {
+            t.HasCheckConstraint("CK_PasskeyRecoveryMail_Kind",
+                "\"Kind\" IN ('RecoveryLink','RecoveryComplete')");
+            t.HasCheckConstraint("CK_PasskeyRecoveryMail_State",
+                "\"Status\" IN ('Pending','Sending','Sent','Failed','Cancelled') AND \"Attempts\" BETWEEN 0 AND 5");
+            t.HasCheckConstraint("CK_PasskeyRecoveryMail_Claim",
+                "(\"Status\"='Sending' AND \"Claim\" IS NOT NULL AND \"LeaseUntil\" IS NOT NULL) OR (\"Status\"<>'Sending' AND \"Claim\" IS NULL AND \"LeaseUntil\" IS NULL)");
+            t.HasCheckConstraint("CK_PasskeyRecoveryMail_ProofHash",
+                "\"ProofHash\" IS NULL OR length(\"ProofHash\")=64");
+        });
+        b.Entity<PasskeyRecoveryAudit>().HasOne<ApplicationUser>().WithMany()
+            .HasForeignKey(x => x.AdminId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<PasskeyRecoveryAudit>().HasOne<ApplicationUser>().WithMany()
+            .HasForeignKey(x => x.TargetUserId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<PasskeyRecoveryAudit>().HasOne<PasskeyRecoveryOperation>().WithMany()
+            .HasForeignKey(x => x.OperationId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<PasskeyRecoveryAudit>().HasIndex(x => new { x.OperationId, x.At });
+        b.Entity<PasskeyRecoveryAudit>().ToTable("PasskeyRecoveryAudits", t => {
+            t.HasCheckConstraint("CK_PasskeyRecoveryAudit_Action",
+                "\"Action\" IN ('RecoveryStarted','RecoveryMailResent','RecoveryEmailConfirmed','RecoveryCompleted')");
+            t.HasCheckConstraint("CK_PasskeyRecoveryAudit_Reason",
+                "length(trim(\"Reason\")) BETWEEN 3 AND 500");
         });
         b.Entity<EventImportOperation>().HasOne<SessionEvent>().WithMany()
             .HasForeignKey(x => x.EventId).OnDelete(DeleteBehavior.Restrict);

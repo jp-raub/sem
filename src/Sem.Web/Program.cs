@@ -80,6 +80,11 @@ builder.Services.AddScoped<EmailChangeService>();
 builder.Services.AddSingleton<IEmailChangeMailTransport, EmailChangeMailTransport>();
 builder.Services.AddScoped<EmailChangeMailDispatcher>();
 builder.Services.AddHostedService<EmailChangeMailWorker>();
+builder.Services.AddScoped<IPasskeyRecoveryIdentity, NativePasskeyRecoveryIdentity>();
+builder.Services.AddScoped<PasskeyRecoveryService>();
+builder.Services.AddSingleton<IPasskeyRecoveryMailTransport, PasskeyRecoveryMailTransport>();
+builder.Services.AddScoped<PasskeyRecoveryMailDispatcher>();
+builder.Services.AddHostedService<PasskeyRecoveryMailWorker>();
 builder.Services.AddHostedService<NotificationWorker>();
 builder.Services.AddHostedService<PhaseWorker>();
 builder.Services.AddRateLimiter(o =>
@@ -120,19 +125,9 @@ app.Use(async (context, next) =>
     if (context.Request.Path.StartsWithSegments("/_blazor") &&
         context.Request.Headers.Origin.Count > 0 && context.Request.Headers.Origin.ToString() != deployment.PublicUrl.TrimEnd('/'))
     { context.Response.StatusCode = 403; return; }
-    var session = context.User.FindFirstValue(PasskeyAdditionService.SessionClaim);
-    if (session is not null)
-    {
-        var db = context.RequestServices.GetRequiredService<ApplicationDbContext>();
-        var hash = SemEndpoints.Hash(session);
-        if (await db.RevokedAuthSessions.AnyAsync(s => s.TokenHash == hash))
-        {
-            await context.SignOutAsync(IdentityConstants.ApplicationScheme);
-            context.User = new ClaimsPrincipal(new ClaimsIdentity());
-        }
-    }
     await next();
 });
+app.UseSemLiveAuthenticationSession();
 app.UseAuthorization();
 app.UseAntiforgery();
 // Standard wwwroot fallback for SDK/runtime variants whose resource collection
