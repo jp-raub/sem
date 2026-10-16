@@ -13,6 +13,11 @@ using Microsoft.AspNetCore.Authentication;
 using Sem.Web.Core;
 
 // Maintenance exits before deployment configuration, migrations, HTTP or notification workers.
+if (args.Length > 0 && args[0] == "--passkey-emergency-recovery")
+{
+    Environment.ExitCode = await PasskeyEmergencyRecoveryMaintenance.RunAsync(args[1..]);
+    return;
+}
 if (args.Length > 0 && args[0] == "--legacy-event-reset")
 {
     Environment.ExitCode = await LegacyEventResetMaintenance.RunAsync(args[1..]);
@@ -45,6 +50,8 @@ if (args.Length == 1 && args[0] == "--profile-image-self-test")
 }
 var builder = WebApplication.CreateBuilder(args);
 var deployment = builder.AddSemDeployment();
+// Exclude offline emergency maintenance before migrations, HTTP, or workers start.
+using var storageLease = SemStorageRuntimeLease.Acquire(deployment.DataDirectory);
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddScoped<IdentityRedirectManager>();

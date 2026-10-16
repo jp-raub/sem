@@ -2508,7 +2508,10 @@ namespace Sem.Web.Data.Migrations
                 {
                     b.Property<string>("Id").HasColumnType("TEXT");
                     b.Property<string>("OperationId").IsRequired().HasColumnType("TEXT");
-                    b.Property<string>("AdminId").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("AdminId").HasColumnType("TEXT");
+                    b.Property<string>("ActorType").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("ActorId").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("BackupId").HasColumnType("TEXT");
                     b.Property<string>("TargetUserId").IsRequired().HasColumnType("TEXT");
                     b.Property<string>("Action").IsRequired().HasColumnType("TEXT");
                     b.Property<string>("Reason").IsRequired().HasColumnType("TEXT");
@@ -2519,8 +2522,9 @@ namespace Sem.Web.Data.Migrations
                     b.HasIndex("OperationId", "At");
                     b.ToTable("PasskeyRecoveryAudits", null, t =>
                         {
-                            t.HasCheckConstraint("CK_PasskeyRecoveryAudit_Action", "\"Action\" IN ('RecoveryStarted','RecoveryMailResent','RecoveryEmailConfirmed','RecoveryCompleted')");
+                            t.HasCheckConstraint("CK_PasskeyRecoveryAudit_Action", "\"Action\" IN ('RecoveryStarted','RecoveryMailResent','RecoveryEmailConfirmed','RecoveryCompleted','RecoveryHostPrepared','RecoveryHostReset')");
                             t.HasCheckConstraint("CK_PasskeyRecoveryAudit_Reason", "length(trim(\"Reason\")) BETWEEN 3 AND 500");
+                            t.HasCheckConstraint("CK_PasskeyRecoveryAudit_Actor", "((\"ActorType\"='Administrator' AND \"AdminId\" IS NOT NULL AND \"ActorId\"=\"AdminId\" AND \"BackupId\" IS NULL) OR (\"ActorType\"='HostOperator' AND \"AdminId\" IS NULL AND length(trim(\"ActorId\")) BETWEEN 1 AND 128 AND \"BackupId\" IS NOT NULL AND length(\"BackupId\")=64))");
                         });
                 });
 
@@ -2557,7 +2561,11 @@ namespace Sem.Web.Data.Migrations
                 {
                     b.Property<string>("Id").HasColumnType("TEXT");
                     b.Property<string>("UserId").IsRequired().HasColumnType("TEXT");
-                    b.Property<string>("AdminId").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("AdminId").HasColumnType("TEXT");
+                    b.Property<string>("RecoveryMode").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("ActorType").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("ActorId").IsRequired().HasColumnType("TEXT");
+                    b.Property<string>("BackupId").HasColumnType("TEXT");
                     b.Property<string>("Reason").IsRequired().HasColumnType("TEXT");
                     b.Property<string>("Status").IsRequired().HasColumnType("TEXT");
                     b.Property<string>("EmailHash").IsRequired().HasColumnType("TEXT");
@@ -2579,7 +2587,8 @@ namespace Sem.Web.Data.Migrations
                         {
                             t.HasCheckConstraint("CK_PasskeyRecoveryOperation_Hashes", "length(\"EmailHash\")=64 AND length(\"SecurityStamp\")>0 AND (\"TokenHash\" IS NULL OR length(\"TokenHash\")=64) AND (\"GrantHash\" IS NULL OR length(\"GrantHash\")=64) AND (\"CreationChallengeHash\" IS NULL OR length(\"CreationChallengeHash\")=64)");
                             t.HasCheckConstraint("CK_PasskeyRecoveryOperation_Reason", "length(trim(\"Reason\")) BETWEEN 3 AND 500");
-                            t.HasCheckConstraint("CK_PasskeyRecoveryOperation_State", "\"Status\" IN ('Pending','EmailConfirmed','Completed','Expired','Cancelled','Invalidated') AND \"RowVersion\">0");
+                            t.HasCheckConstraint("CK_PasskeyRecoveryOperation_State", "\"Status\" IN ('Pending','HostPrepared','EmailConfirmed','Completed','Expired','Cancelled','Invalidated') AND \"RowVersion\">0");
+                            t.HasCheckConstraint("CK_PasskeyRecoveryOperation_Actor", "((\"RecoveryMode\"='Administrator' AND \"ActorType\"='Administrator' AND \"AdminId\" IS NOT NULL AND \"ActorId\"=\"AdminId\" AND \"BackupId\" IS NULL) OR (\"RecoveryMode\"='HostEmergency' AND \"ActorType\"='HostOperator' AND \"AdminId\" IS NULL AND length(trim(\"ActorId\")) BETWEEN 1 AND 128 AND \"BackupId\" IS NOT NULL AND length(\"BackupId\")=64))");
                         });
                 });
 
@@ -3691,7 +3700,7 @@ namespace Sem.Web.Data.Migrations
 
             modelBuilder.Entity("Sem.Web.Runtime.PasskeyRecoveryAudit", b =>
                 {
-                    b.HasOne("Sem.Web.Data.ApplicationUser", null).WithMany().HasForeignKey("AdminId").OnDelete(DeleteBehavior.Restrict).IsRequired();
+                    b.HasOne("Sem.Web.Data.ApplicationUser", null).WithMany().HasForeignKey("AdminId").OnDelete(DeleteBehavior.Restrict);
                     b.HasOne("Sem.Web.Data.ApplicationUser", null).WithMany().HasForeignKey("TargetUserId").OnDelete(DeleteBehavior.Restrict).IsRequired();
                     b.HasOne("Sem.Web.Runtime.PasskeyRecoveryOperation", null).WithMany().HasForeignKey("OperationId").OnDelete(DeleteBehavior.Restrict).IsRequired();
                 });
@@ -3704,7 +3713,7 @@ namespace Sem.Web.Data.Migrations
 
             modelBuilder.Entity("Sem.Web.Runtime.PasskeyRecoveryOperation", b =>
                 {
-                    b.HasOne("Sem.Web.Data.ApplicationUser", null).WithMany().HasForeignKey("AdminId").OnDelete(DeleteBehavior.Restrict).IsRequired();
+                    b.HasOne("Sem.Web.Data.ApplicationUser", null).WithMany().HasForeignKey("AdminId").OnDelete(DeleteBehavior.Restrict);
                     b.HasOne("Sem.Web.Data.ApplicationUser", null).WithMany().HasForeignKey("UserId").OnDelete(DeleteBehavior.Restrict).IsRequired();
                 });
 

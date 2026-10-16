@@ -56,7 +56,8 @@ public sealed class PasskeyRecoveryService(
         var user = await db.Users.AsNoTracking().SingleOrDefaultAsync(x => x.Id == targetUserId, ct);
         if (user is null) return null;
         var operation = await db.PasskeyRecoveryOperations.AsNoTracking()
-            .Where(x => x.UserId == user.Id && x.DisabledForRecovery &&
+            .Where(x => x.UserId == user.Id && x.RecoveryMode == "Administrator" &&
+                x.DisabledForRecovery &&
                 (x.Status == "Pending" || x.Status == "EmailConfirmed" || x.Status == "Expired") &&
                 x.SecurityStamp == user.SecurityStamp &&
                 x.EmailHash == EmailHash(user.Email ?? ""))
@@ -147,7 +148,8 @@ public sealed class PasskeyRecoveryService(
 
         var now = Now;
         var operation = await db.PasskeyRecoveryOperations.SingleOrDefaultAsync(x => x.UserId == target.Id, ct);
-        if (operation is not null && operation.Status is ("Pending" or "EmailConfirmed") &&
+        if (operation is not null && operation.RecoveryMode == "Administrator" &&
+            operation.Status is ("Pending" or "EmailConfirmed") &&
             operation.ExpiresAt > now)
             throw new ValidationException("このアカウントには有効な復旧処理があります。");
         var token = NewSecret();
@@ -163,6 +165,10 @@ public sealed class PasskeyRecoveryService(
             db.PasskeyRecoveryOperations.Add(operation);
         }
         operation.AdminId = liveAdmin.Id;
+        operation.RecoveryMode = "Administrator";
+        operation.ActorType = "Administrator";
+        operation.ActorId = liveAdmin.Id;
+        operation.BackupId = null;
         operation.Reason = safeReason;
         operation.Status = "Pending";
         operation.EmailHash = EmailHash(target.Email!);
@@ -196,11 +202,114 @@ public sealed class PasskeyRecoveryService(
         AdmitSend(rate, now);
         QueueMail(operation, target.Email!, "RecoveryLink",
             RecoveryMailBody(operation, token), now, expiry, tokenHash);
-        db.PasskeyRecoveryAudits.Add(new()
+        db.PasskeyRecoveryAudits.Add(NewAudit(operation, "RecoveryStarted", now));
+        await db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
+        return new(operation.Id, DateTimeOffset.FromUnixTimeSeconds(expiry), MaskEmail(target.Email));
+    }
+
+    /// <summary>
+    /// Called only by the internal offline emergency-recovery command after it has
+    /// validated the host operator and created a verified database/key-ring backup.
+    /// Preparing mail is deliberately non-destructive; credential revocation is
+    /// deferred until the recipient proves control of the saved email address.
+    /// </summary>
+    internal async Task<PasskeyRecoveryStartResult> PrepareHostEmergencyAsync(
+        string targetUserId, string reason, string operatorId, string backupId,
+        string expectedSecurityStamp,
+        CancellationToken ct = default)
+    {
+        if (!notifications.EmailConfigured)
+            throw new ValidationException("SMTPを設定してから緊急復旧を準備してください。");
+        var safeReason = NormalizeReason(reason);
+        if (string.IsNullOrWhiteSpace(operatorId) || operatorId.Length > 128 ||
+            operatorId.Any(char.IsControl))
+            throw new ValidationException("ホスト操作者を確認できません。");
+        if (string.IsNullOrWhiteSpace(backupId) || backupId.Length != 64 ||
+            backupId.Any(c => !Uri.IsHexDigit(c)))
+            throw new ValidationException("検証済みバックアップ識別子が必要です。");
+        backupId = backupId.ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(expectedSecurityStamp) || expectedSecurityStamp.Length > 256)
+            throw new ValidationException("バックアップに結び付いたセキュリティスタンプが必要です。");
+
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        var target = await db.Users.SingleOrDefaultAsync(x => x.Id == targetUserId, ct);
+        if (target is not null)
+            await db.Entry(target).ReloadAsync(ct);
+        if (target is null || !target.EmailConfirmed || string.IsNullOrWhiteSpace(target.Email))
+            throw new ValidationException("対象アカウントの保存済み確認メールを確認できません。");
+        if (string.IsNullOrWhiteSpace(target.SecurityStamp) ||
+            !FixedEquals(target.SecurityStamp, expectedSecurityStamp))
+            throw new ValidationException("バックアップ取得後に対象アカウントの状態が変わりました。");
+        var now = Now;
+        var operation = await db.PasskeyRecoveryOperations
+            .SingleOrDefaultAsync(x => x.UserId == target.Id, ct);
+        var recoveryRestart = operation is not null &&
+            IsHostRecoveryDisabledBinding(operation, target) &&
+            (operation.Status is "EmailConfirmed" or "Expired" or "HostPrepared") &&
+            !(operation.Status == "EmailConfirmed" && operation.GrantExpiresAt > now);
+
+        if (target.Enabled)
         {
-            OperationId = operation.Id, AdminId = liveAdmin.Id, TargetUserId = target.Id,
-            Action = "RecoveryStarted", Reason = safeReason, At = now
-        });
+            if (!await IsSoleEnabledConfirmedAdminAsync(target, ct))
+                throw new ValidationException("ホスト緊急復旧は唯一の有効な確認済み全体管理者に限られます。");
+            if (operation is not null && operation.Status is ("Pending" or "HostPrepared") &&
+                operation.ExpiresAt > now)
+                throw new ValidationException("このアカウントには有効な復旧メールが既にあります。");
+        }
+        else if (!recoveryRestart)
+        {
+            throw new ValidationException("無効化された対象は、このホスト緊急復旧の記録と一致しません。");
+        }
+        if (operation?.Status == "HostPrepared" && operation.ExpiresAt > now)
+            throw new ValidationException("有効なホスト緊急復旧メールが既にあります。");
+
+        var rate = await RateAsync(target.Id, ct);
+        GateFailures(rate.EmailFailures, now);
+        GateSend(rate, now);
+        var token = NewSecret();
+        var expiry = now + OperationSeconds;
+        if (operation is null)
+        {
+            operation = new()
+            {
+                UserId = target.Id,
+                CreatedAt = now,
+                ExpiresAt = expiry,
+                DisabledForRecovery = false
+            };
+            db.PasskeyRecoveryOperations.Add(operation);
+        }
+        operation.AdminId = null;
+        operation.RecoveryMode = "HostEmergency";
+        operation.ActorType = "HostOperator";
+        operation.ActorId = operatorId.Trim();
+        operation.BackupId = backupId;
+        operation.Reason = safeReason;
+        operation.Status = "HostPrepared";
+        operation.EmailHash = EmailHash(target.Email);
+        operation.SecurityStamp = target.SecurityStamp ?? "";
+        operation.TokenHash = SemEndpoints.Hash(token);
+        operation.GrantHash = null;
+        operation.GrantExpiresAt = null;
+        operation.EmailVerifiedAt = null;
+        operation.CreationChallengeHash = null;
+        operation.CreatedAt = now;
+        operation.ExpiresAt = expiry;
+        operation.LastSentAt = now;
+        operation.DisabledForRecovery = recoveryRestart;
+        operation.RowVersion = checked(operation.RowVersion + 1);
+        await db.PasskeyRecoveryMails.Where(x => x.OperationId == operation.Id &&
+            x.Kind == "RecoveryLink" && x.Status != "Sent")
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.Status, "Cancelled")
+                .SetProperty(x => x.ProtectedPayload, "")
+                .SetProperty(x => x.ProofHash, (string?)null)
+                .SetProperty(x => x.Claim, (string?)null)
+                .SetProperty(x => x.LeaseUntil, (long?)null), ct);
+        AdmitSend(rate, now);
+        QueueMail(operation, target.Email, "RecoveryLink",
+            RecoveryMailBody(operation, token), now, expiry, operation.TokenHash);
+        db.PasskeyRecoveryAudits.Add(NewAudit(operation, "RecoveryHostPrepared", now));
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
         return new(operation.Id, DateTimeOffset.FromUnixTimeSeconds(expiry), MaskEmail(target.Email));
@@ -283,6 +392,10 @@ public sealed class PasskeyRecoveryService(
         operation.CreationChallengeHash = null;
         operation.LastSentAt = Now;
         operation.AdminId = liveAdmin.Id;
+        operation.RecoveryMode = "Administrator";
+        operation.ActorType = "Administrator";
+        operation.ActorId = liveAdmin.Id;
+        operation.BackupId = null;
         operation.RowVersion = checked(operation.RowVersion + 1);
         await db.PasskeyRecoveryMails.Where(x => x.OperationId == operation.Id &&
             x.Kind == "RecoveryLink" && x.Status != "Sent")
@@ -292,11 +405,7 @@ public sealed class PasskeyRecoveryService(
         AdmitSend(rate, Now);
         QueueMail(operation, target.Email!, "RecoveryLink",
             RecoveryMailBody(operation, token), Now, operation.ExpiresAt, operation.TokenHash);
-        db.PasskeyRecoveryAudits.Add(new()
-        {
-            OperationId = operation.Id, AdminId = liveAdmin.Id, TargetUserId = target.Id,
-            Action = "RecoveryMailResent", Reason = operation.Reason, At = Now
-        });
+        db.PasskeyRecoveryAudits.Add(NewAudit(operation, "RecoveryMailResent", Now));
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
         return new(operation.Id, DateTimeOffset.FromUnixTimeSeconds(operation.ExpiresAt), MaskEmail(target.Email));
@@ -311,19 +420,30 @@ public sealed class PasskeyRecoveryService(
         var rate = await RateAsync(operation.UserId, ct);
         GateFailures(rate.EmailFailures, Now);
         var user = await db.Users.SingleOrDefaultAsync(x => x.Id == operation.UserId, ct);
-        var valid = user is not null && operation.Status == "Pending" &&
-            operation.ExpiresAt > Now && operation.DisabledForRecovery && !user.Enabled &&
+        var now = Now;
+        var boundToSavedAccount = user is not null && operation.ExpiresAt > now &&
             user.EmailConfirmed && !string.IsNullOrWhiteSpace(user.Email) &&
             operation.SecurityStamp == user.SecurityStamp &&
-            operation.EmailHash == EmailHash(user.Email) && TokenMatches(operation.TokenHash, token);
+            operation.EmailHash == EmailHash(user.Email);
+        var adminRecovery = boundToSavedAccount && operation.RecoveryMode == "Administrator" &&
+            operation.Status == "Pending" && operation.DisabledForRecovery && !user!.Enabled;
+        var hostPrepared = false;
+        if (boundToSavedAccount && operation.RecoveryMode == "HostEmergency" &&
+            operation.Status == "HostPrepared")
+        {
+            hostPrepared = user!.Enabled
+                ? await IsSoleEnabledConfirmedAdminAsync(user, ct)
+                : IsHostRecoveryDisabledBinding(operation, user);
+        }
+        var valid = (adminRecovery || hostPrepared) && TokenMatches(operation.TokenHash, token);
         if (!valid)
         {
-            AddFailure(rate, Now, proof: false);
-            if (operation.Status == "Pending" &&
-                ReadTimes(rate.EmailFailures).Count(x => x > Now - 900) >= 5)
+            AddFailure(rate, now, proof: false);
+            if ((operation.Status is "Pending" or "HostPrepared") &&
+                ReadTimes(rate.EmailFailures).Count(x => x > now - 900) >= 5)
             {
                 operation.Status = "Expired";
-                operation.ExpiresAt = Math.Min(operation.ExpiresAt, Now);
+                operation.ExpiresAt = Math.Min(operation.ExpiresAt, now);
                 operation.TokenHash = null;
                 operation.GrantHash = null;
                 operation.GrantExpiresAt = null;
@@ -345,26 +465,40 @@ public sealed class PasskeyRecoveryService(
             await tx.CommitAsync(ct);
             throw new ValidationException("復旧リンクは無効または期限切れです。");
         }
+        if (hostPrepared)
+        {
+            var target = user!;
+            target.Enabled = false;
+            target.SecurityStamp = Guid.NewGuid().ToString("N");
+            var updated = await users.UpdateAsync(target);
+            if (!updated.Succeeded)
+                throw new ValidationException("ホスト緊急復旧で対象を無効化できませんでした。");
+            var oldPasskeys = await db.Set<IdentityUserPasskey<string>>()
+                .Where(x => x.UserId == target.Id).ToListAsync(ct);
+            db.RemoveRange(oldPasskeys);
+            await InvalidateOtherCredentialFlowsAsync(target.Id, ct);
+            await db.PushDevices.Where(x => x.UserId == target.Id).ExecuteDeleteAsync(ct);
+            operation.SecurityStamp = target.SecurityStamp!;
+            operation.DisabledForRecovery = true;
+            db.PasskeyRecoveryAudits.Add(NewAudit(operation, "RecoveryHostReset", now));
+        }
         var grant = NewSecret();
-        var grantExpires = Math.Min(operation.ExpiresAt, Now + RegistrationSeconds);
+        var grantExpires = Math.Min(operation.ExpiresAt, now + RegistrationSeconds);
         operation.TokenHash = null;
         operation.GrantHash = SemEndpoints.Hash(grant);
         operation.GrantExpiresAt = grantExpires;
-        operation.EmailVerifiedAt = Now;
+        operation.EmailVerifiedAt = now;
         operation.CreationChallengeHash = null;
         operation.Status = "EmailConfirmed";
         operation.RowVersion = checked(operation.RowVersion + 1);
-        ClearExpired(rate, Now);
+        ClearExpired(rate, now);
         await db.PasskeyRecoveryMails.Where(x => x.OperationId == operation.Id &&
             x.Kind == "RecoveryLink" && x.Status != "Sent")
             .ExecuteUpdateAsync(s => s.SetProperty(x => x.Status, "Cancelled")
-                .SetProperty(x => x.ProtectedPayload, "").SetProperty(x => x.Claim, (string?)null)
+                .SetProperty(x => x.ProtectedPayload, "").SetProperty(x => x.ProofHash, (string?)null)
+                .SetProperty(x => x.Claim, (string?)null)
                 .SetProperty(x => x.LeaseUntil, (long?)null), ct);
-        db.PasskeyRecoveryAudits.Add(new()
-        {
-            OperationId = operation.Id, AdminId = operation.AdminId, TargetUserId = operation.UserId,
-            Action = "RecoveryEmailConfirmed", Reason = operation.Reason, At = Now
-        });
+        db.PasskeyRecoveryAudits.Add(NewAudit(operation, "RecoveryEmailConfirmed", now));
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
         return new(operation.UserId, grant, DateTimeOffset.FromUnixTimeSeconds(grantExpires));
@@ -413,11 +547,7 @@ public sealed class PasskeyRecoveryService(
             "SEM パスキー復旧完了",
             "アカウントのパスキーが再登録され、通常利用が再開されました。本人の操作でない場合は管理者へ連絡してください。");
         QueueProtectedMail(operation, "RecoveryComplete", mail, Now, Now + 7 * 86400, null);
-        db.PasskeyRecoveryAudits.Add(new()
-        {
-            OperationId = operation.Id, AdminId = operation.AdminId, TargetUserId = target.Id,
-            Action = "RecoveryCompleted", Reason = operation.Reason, At = Now
-        });
+        db.PasskeyRecoveryAudits.Add(NewAudit(operation, "RecoveryCompleted", Now));
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
     }
@@ -434,22 +564,40 @@ public sealed class PasskeyRecoveryService(
             .Where(x => x.UserId == target.Id)
             .OrderByDescending(x => x.CreatedAt).FirstOrDefaultAsync(ct);
         var provenRecoveryDisabled = !target.Enabled && previous is not null &&
+            previous.RecoveryMode == "Administrator" &&
             previous.DisabledForRecovery &&
             previous.SecurityStamp == target.SecurityStamp &&
             previous.EmailHash == EmailHash(target.Email) &&
             (previous.Status == "Pending" || previous.Status == "EmailConfirmed" || previous.Status == "Expired");
         if (!target.Enabled && !provenRecoveryDisabled)
             throw new ValidationException("管理者が無効化したアカウントはこの手順で復旧できません。");
-        if (target.Enabled && previous is { Status: "Pending" or "EmailConfirmed" } &&
+        if (target.Enabled && previous is { Status: "Pending" or "HostPrepared" or "EmailConfirmed" } &&
             previous.ExpiresAt > Now)
             throw new ValidationException("このアカウントには有効な復旧処理があります。");
         return target;
     }
 
+    async Task<bool> IsSoleEnabledConfirmedAdminAsync(
+        ApplicationUser target, CancellationToken ct)
+    {
+        if (!target.Enabled || !target.EmailConfirmed || !target.IsAdmin ||
+            string.IsNullOrWhiteSpace(target.Email))
+            return false;
+        return await db.Users.CountAsync(x => x.Enabled && x.EmailConfirmed && x.IsAdmin, ct) == 1;
+    }
+
+    bool IsHostRecoveryDisabledBinding(
+        PasskeyRecoveryOperation operation, ApplicationUser target) =>
+        !target.Enabled && target.EmailConfirmed && !string.IsNullOrWhiteSpace(target.Email) &&
+        operation.RecoveryMode == "HostEmergency" && operation.DisabledForRecovery &&
+        operation.SecurityStamp == target.SecurityStamp &&
+        operation.EmailHash == EmailHash(target.Email);
+
     async Task<PasskeyRecoveryOperation> RequirePendingOperationAsync(string operationId, CancellationToken ct)
     {
         var operation = await db.PasskeyRecoveryOperations.SingleOrDefaultAsync(x => x.Id == operationId, ct);
-        if (operation is null || operation.Status != "Pending" ||
+        if (operation is null || operation.RecoveryMode != "Administrator" ||
+            operation.Status != "Pending" ||
             operation.ExpiresAt <= Now || !operation.DisabledForRecovery)
             throw new ValidationException("復旧処理は無効または期限切れです。");
         return operation;
@@ -538,6 +686,20 @@ public sealed class PasskeyRecoveryService(
         state.RowVersion = checked(state.RowVersion + 1);
     }
 
+    PasskeyRecoveryAudit NewAudit(PasskeyRecoveryOperation operation, string action, long at) =>
+        new()
+        {
+            OperationId = operation.Id,
+            AdminId = operation.AdminId,
+            ActorType = operation.ActorType,
+            ActorId = operation.ActorId,
+            BackupId = operation.BackupId,
+            TargetUserId = operation.UserId,
+            Action = action,
+            Reason = operation.Reason,
+            At = at
+        };
+
     void QueueMail(PasskeyRecoveryOperation operation, string recipient, string kind,
         string body, long now, long expiry, string? tokenHash)
     {
@@ -561,7 +723,10 @@ public sealed class PasskeyRecoveryService(
     {
         var link = settings.PublicUrl.TrimEnd('/') + "/recovery#op=" +
             Uri.EscapeDataString(operation.Id) + "&token=" + Uri.EscapeDataString(token);
-        return $"管理者の承認により、パスキー復旧が開始されました。\n" +
+        var intro = operation.RecoveryMode == "HostEmergency"
+            ? "ホスト運用者による緊急復旧の準備が行われました。メール確認後に認証情報がリセットされます。"
+            : "管理者の承認により、パスキー復旧が開始されました。";
+        return $"{intro}\n" +
             $"理由: {operation.Reason}\nこの操作は15分で期限切れになります。\n" +
             $"登録済みの新しいパスキーだけを設定してください。\n{link}\n" +
             "本人が依頼していない場合は、リンクを開かず管理者へ連絡してください。";
@@ -645,6 +810,8 @@ public sealed class PasskeyRecoveryService(
     async Task InvalidateOtherCredentialFlowsAsync(string userId, CancellationToken ct)
     {
         await db.EmailTickets.Where(x => x.UserId == userId && !x.Used)
+            .ExecuteDeleteAsync(ct);
+        await db.PasskeyRecoveryAdminChallenges.Where(x => x.TargetUserId == userId)
             .ExecuteDeleteAsync(ct);
         await db.PasskeyAdditions.Where(x => x.UserId == userId && !x.Cancelled && x.CompletedAt == null)
             .ExecuteUpdateAsync(s => s.SetProperty(x => x.Cancelled, true)
