@@ -25,6 +25,8 @@ module.exports=async({p,g,ok})=>{
   await w.waitForFunction(()=>!document.querySelector('.comment-composer')?.open&&document.activeElement===document.getElementById('comment-compose-open'));
   ok(await w.locator('#comment-compose-open').evaluate(e=>e===document.activeElement),'Closing embedded composer restores trigger focus');
   await w.locator('#comment-compose-open').click();
+  await w.locator('.comment-composer[open]').waitFor();
+  await w.waitForFunction(()=>document.activeElement===document.getElementById('comment-body'));
   ok(await w.locator('#comment-body').inputValue()==='Embedded standalone text <img src=x>','Closing composer preserves its unsubmitted body');
   await w.keyboard.press('Escape');
   await w.waitForFunction(()=>!document.querySelector('.comment-composer')?.open&&document.activeElement===document.getElementById('comment-compose-open'));
