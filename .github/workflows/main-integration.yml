@@ -59,6 +59,17 @@ jobs:
         env:
           NODE_PATH: ${{ runner.temp }}/sem-browser/node_modules
         run: bash scripts/acceptance-browser-fixture.sh
+      - name: Summarize failed acceptance location without private logs
+        if: failure()
+        run: |
+          python3 - <<'PYCODE'
+          import json,pathlib,re
+          root=pathlib.Path('verification/acceptance-native')
+          result=json.loads((root/'e2e-result.json').read_text()) if (root/'e2e-result.json').exists() else {'passed':0,'checks':[]}
+          frames=re.findall(r'scripts/[A-Za-z0-9_-]+\.cjs:[0-9]+:[0-9]+',(root/'e2e-error.txt').read_text()) if (root/'e2e-error.txt').exists() else []
+          last=result['checks'][-1] if result['checks'] else 'No browser check completed'
+          print('::error title=Acceptance failure location::passed='+str(result['passed'])+'; last='+last+'; frames='+','.join(frames))
+          PYCODE
       - uses: actions/upload-artifact@v4
         if: always()
         with:
