@@ -23,12 +23,20 @@ jobs:
       - name: Record source and validate scripts
         run: |
           set -euo pipefail
-          bash -n scripts/integration-checks.sh
+          bash -n scripts/integration-checks.sh scripts/build-integration-projects.sh
           mkdir -p verification
           printf 'event=%s\nref=%s\nsha=%s\n' "$GITHUB_EVENT_NAME" "$GITHUB_REF" "$GITHUB_SHA" > verification/event.txt
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
+      - name: Cache NuGet packages (never build outputs)
+        continue-on-error: true # Cache availability is optional; verification is not.
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-dotnet10-nuget-v1-integration-${{ hashFiles('**/*.csproj', '**/*.props', '**/*.targets', '**/packages.lock.json', '**/NuGet.Config', 'global.json') }}
+          restore-keys: |
+            ${{ runner.os }}-dotnet10-nuget-v1-integration-
       - name: Verify exact merged tree without deployment
         run: bash scripts/integration-checks.sh
       - uses: actions/upload-artifact@v4
@@ -48,6 +56,14 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
+      - name: Cache NuGet packages (never build outputs)
+        continue-on-error: true # Cache availability is optional; verification is not.
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-dotnet10-nuget-v1-browser-${{ hashFiles('**/*.csproj', '**/*.props', '**/*.targets', '**/packages.lock.json', '**/NuGet.Config', 'global.json') }}
+          restore-keys: |
+            ${{ runner.os }}-dotnet10-nuget-v1-browser-
       - uses: actions/setup-node@v4
         with:
           node-version: '22'

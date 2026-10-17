@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 mkdir -p verification
-bash -n scripts/integration-checks.sh
+printf 'phase\tseconds\n' > verification/timings.tsv
+phase_started=$SECONDS
+bash -n scripts/integration-checks.sh scripts/build-integration-projects.sh
+python3 tests/ci-build-graph-checks.py
 printf 'Checked commit: %s\nTree: %s\n' "$(git rev-parse HEAD)" "$(git rev-parse HEAD^{tree})" | tee verification/source.txt
 if [[ ! -f src/Sem.Web/Sem.Web.csproj ]]; then
   if [[ -n $(git log -1 --format=%H -- src/Sem.Web/Sem.Web.csproj) ]]; then
@@ -43,18 +46,23 @@ node --check src/Sem.Web/wwwroot/inbox.js
 node --check scripts/application-inbox-ui-checks.mjs
 node scripts/application-inbox-ui-checks.mjs 2>&1 | tee verification/application-inbox-ui.log
 # Use default NuGet auditing. Historical dependency warnings are recorded, not suppressed.
-dotnet build src/Sem.Web/Sem.Web.csproj -c Release 2>&1 | tee verification/build.log
+printf 'synthetic-ui\t%s\n' "$((SECONDS-phase_started))" >> verification/timings.tsv
+phase_started=$SECONDS
+bash scripts/build-integration-projects.sh 2>&1 | tee verification/build.log
+printf 'restore-build-all\t%s\n' "$((SECONDS-phase_started))" >> verification/timings.tsv
+phase_started=$SECONDS
 suites=0
 shopt -s nullglob
 for project in tests/*/*.csproj; do
   name=$(basename "$(dirname "$project")")
-  dotnet build "$project" -c Release 2>&1 | tee "verification/${name}-build.log"
+  suite_started=$SECONDS
   # Tests may use synthetic loopback fixtures but cannot reach an external provider.
   output_type=$(dotnet msbuild "$project" -getProperty:OutputType -nologo)
   command=run; project_flag=--project
   if [[ $output_type != Exe && $output_type != WinExe ]]; then command=test; project_flag=; fi
   # Drop root/capabilities/supplementary groups and forbid privilege escalation.
   sudo -E unshare --net bash -c 'set -euo pipefail; ip link set lo up; exec setpriv --reuid="$2" --regid=65534 --clear-groups --no-new-privs --bounding-set=-all --inh-caps=-all --ambient-caps=-all "$3" "$4" ${5:+"$5"} "$1" -c Release --no-build --no-restore' bash "$project" "$(id -u)" "$(command -v dotnet)" "$command" "$project_flag" 2>&1 | tee "verification/${name}.log"
+  printf 'suite:%s\t%s\n' "$name" "$((SECONDS-suite_started))" >> verification/timings.tsv
   suites=$((suites+1))
 done
 if [[ $suites -eq 0 ]]; then
@@ -65,6 +73,8 @@ if [[ $suites -eq 0 ]]; then
 else
  printf 'All %s .NET suites passed.\n' "$suites" | tee verification/suites.txt
 fi
+printf 'all-suites\t%s\n' "$((SECONDS-phase_started))" >> verification/timings.tsv
+phase_started=$SECONDS
 dotnet publish src/Sem.Web/Sem.Web.csproj -c Release --no-build -o /tmp/sem-integration-publish 2>&1 | tee verification/publish.log
 docker build --platform linux/amd64 -t sem-integration:check -f deploy/Dockerfile . 2>&1 | tee verification/docker-build.log
 # Verify the final image as its configured non-root user, before starting it.
@@ -80,6 +90,8 @@ docker run --rm --network none --read-only --cap-drop ALL \
  test -x /app
  echo "Non-root application files: readable and not writable."
 ' 2>&1 | tee verification/docker-file-permissions.log
+printf 'publish-docker-build\t%s\n' "$((SECONDS-phase_started))" >> verification/timings.tsv
+phase_started=$SECONDS
 docker volume create sem-integration-data
 cleanup() {
  docker logs sem-integration > verification/storage.log 2>&1 || true
@@ -109,3 +121,5 @@ sleep 2
 ready
 cp verification/ready.json verification/restart-ready.json
 echo 'Isolated Docker empty storage initial start/restart passed; no browser/device/production acceptance.' | tee verification/smoke.txt
+
+printf 'docker-smoke\t%s\n' "$((SECONDS-phase_started))" >> verification/timings.tsv
