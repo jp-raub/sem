@@ -16,6 +16,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Sem.Web.Core;
 using Sem.Web.Data;
@@ -47,7 +48,9 @@ builder.Services.AddSingleton(new DeploymentSettings { PublicUrl = Origin + "/" 
 builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
 {
     ["Smtp:Host"] = "synthetic.invalid",
-    ["Smtp:From"] = "noreply@example.test"
+    ["Smtp:From"] = "noreply@example.test",
+    ["Push:PublicKey"] = "synthetic-push-public-key",
+    ["Push:PrivateKey"] = "synthetic-push-private-key"
 });
 builder.Services.AddSingleton<NotificationService>();
 builder.Services.AddScoped<PasskeyAdditionService>();
@@ -134,6 +137,91 @@ void Check(bool condition, string name)
 
 try
 {
+    // Keep this fixture separate from the normal migration path: the unique
+    // filtered index must fail closed rather than repair existing duplicates.
+    var duplicateDbPath = Path.Combine(root, "preexisting-duplicate-request-id.db");
+    var duplicateServices = new ServiceCollection();
+    duplicateServices.AddLogging();
+    duplicateServices.AddDbContextFactory<ApplicationDbContext>(options =>
+        options.UseSqlite($"Data Source={duplicateDbPath};Default Timeout=10"));
+    duplicateServices.AddIdentityCore<ApplicationUser>(options =>
+        {
+            options.Stores.SchemaVersion = IdentitySchemaVersions.Version3;
+            options.User.RequireUniqueEmail = true;
+        })
+        .AddEntityFrameworkStores<ApplicationDbContext>();
+    await using (var duplicateProvider = duplicateServices.BuildServiceProvider())
+    {
+        await using var duplicateDb = await duplicateProvider
+            .GetRequiredService<IDbContextFactory<ApplicationDbContext>>().CreateDbContextAsync();
+        await duplicateDb.GetService<IMigrator>().MigrateAsync(PreviousMigration);
+        await duplicateDb.Database.OpenConnectionAsync();
+        try
+        {
+            await using var command = (SqliteCommand)duplicateDb.Database.GetDbConnection().CreateCommand();
+            command.CommandText = """
+                INSERT INTO "Invitations"
+                    ("Id","TokenHash","OwnerId","IssuerId","RequestId","Limit","Uses","Expires","Created","Disabled","RevokedBy","RevocationReason","RevokedAt","ProtectedToken")
+                VALUES ($id,$hash,$owner,$issuer,$requestId,2,0,200000,100000,0,NULL,NULL,NULL,$protected)
+                """;
+            foreach (var id in new[] { "duplicate-a", "duplicate-b" })
+            {
+                command.Parameters.Clear();
+                command.Parameters.AddWithValue("$id", id);
+                command.Parameters.AddWithValue("$hash", SemEndpoints.Hash("synthetic-token-" + id));
+                command.Parameters.AddWithValue("$owner", "member");
+                command.Parameters.AddWithValue("$issuer", "admin");
+                command.Parameters.AddWithValue("$requestId", "preexisting-duplicate-request");
+                command.Parameters.AddWithValue("$protected", "synthetic-protected-" + id);
+                await command.ExecuteNonQueryAsync();
+            }
+        }
+        finally { await duplicateDb.Database.CloseConnectionAsync(); }
+
+        Exception? migrationFailure = null;
+        try { await duplicateDb.Database.MigrateAsync(); }
+        catch (Exception error) when (HasSqliteException(error)) { migrationFailure = error; }
+        Check(migrationFailure is not null &&
+              ExceptionMessages(migrationFailure).Contains("UNIQUE", StringComparison.OrdinalIgnoreCase),
+            "pre-existing duplicate non-null RequestIds stop migration at the unique index");
+
+        await duplicateDb.Database.OpenConnectionAsync();
+        try
+        {
+            await using var command = (SqliteCommand)duplicateDb.Database.GetDbConnection().CreateCommand();
+            command.CommandText = """
+                SELECT "Id" || '|' || "RequestId" || '|' || COALESCE("Purpose", '<null>') || '|' ||
+                       COALESCE("IssuanceSource", '<null>')
+                FROM "Invitations" WHERE "RequestId" = 'preexisting-duplicate-request'
+                ORDER BY "Id"
+                """;
+            var afterRows = new List<string>();
+            await using (var reader = await command.ExecuteReaderAsync())
+                while (await reader.ReadAsync()) afterRows.Add(reader.GetString(0));
+            Check(afterRows.SequenceEqual([
+                    "duplicate-a|preexisting-duplicate-request|<null>|<null>",
+                    "duplicate-b|preexisting-duplicate-request|<null>|<null>"
+                ]),
+                "failed unique-index migration leaves duplicate rows and nullable metadata unrepaired");
+
+            command.CommandText = """
+                SELECT COUNT(*) FROM "__EFMigrationsHistory"
+                WHERE "MigrationId" = '20261017032500_AddInvitationRequestDecisionAndUniqueRequestIndex'
+                """;
+            Check(Convert.ToInt64(await command.ExecuteScalarAsync(), CultureInfo.InvariantCulture) == 0,
+                "failed duplicate migration is not recorded as applied");
+            command.CommandText = """
+                SELECT COUNT(*) FROM "sqlite_master"
+                WHERE "type" = 'index' AND "name" = 'IX_Invitations_RequestId'
+                """;
+            Check(Convert.ToInt64(await command.ExecuteScalarAsync(), CultureInfo.InvariantCulture) == 0,
+                "failed duplicate migration leaves no partial unique index");
+        }
+        finally { await duplicateDb.Database.CloseConnectionAsync(); }
+    }
+
+    var tokenProtector = app.Services.GetRequiredService<IDataProtectionProvider>()
+        .CreateProtector("SEM.Tokens.v1");
     await using (var scope = app.Services.CreateAsyncScope())
     {
         var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
@@ -158,7 +246,22 @@ try
             command.Parameters.AddWithValue("$issuer", "admin");
             command.Parameters.AddWithValue("$expires", SemEndpoints.Now + 86400);
             command.Parameters.AddWithValue("$created", SemEndpoints.Now - 10);
-            command.Parameters.AddWithValue("$protected", "synthetic-old-protected-token");
+            command.Parameters.AddWithValue("$protected", tokenProtector.Protect("old-baseline-secret"));
+            await command.ExecuteNonQueryAsync();
+
+            command.CommandText = """
+                INSERT INTO "Invitations"
+                    ("Id","TokenHash","OwnerId","IssuerId","RequestId","Limit","Uses","Expires","Created","Disabled","RevokedBy","RevocationReason","RevokedAt","ProtectedToken")
+                VALUES ($id,$hash,$owner,$issuer,NULL,2,0,$expires,$created,0,NULL,NULL,NULL,$protected)
+                """;
+            command.Parameters.Clear();
+            command.Parameters.AddWithValue("$id", "legacy-member-owned");
+            command.Parameters.AddWithValue("$hash", SemEndpoints.Hash("snapshot-member-secret"));
+            command.Parameters.AddWithValue("$owner", "member");
+            command.Parameters.AddWithValue("$issuer", "admin");
+            command.Parameters.AddWithValue("$expires", SemEndpoints.Now + 86400);
+            command.Parameters.AddWithValue("$created", SemEndpoints.Now - 9);
+            command.Parameters.AddWithValue("$protected", tokenProtector.Protect("snapshot-member-secret"));
             await command.ExecuteNonQueryAsync();
         }
         finally { await db.Database.CloseConnectionAsync(); }
@@ -190,6 +293,19 @@ try
     var adminSyntheticCsrf = await GetCsrfAsync(client, actor: "admin");
     var staleAdminCsrf = await GetCsrfAsync(client, actor: "admin", stamp: "stale-admin-stamp");
     var memberCsrf = await GetCsrfAsync(client, actor: "member");
+
+    using (var response = await SendAsync(HttpMethod.Get, "/api/snapshot", content: null,
+        adminSyntheticCsrf, actor: "admin"))
+    {
+        Check(response.StatusCode == HttpStatusCode.OK && response.Headers.CacheControl?.NoStore == true,
+            "legacy administrator snapshot remains no-store");
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var otherOwner = json.RootElement.GetProperty("invites").EnumerateArray()
+            .Single(x => x.GetProperty("id").GetString() == "legacy-member-owned");
+        Check(otherOwner.GetProperty("link").ValueKind == JsonValueKind.Null &&
+              !json.RootElement.GetRawText().Contains("snapshot-member-secret", StringComparison.Ordinal),
+            "legacy snapshot with administrator scope never exposes another owner's link");
+    }
 
     async Task<HttpResponseMessage> SendAsync(HttpMethod method, string path, HttpContent? content,
         CsrfTokens csrf, string? actor = "admin", string? stamp = null, string? session = null,
@@ -302,6 +418,116 @@ try
     using (var response = await IssueAsync("authenticated cookie", 1, 1, csrf: adminCookieCsrf,
         actor: null, applicationCookie: adminCookie))
         Check(response.StatusCode == HttpStatusCode.OK, "real Identity.Application cookie is accepted for live admin");
+
+    const string raceRequestId = "legacy-new-decision-race";
+    await using (var scope = app.Services.CreateAsyncScope())
+    {
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        db.InvitationRequests.Add(new InvitationRequest
+        {
+            Id = raceRequestId, UserId = "member", Reason = "synthetic race fixture",
+            Count = 2, Days = 3, Status = "Pending", Created = SemEndpoints.Now
+        });
+        await db.SaveChangesAsync();
+    }
+    var legacyDecision = SendAsync(HttpMethod.Post, "/api/decide-invitation",
+        JsonContent.Create(new { id = raceRequestId, approve = true, comment = "legacy path" }),
+        adminSyntheticCsrf, actor: "admin");
+    var currentDecision = SendAsync(HttpMethod.Post,
+        "/api/core/invitations/decide?expectedActor=admin",
+        JsonContent.Create(new { id = raceRequestId, approve = true, comment = "current path" }),
+        adminSyntheticCsrf, actor: "admin");
+    using (var legacyResponse = await legacyDecision)
+    using (var currentResponse = await currentDecision)
+    {
+        var successCount = new[] { legacyResponse, currentResponse }
+            .Count(x => x.StatusCode == HttpStatusCode.OK);
+        Check(successCount == 1,
+            "simultaneous legacy and current decisions have exactly one successful claimant");
+        Check(new[] { legacyResponse, currentResponse }.Single(x => x.StatusCode != HttpStatusCode.OK)
+                .StatusCode == HttpStatusCode.Conflict,
+            "simultaneous legacy and current decisions reject the losing claimant with conflict");
+    }
+    await using (var scope = app.Services.CreateAsyncScope())
+    {
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var raced = await db.InvitationRequests.SingleAsync(x => x.Id == raceRequestId);
+        var issued = await db.Invitations.Where(x => x.RequestId == raceRequestId).ToListAsync();
+        Check(raced.Status == "Approved" && raced.DecidedBy == "admin" &&
+              raced.DecisionComment is "legacy path" or "current path" && issued.Count == 1,
+            "legacy/current decision race commits one approved request and one invitation");
+        Check(await db.Audits.CountAsync(x => x.Action == "InvitationApproved" && x.EntityId == raceRequestId) == 1 &&
+              await db.Audits.CountAsync(x => x.Action == "InvitationIssued" && x.EntityId == issued[0].Id) == 1 &&
+              await db.Messages.CountAsync(x => x.UserId == "member" &&
+                  x.Title == "招待リクエストが許可されました") == 1 &&
+              await db.Deliveries.CountAsync(x => x.UserId == "member" && x.Kind == "Push" &&
+                  x.Subject == "招待リクエストが許可されました") == 1,
+            "the winning race decision produces one audit, message, and Push delivery");
+    }
+
+    const string rollbackRequestId = "push-atomicity-rollback";
+    const string rollbackInvitationId = "push-atomicity-existing";
+    await using (var scope = app.Services.CreateAsyncScope())
+    {
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        Check(scope.ServiceProvider.GetRequiredService<NotificationService>().PushConfigured,
+            "atomicity fixture has Push queueing enabled");
+        db.InvitationRequests.Add(new InvitationRequest
+        {
+            Id = rollbackRequestId, UserId = "member", Reason = "synthetic rollback fixture",
+            Count = 1, Days = 2, Status = "Pending", Created = SemEndpoints.Now
+        });
+        db.Invitations.Add(new Invitation
+        {
+            Id = rollbackInvitationId,
+            TokenHash = SemEndpoints.Hash("rollback-existing-token"),
+            ProtectedToken = tokenProtector.Protect("rollback-existing-token"),
+            OwnerId = "member",
+            IssuerId = "admin",
+            RequestId = rollbackRequestId,
+            Limit = 1,
+            Uses = 0,
+            Created = SemEndpoints.Now,
+            Expires = SemEndpoints.Now + 2 * 86400L
+        });
+        await db.SaveChangesAsync();
+    }
+    long beforeMessages;
+    long beforeDeliveries;
+    long beforeAudits;
+    await using (var scope = app.Services.CreateAsyncScope())
+    {
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        beforeMessages = await db.Messages.LongCountAsync(x => x.UserId == "member" &&
+            x.Title == "招待リクエストが許可されました");
+        beforeDeliveries = await db.Deliveries.LongCountAsync(x => x.UserId == "member" &&
+            x.Kind == "Push" && x.Subject == "招待リクエストが許可されました");
+        beforeAudits = await db.Audits.LongCountAsync();
+    }
+    using (var response = await SendAsync(HttpMethod.Post,
+        "/api/core/invitations/decide?expectedActor=admin",
+        JsonContent.Create(new { id = rollbackRequestId, approve = true, comment = "must roll back" }),
+        adminSyntheticCsrf, actor: "admin"))
+        Check(response.StatusCode == HttpStatusCode.Conflict,
+            "duplicate RequestId blocks approval after Push decision notification is queued");
+    await using (var scope = app.Services.CreateAsyncScope())
+    {
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var request = await db.InvitationRequests.SingleAsync(x => x.Id == rollbackRequestId);
+        Check(request.Status == "Pending" && request.DecidedAt is null &&
+              request.DecidedBy is null && request.DecisionComment is null,
+            "failed Push-enabled decision rolls back the conditional claim and comment");
+        Check(await db.Invitations.CountAsync(x => x.RequestId == rollbackRequestId) == 1 &&
+              await db.Invitations.AnyAsync(x => x.Id == rollbackInvitationId),
+            "failed Push-enabled decision retains only the pre-existing invitation");
+        Check(await db.Messages.LongCountAsync(x => x.UserId == "member" &&
+                  x.Title == "招待リクエストが許可されました") == beforeMessages &&
+              await db.Deliveries.LongCountAsync(x => x.UserId == "member" &&
+                  x.Kind == "Push" && x.Subject == "招待リクエストが許可されました") == beforeDeliveries &&
+              await db.Audits.LongCountAsync() == beforeAudits &&
+              !await db.Audits.AnyAsync(x => x.Action == "InvitationApproved" && x.EntityId == rollbackRequestId),
+            "failed Push-enabled decision atomically rolls back invitation, message, delivery, and audits");
+    }
 
 
     var invalidRequests = new[]
@@ -498,6 +724,21 @@ static void CheckExactKeys(JsonElement element, string[] expected)
     var actual = element.EnumerateObject().Select(property => property.Name).ToHashSet(StringComparer.Ordinal);
     if (!actual.SetEquals(expected))
         throw new Exception("Unexpected JSON fields: " + string.Join(",", actual.OrderBy(x => x, StringComparer.Ordinal)));
+}
+
+static bool HasSqliteException(Exception error)
+{
+    for (Exception? current = error; current is not null; current = current.InnerException)
+        if (current is SqliteException) return true;
+    return false;
+}
+
+static string ExceptionMessages(Exception? error)
+{
+    var messages = new List<string>();
+    for (var current = error; current is not null; current = current.InnerException)
+        messages.Add(current.Message);
+    return string.Join(" | ", messages);
 }
 
 static async Task<string> GetApplicationCookieAsync(HttpClient client, string userId)

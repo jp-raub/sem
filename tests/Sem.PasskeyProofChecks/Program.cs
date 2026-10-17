@@ -170,8 +170,7 @@ sealed class Fixture : IDisposable
         Db = provider.GetRequiredService<ApplicationDbContext>();
         var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
             { ["Smtp:Host"] = "synthetic.test", ["Smtp:From"] = "test@example.test" }).Build();
-        Service = new(Db, null!, null!, new NotificationService(config, new EphemeralDataProtectionProvider()),
-            new DeploymentSettings { PublicUrl = "https://localhost:18443/" }, Clock);
+        Service = new(Db, null!, null!, new NotificationService(config, new EphemeralDataProtectionProvider()), Clock);
     }
     public static async Task<Fixture> CreateAsync(string path)
     {

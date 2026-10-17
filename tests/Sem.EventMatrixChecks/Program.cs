@@ -1,0 +1,99 @@
+using System.Net;
+using System.Text.RegularExpressions;
+using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Web;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Sem.Web.Components.Shared;
+using Sem.Web.Core;
+
+var services = new ServiceCollection().AddLogging().BuildServiceProvider();
+await using var renderer = new HtmlRenderer(services, services.GetRequiredService<ILoggerFactory>());
+var checks = 0;
+void Check(bool value, string name)
+{
+    if (!value) throw new InvalidOperationException(name);
+    checks++;
+    Console.WriteLine("PASS " + name);
+}
+var start = new DateTimeOffset(2026, 10, 17, 10, 0, 0, TimeSpan.FromHours(9));
+TimedPart Row(string id, string kind, string? songId, string title) =>
+    new(id, kind, title, "", "🎵", songId, null, start, start.AddMinutes(5), 300, null);
+ParticipationSlot Slot(string id, string songId, string part, string? owner = null, string? name = null) =>
+    new(id, songId, "曲 " + songId, part, "Instrument", owner, name, null, 1);
+async Task<string> Render(IReadOnlyList<TimedPart> rows, ParticipationSlot[] slots,
+    IReadOnlySet<string>? selected = null, bool release = false, bool disabled = false, bool decode = true)
+{
+    return await renderer.Dispatcher.InvokeAsync(async () =>
+    {
+        var output = await renderer.RenderComponentAsync<EventPartMatrix>(ParameterView.FromDictionary(
+            new Dictionary<string, object?>
+            {
+                ["Rows"] = rows,
+                ["Slots"] = slots,
+                ["SelectedIds"] = selected ?? new HashSet<string>(),
+                ["OwnUserId"] = "me",
+                ["ReleaseMode"] = release,
+                ["IsDisabled"] = (Func<ParticipationSlot, bool>)(_ => disabled)
+            }));
+        var raw = output.ToHtmlString();
+        return decode ? WebUtility.HtmlDecode(raw) : raw;
+    });
+}
+
+var transition = Row("opening", "Transition", null, "開場案内");
+var html = await Render([transition], []);
+Check(html.Contains("開場案内") && html.Contains("<table"), "Progress rows render with zero part columns");
+Check(!html.Contains("colspan=\"0\""), "Zero-column progress never emits invalid colspan");
+Check(!html.Contains("現在、表示できる曲の参加枠はありません"), "Progress-only event is not reported as empty");
+
+html = await Render([], []);
+Check(html.Contains("現在、表示できる曲の参加枠はありません") && !html.Contains("<table"), "Truly empty matrix has an explicit empty state");
+html = await Render([], [Slot("unplaced", "s1", "Guitar")]);
+Check(html.Contains("参加枠はありますが") && !html.Contains("現在、表示できる曲の参加枠はありません"), "Unplaced slots are distinguished from no slots");
+
+var song = Row("song-row", "Song", "s1", "合奏 <song>");
+var slots = new[]
+{
+    Slot("free", "s1", "Guitar"),
+    Slot("own", "s1", "Guitar", "me", "本人 <Alice>"),
+    Slot("other", "s1", "Drums", "other-user", "相手 & Bob")
+};
+html = await Render([song, transition], slots, new HashSet<string> { "free" });
+if (Environment.GetEnvironmentVariable("SEM_MATRIX_RENDER_OUTPUT_DIR") is { Length: > 0 } outputDirectory)
+{
+    Directory.CreateDirectory(outputDirectory);
+    await File.WriteAllTextAsync(Path.Combine(outputDirectory, "matrix-synthetic.html"),
+        await Render([song, transition], slots, new HashSet<string> { "free" }, decode: false));
+}
+Check(Regex.Matches(html, "data-event-matrix-slot=").Count == 3, "Every displayed slot has exactly one button");
+Check(Regex.Matches(html, "<th\\b(?=[^>]*\\bscope=\"col\")[^>]*>Guitar</th>").Count == 1, "Duplicate part definitions form one column");
+Check(html.IndexOf(">Guitar</th>", StringComparison.Ordinal) < html.IndexOf(">Drums</th>", StringComparison.Ordinal), "Part order follows the existing slot order");
+Check(html.Contains("aria-pressed=\"true\""), "Selected state is exposed to assistive technology");
+Check(Regex.Matches(html, "aria-pressed=\"false\"").Count == 2, "Unselected buttons explicitly expose a false pressed state");
+Check(html.Contains("自分: 本人 <Alice>") && html.Contains("他人: 相手 & Bob"), "Visible owner labels include self/other and the assigned name");
+Check(html.Contains("aria-label=\"合奏 <song> / Guitar 2 / 2 / 自分: 本人 <Alice>\""), "Accessible name includes self and the assigned name");
+Check(html.Contains("aria-label=\"合奏 <song> / Drums / 他人: 相手 & Bob\""), "Accessible name includes other and the assigned name");
+Check(html.Contains("colspan=\"2\""), "Progress spans only existing part columns");
+Check(html.Contains("tabindex=\"0\"") && html.Contains("横スクロールできます"), "Scrollable region is keyboard reachable and named");
+Check(!html.Contains("id=\""), "Matrix does not introduce global DOM ids");
+
+html = await Render([song], slots, new HashSet<string> { "own" }, release: true, disabled: true);
+Check(html.Contains("解除選択中・自分: 本人 <Alice>"), "Release selection preserves the visible owner");
+Check(html.Contains("自分: 本人 <Alice> / 解除選択中"), "Release selection preserves the accessible owner");
+var disabledHtml = await Render([song], slots, new HashSet<string> { "own" }, release: true, disabled: true, decode: false);
+Check(Regex.Matches(disabledHtml, "<button[^>]*\\sdisabled(?=\\s|>)", RegexOptions.Singleline).Count == 3, "Parent-supplied disabling is honored for every slot");
+html = await renderer.Dispatcher.InvokeAsync(async () =>
+{
+    var output = await renderer.RenderComponentAsync<EventPartMatrix>(ParameterView.FromDictionary(
+        new Dictionary<string, object?>
+        {
+            ["Rows"] = new[] { song },
+            ["Slots"] = slots,
+            ["SelectedIds"] = new HashSet<string>(),
+            ["IsDisabled"] = (Func<ParticipationSlot, bool>)(_ => false)
+        }));
+    return output.ToHtmlString();
+});
+Check(!html.Contains("<Alice>") && !html.Contains("<song>"), "Assigned names and song names are HTML encoded");
+Console.WriteLine($"PASS {checks} matrix rendering checks (not interactive browser acceptance)");

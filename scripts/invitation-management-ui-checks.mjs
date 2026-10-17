@@ -46,6 +46,7 @@ class FakeElement {
     this.focusCount = 0;
     this.selectCount = 0;
   }
+  get childNodes() { return this.children; }
   get innerHTML() { return undefined; }
   set innerHTML(_value) { throw new Error('innerHTML must not be used'); }
   append(...nodes) { this.children.push(...nodes); }
@@ -87,15 +88,43 @@ class FakeRoot extends FakeElement {
     for (const id of ['form','fields','purpose','count','days','confirm','submit','result','link','copy','copy-status','status','error']) {
       this.nodes.set(`#invitation-issue-${id}`, new FakeElement(id === 'fields' ? 'fieldset' : 'div', document));
     }
+    this.nodes.set('#invitation-owner-link-result', new FakeElement('section', document));
+    for (const id of ['summary','value','copy','copy-status']) {
+      this.nodes.set(`#invitation-owner-link-${id}`, new FakeElement(id === 'value' ? 'input' : id === 'copy' ? 'button' : 'p', document));
+    }
+    this.nodes.set('#invitation-request-create', new FakeElement('section', document));
+    for (const id of ['form','fields','reason','count','days','submit','status','error']) {
+      const tag = id === 'form' ? 'form' : id === 'fields' ? 'fieldset'
+        : id === 'reason' ? 'textarea' : id === 'count' || id === 'days' ? 'input'
+          : id === 'submit' ? 'button' : 'p';
+      this.nodes.set(`#invitation-request-create-${id}`, new FakeElement(tag, document));
+    }
+    this.nodes.set('#invitation-request-review', new FakeElement('section', document));
+    for (const id of ['form','summary','status','error','choice','comment','confirm','submit','cancel']) {
+      const tag = id === 'form' ? 'form' : id === 'choice' ? 'select'
+        : id === 'comment' ? 'textarea' : id === 'confirm' ? 'input'
+          : id === 'submit' || id === 'cancel' ? 'button' : 'p';
+      this.nodes.set(`#invitation-request-review-${id}`, new FakeElement(tag, document));
+    }
     this.get('issue-count').value = '1';
     this.get('issue-days').value = '1';
     this.get('issue-link').readOnly = true;
+    this.get('request-create-count').value = '1';
+    this.get('request-create-days').value = '1';
+    this.get('request-review-choice').value = 'approve';
+    this.get('owner-link-value').readOnly = true;
   }
   querySelector(selector) { return this.nodes.get(selector) ?? null; }
   emitFromRoot(type, target) { return this.emit(type, target); }
   get(id) {
     if (id === 'issue') return this.nodes.get('#invitation-issue');
     if (id.startsWith('issue-')) return this.nodes.get(`#invitation-${id}`);
+    if (id === 'owner-link') return this.nodes.get('#invitation-owner-link-result');
+    if (id.startsWith('owner-link-')) return this.nodes.get(`#invitation-owner-link-${id.slice('owner-link-'.length)}`);
+    if (id === 'request-create') return this.nodes.get('#invitation-request-create');
+    if (id.startsWith('request-create-')) return this.nodes.get(`#invitation-request-create-${id.slice('request-create-'.length)}`);
+    if (id === 'request-review') return this.nodes.get('#invitation-request-review');
+    if (id.startsWith('request-review-')) return this.nodes.get(`#invitation-request-review-${id.slice('request-review-'.length)}`);
     return this.nodes.get(`#invitation-management-${id}`);
   }
   allText() { return [...this.nodes.values()].map(node => node.allText()).join('\n'); }
@@ -138,20 +167,35 @@ let currentPage = page();
 let pageResponseOverride = null;
 let revokeMode = 'success';
 let issueMode = 'success';
+let requestMode = 'success';
+let decisionMode = 'success';
+let ownerLinkMode = 'success';
 let calls = [];
 let revokeCalls = [];
 let issueCalls = [];
+let requestCalls = [];
+let decisionCalls = [];
+let ownerLinkCalls = [];
 let resolveIssueResponse = null;
 let lifecycleListeners = new Map();
 let ownerCounter = 0;
-function setup({ initialPage = page(), responseOverride = null, mode = 'success', issuanceMode = 'success' } = {}) {
+function setup({
+  initialPage = page(), responseOverride = null, mode = 'success', issuanceMode = 'success',
+  requestModeOverride = 'success', decisionModeOverride = 'success', ownerLinkModeOverride = 'success'
+} = {}) {
   currentPage = initialPage;
   pageResponseOverride = responseOverride;
   revokeMode = mode;
   issueMode = issuanceMode;
+  requestMode = requestModeOverride;
+  decisionMode = decisionModeOverride;
+  ownerLinkMode = ownerLinkModeOverride;
   calls = [];
   revokeCalls = [];
   issueCalls = [];
+  requestCalls = [];
+  decisionCalls = [];
+  ownerLinkCalls = [];
   resolveIssueResponse = null;
   lifecycleListeners = new Map();
   setGlobal('addEventListener', (type, listener) => {
@@ -174,6 +218,21 @@ function setup({ initialPage = page(), responseOverride = null, mode = 'success'
       return json({ ...currentPage, page: Number(url.searchParams.get('page') ?? 1) });
     }
     if (url.pathname === '/api/csrf' && options.method === 'GET') return json({ token: csrfToken });
+    if (url.pathname.startsWith('/api/core/invitations/link/') && options.method === 'GET') {
+      assert.equal(url.searchParams.getAll('expectedActor').length, 1);
+      assert.equal(url.searchParams.get('expectedActor'), actorId);
+      assert.equal(url.searchParams.size, 1);
+      const id = decodeURIComponent(url.pathname.slice('/api/core/invitations/link/'.length));
+      ownerLinkCalls.push({ id });
+      if (ownerLinkMode === 'network-failure') throw new TypeError('synthetic network failure');
+      const invitation = currentPage.invitations.find(row => row.id === id);
+      assert.ok(invitation, `owner-link fixture ${id} must exist`);
+      return json({
+        actorId, id, limit: invitation.limit, uses: invitation.uses,
+        created: invitation.created, expires: invitation.expires ?? invitation.created + 86_400,
+        link: 'https://app.example/join#invite=owner-only-secret'
+      });
+    }
     if (url.pathname === '/api/core/invitations/issue' && options.method === 'POST') {
       assert.equal(url.searchParams.getAll('expectedActor').length, 1);
       assert.equal(url.searchParams.get('expectedActor'), actorId);
@@ -208,6 +267,54 @@ function setup({ initialPage = page(), responseOverride = null, mode = 'success'
         : row) };
       if (revokeMode === 'oversized-response') return new Response(JSON.stringify({ actorId, id: body.id, disabled: true, padding: 'x'.repeat(20_000) }));
       return json({ actorId, id: body.id, disabled: true });
+    }
+    if (url.pathname === '/api/core/invitations/request' && options.method === 'POST') {
+      assert.equal(url.searchParams.getAll('expectedActor').length, 1);
+      assert.equal(url.searchParams.get('expectedActor'), actorId);
+      assert.equal(url.searchParams.size, 1);
+      assert.equal(options.headers['X-CSRF-TOKEN'], csrfToken);
+      const body = JSON.parse(options.body);
+      assert.deepEqual(Object.keys(body).sort(), ['count','days','reason']);
+      assert.ok(Buffer.byteLength(options.body, 'utf8') <= 4096);
+      requestCalls.push(body);
+      if (requestMode === 'network-failure') throw new TypeError('synthetic network failure');
+      const created = {
+        id: 'request-created-1', userId: actorId, userName: 'Requester', reason: body.reason,
+        count: body.count, days: body.days, status: 'Pending', created: 1_700_000_100,
+        decidedAt: null, decidedBy: null, deciderName: null, decisionComment: null
+      };
+      currentPage = { ...currentPage, requests: [created, ...currentPage.requests] };
+      if (requestMode === 'unknown-after-commit') throw new TypeError('synthetic response lost after commit');
+      return json({ actorId, id: created.id, status: 'Pending' });
+    }
+    if (url.pathname === '/api/core/invitations/decide' && options.method === 'POST') {
+      assert.equal(url.searchParams.getAll('expectedActor').length, 1);
+      assert.equal(url.searchParams.get('expectedActor'), actorId);
+      assert.equal(url.searchParams.size, 1);
+      assert.equal(options.headers['X-CSRF-TOKEN'], csrfToken);
+      const body = JSON.parse(options.body);
+      assert.deepEqual(Object.keys(body).sort(), ['approve','comment','id']);
+      assert.ok(Buffer.byteLength(options.body, 'utf8') <= 4096);
+      decisionCalls.push(body);
+      if (decisionMode === 'network-failure') throw new TypeError('synthetic network failure');
+      const status = body.approve ? 'Approved' : 'Rejected';
+      const decisionComment = body.comment === '' ? null : body.comment;
+      const invitationId = body.approve ? 'request-issued-invitation-1' : null;
+      currentPage = {
+        ...currentPage,
+        requests: currentPage.requests.map(row => row.id === body.id ? {
+          ...row, status, decidedAt: 1_700_000_200, decidedBy: actorId,
+          deciderName: 'Admin', decisionComment
+        } : row),
+        invitations: body.approve
+          ? [...currentPage.invitations, invitation({
+            id: invitationId, ownerId: currentPage.requests.find(row => row.id === body.id)?.userId ?? 'user-1',
+            requestId: body.id, issuanceSource: 'Request', limit: 2, uses: 0
+          })]
+          : currentPage.invitations
+      };
+      if (decisionMode === 'unknown-after-commit') throw new TypeError('synthetic response lost after commit');
+      return json({ actorId, id: body.id, status, decisionComment, invitationId });
     }
     assert.fail(`unexpected request ${options.method} ${url.pathname}`);
   });
@@ -247,6 +354,33 @@ function prepareIssue(root, { purpose = '  Local event  ', count = '2', days = '
   root.get('issue-confirm').emit('change');
 }
 function issueSubmit(root) { root.emitFromRoot('submit', root.get('issue-form')); }
+function prepareRequest(root, { reason = '  Family event  ', count = '2', days = '4' } = {}) {
+  root.get('request-create-reason').value = reason;
+  root.get('request-create-reason').emit('input');
+  root.get('request-create-count').value = count;
+  root.get('request-create-count').emit('input');
+  root.get('request-create-days').value = days;
+  root.get('request-create-days').emit('input');
+}
+function requestSubmit(root) { root.emitFromRoot('submit', root.get('request-create-form')); }
+function requestRowAction(root, index = 0) {
+  const row = root.get('requests-body').children[index];
+  return row.children.at(-1).children[0];
+}
+function prepareDecision(root, { choice = 'approve', comment = '  Approval note  ' } = {}) {
+  requestRowAction(root).click();
+  root.get('request-review-choice').value = choice;
+  root.get('request-review-choice').emit('change');
+  root.get('request-review-comment').value = comment;
+  root.get('request-review-comment').emit('input');
+  root.get('request-review-confirm').checked = true;
+  root.get('request-review-confirm').emit('change');
+}
+function decisionSubmit(root) { root.emitFromRoot('submit', root.get('request-review-form')); }
+function ownerLinkAction(root, index = 0) {
+  const row = root.get('invitations-body').children[index];
+  return row.children.at(-1).children[0];
+}
 
 // A realistic 50+50 page with long reasons exceeds 16 KiB and remains valid under the 512 KiB list bound.
 {
@@ -303,7 +437,126 @@ function issueSubmit(root) { root.emitFromRoot('submit', root.get('issue-form'))
   assert.equal(root.get('admin').hidden, true);
   assert.equal(root.get('issue').hidden, true);
   assert.equal(root.get('issue-fields').disabled, true);
-  assert.equal(root.get('invitations-body').children[0].children.length, 12);
+  const invitationHeaders = root.get('invitations-head').children[0].children;
+  const invitationRow = root.get('invitations-body').children[0];
+  assert.equal(invitationHeaders.length, 13);
+  assert.equal(invitationRow.children.length, invitationHeaders.length);
+  const actionCell = invitationRow.children.at(-1);
+  assert.equal(actionCell.textContent, '—');
+  assert.equal(actionCell.children.length, 0);
+  assert.equal(root.allText().includes('失効対象に選ぶ'), false);
+  await stop(owner);
+}
+
+// A member can create a request; an immediate repeat submit is ignored while the first is in flight.
+{
+  const root = setup({ initialPage: page({ isAdmin: false, invitations: [], requests: [] }) });
+  const { owner } = await start(root);
+  assert.equal(root.get('request-create').hidden, false);
+  prepareRequest(root, { reason: '  Family event  ', count: '3', days: '4' });
+  assert.equal(root.get('request-create-submit').disabled, false);
+  requestSubmit(root);
+  requestSubmit(root);
+  await until(() => root.get('request-create-status').textContent.includes('受け付けました'), 'successful invitation request');
+  assert.deepEqual(requestCalls, [{ reason: 'Family event', count: 3, days: 4 }]);
+  assert.equal(root.get('request-create-reason').value, '');
+  assert.equal(root.get('request-create-count').value, '1');
+  assert.equal(root.get('request-create-days').value, '1');
+  assert.equal(root.get('unknown').hidden, true);
+  await stop(owner);
+}
+
+// An ambiguous request result is never replayed, including after a read-only refresh.
+{
+  const root = setup({
+    initialPage: page({ isAdmin: false, invitations: [], requests: [] }),
+    requestModeOverride: 'unknown-after-commit'
+  });
+  const { owner } = await start(root);
+  prepareRequest(root, { reason: 'Ambiguous request', count: '2', days: '3' });
+  requestSubmit(root);
+  requestSubmit(root);
+  await until(() => requestCalls.length === 1 && root.get('unknown').hidden === false, 'unknown invitation request outcome');
+  assert.equal(root.get('request-create-submit').disabled, true);
+  requestSubmit(root);
+  assert.equal(requestCalls.length, 1, 'unknown request cannot be resubmitted');
+  const readsBefore = calls.filter(call => call.url.pathname === '/api/core/invitations' && call.options.method === 'GET').length;
+  root.emitFromRoot('click', root.get('refresh'));
+  await until(() => calls.filter(call => call.url.pathname === '/api/core/invitations' && call.options.method === 'GET').length > readsBefore, 'read-only request reconciliation');
+  assert.equal(root.get('unknown').hidden, false);
+  assert.equal(root.get('request-create-submit').disabled, true);
+  requestSubmit(root);
+  assert.equal(requestCalls.length, 1, 'refresh does not automatically replay an ambiguous request');
+  await stop(owner);
+}
+
+// Admin decision submits only the selected request and normalized comment; a repeat submit is ignored.
+{
+  const root = setup({
+    initialPage: page({ requests: [request({ id: 'request-to-review', userId: 'requester-1' })] })
+  });
+  const { owner } = await start(root);
+  prepareDecision(root, { choice: 'approve', comment: '  Approval note  ' });
+  assert.equal(root.get('request-review').hidden, false);
+  assert.equal(root.get('request-review-submit').disabled, false);
+  decisionSubmit(root);
+  decisionSubmit(root);
+  await until(() => root.get('request-review-status').textContent.includes('許可し'), 'successful invitation request decision');
+  assert.deepEqual(decisionCalls, [{ id: 'request-to-review', approve: true, comment: 'Approval note' }]);
+  const row = root.get('requests-body').children[0];
+  assert.equal(row.children[5].textContent, '許可');
+  assert.equal(row.children[9].textContent, 'Approval note');
+  assert.equal(root.get('request-review').hidden, true);
+  assert.equal(root.get('request-review-comment').value, '');
+  assert.equal(root.get('request-review-confirm').checked, false);
+  await stop(owner);
+}
+
+// The owner can retrieve a private link; the secret stays out of rendered text and request URLs.
+{
+  const root = setup({
+    initialPage: page({
+      actorId, isAdmin: false, requests: [],
+      invitations: [invitation({
+        id: 'owned-invitation', ownerId: actorId, limit: 2, uses: 1, expires: 1_900_000_000
+      })]
+    })
+  });
+  const { owner } = await start(root);
+  ownerLinkAction(root).click();
+  await until(() => ownerLinkCalls.length === 1 && root.get('owner-link').hidden === false, 'owner-only link retrieval');
+  assert.deepEqual(ownerLinkCalls, [{ id: 'owned-invitation' }]);
+  assert.equal(root.get('owner-link-value').value, 'https://app.example/join#invite=owner-only-secret');
+  assert.equal(root.get('owner-link-value').readOnly, true);
+  assert.equal(root.get('owner-link-value').disabled, false);
+  assert.match(root.get('owner-link-summary').textContent, /1 \/ 2/);
+  assert.equal(root.allText().includes('owner-only-secret'), false);
+  assert.equal(calls.some(call => call.url.href.includes('owner-only-secret')), false);
+  await stop(owner);
+  assert.equal(root.get('owner-link-value').value, '');
+}
+
+// A decision whose response is lost is reconciled by reading state, never by sending it again.
+{
+  const root = setup({
+    initialPage: page({ requests: [request({ id: 'unknown-decision', userId: 'requester-2' })] }),
+    decisionModeOverride: 'unknown-after-commit'
+  });
+  const { owner } = await start(root);
+  prepareDecision(root, { choice: 'approve', comment: 'Single decision' });
+  decisionSubmit(root);
+  decisionSubmit(root);
+  await until(() => decisionCalls.length === 1 && root.get('unknown').hidden === false, 'unknown decision outcome');
+  assert.equal(root.get('request-review-submit').disabled, true);
+  decisionSubmit(root);
+  assert.equal(decisionCalls.length, 1, 'unknown decision cannot be resubmitted');
+  const readsBefore = calls.filter(call => call.url.pathname === '/api/core/invitations' && call.options.method === 'GET').length;
+  root.emitFromRoot('click', root.get('refresh'));
+  await until(() => calls.filter(call => call.url.pathname === '/api/core/invitations' && call.options.method === 'GET').length > readsBefore, 'read-only decision reconciliation');
+  await until(() => root.get('unknown').hidden === true, 'decision outcome confirmed by refreshed status');
+  assert.equal(decisionCalls.length, 1);
+  assert.equal(root.get('requests-body').children[0].children[5].textContent, '許可');
+  assert.equal(root.get('requests-body').children[0].children.at(-1).textContent, '—');
   await stop(owner);
 }
 
@@ -470,9 +723,15 @@ function issueSubmit(root) { root.emitFromRoot('submit', root.get('issue-form'))
   assert.equal(hiddenInvitationRows.length, 1, 'cleared inventory should render its empty-state row');
   assert.equal(hiddenInvitationRows[0].children.length, 1);
   assert.equal(hiddenInvitationRows[0].children[0].textContent, 'このページに招待はありません。');
-  assert.equal(hiddenInvitationRows[0].children[0].attributes.get('colspan'), '12');
-  assert.equal(root.get('requests-body').children.length, 1);
-  assert.equal(root.get('requests-body').children[0].children[0].textContent, 'このページに依頼はありません。');
+  const invitationColumnCount = root.get('invitations-head').children[0].children.length;
+  assert.equal(invitationColumnCount, 13);
+  assert.equal(hiddenInvitationRows[0].children[0].attributes.get('colspan'), String(invitationColumnCount));
+  const hiddenRequestRows = root.get('requests-body').children;
+  assert.equal(hiddenRequestRows.length, 1);
+  assert.equal(hiddenRequestRows[0].children[0].textContent, 'このページに依頼はありません。');
+  const requestColumnCount = root.get('requests-head').children[0].children.length;
+  assert.equal(requestColumnCount, 11);
+  assert.equal(hiddenRequestRows[0].children[0].attributes.get('colspan'), String(requestColumnCount));
   assert.equal(root.allText().includes('invitation-1'), false, 'previous inventory row must not survive pagehide');
   assert.equal(root.allText().includes('request-1'), false, 'previous request row must not survive pagehide');
   assert.equal(root.allText().includes('secret-invite-code'), false);

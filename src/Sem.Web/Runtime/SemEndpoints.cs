@@ -29,6 +29,8 @@ public static class SemEndpoints
                     await EmailChangeEndpoints.Handle(ctx, ctx.RequestServices.GetRequiredService<EmailChangeService>(), csrf, settings);
                 else if (action.StartsWith("passkey-recovery-", StringComparison.Ordinal))
                     await PasskeyRecoveryEndpoints.Handle(ctx, ctx.RequestServices.GetRequiredService<PasskeyRecoveryService>(), csrf, settings);
+                else if (await AccountPasskeyEndpoints.TryHandleLegacyAsync(ctx, action))
+                    return;
                 else await Handle(ctx, db, users, signin, csrf, dp.CreateProtector("SEM.Tokens.v1"), settings, notifications, additions);
             }
             catch (PasskeyRecoveryRateLimitException e) { ctx.Response.StatusCode = 429; ctx.Response.Headers.RetryAfter = e.RetryAfter.ToString(System.Globalization.CultureInfo.InvariantCulture); await ctx.Response.WriteAsJsonAsync(new { error = e.Message, retryAfter = e.RetryAfter }); }
@@ -77,7 +79,22 @@ public static class SemEndpoints
         if (action == "status" && !post)
         {
             var pending = await c.AuthenticateAsync("SEM.Enrollment");
-            await Reply(new { initialized = site?.Initialized ?? false, siteName = site?.Name ?? "SEM", emailConfigured = notify.EmailConfigured, pushConfigured = notify.PushConfigured, pushPublicKey = notify.PublicKey, user = user is null ? null : new { user.Id, user.DisplayName, user.Email, isAdmin = user.IsAdmin }, enrolling = pending.Succeeded, passkeyAddition = await additions.StatusAsync(c, user) }); return;
+            object? passkeyAddition = null;
+            if (user is not null)
+            {
+                try
+                {
+                    var account = c.RequestServices.GetRequiredService<AccountPasskeyService>();
+                    var current = await account.ActorAsync(c.User, user.Id, c.RequestAborted);
+                    passkeyAddition = await c.RequestServices.GetRequiredService<PasskeyAdditionService>()
+                        .StatusAsync(c, current);
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    // Do not surface session-bound addition state for stale or revoked cookies.
+                }
+            }
+            await Reply(new { initialized = site?.Initialized ?? false, siteName = site?.Name ?? "SEM", emailConfigured = notify.EmailConfigured, pushConfigured = notify.PushConfigured, pushPublicKey = notify.PublicKey, user = user is null ? null : new { user.Id, user.DisplayName, user.Email, isAdmin = user.IsAdmin }, enrolling = pending.Succeeded, passkeyAddition }); return;
         }
         if (action.StartsWith("passkey-add-", StringComparison.Ordinal) && post)
         {
@@ -237,36 +254,14 @@ public static class SemEndpoints
             var people = await db.Users.Where(u => u.Enabled).Select(u => new { u.Id, u.DisplayName }).ToListAsync();
             var events = await db.Events.Where(e => user.IsAdmin || e.ManagerId == user.Id || e.Phase != "Hidden").ToListAsync();
             var deliveries = await db.Deliveries.Where(d => user.IsAdmin || d.UserId == user.Id).Select(d => new { d.Id, d.Kind, d.Subject, d.Attempts, d.SentAt, d.Error, d.Due }).ToListAsync();
-            await Reply(new { people, requests, events, invites = invites.Select(i => new { i.Id, i.OwnerId, i.IssuerId, i.RequestId, i.Limit, i.Uses, i.Expires, i.Created, i.Disabled, i.RevokedAt, i.RevokedBy, i.RevocationReason, link = i.Disabled || i.Uses >= i.Limit || i.Expires <= Now ? null : new Uri(new Uri(cfg.PublicUrl), "?invite=" + protector.Unprotect(i.ProtectedToken)).ToString() }), messages = await db.Messages.Where(m => m.UserId == user.Id).OrderByDescending(m => m.Created).ToListAsync(), deliveries }); return;
+            await Reply(new { people, requests, events, invites = invites.Select(i => new { i.Id, i.OwnerId, i.IssuerId, i.RequestId, i.Limit, i.Uses, i.Expires, i.Created, i.Disabled, i.RevokedAt, i.RevokedBy, i.RevocationReason, link = i.OwnerId == user.Id && !i.Disabled && i.Uses < i.Limit && i.Expires > Now ? new Uri(new Uri(cfg.PublicUrl), "/join#invite=" + Uri.EscapeDataString(protector.Unprotect(i.ProtectedToken))).ToString() : null }), messages = await db.Messages.Where(m => m.UserId == user.Id).OrderByDescending(m => m.Created).ToListAsync(), deliveries }); return;
         }
-        if (action == "request-invitation" && post)
+        if (action == "issue-invitation" && post)
         {
-            if (user.IsAdmin) throw new ValidationException("全体管理者は直接発行してください。");
-            var request = new InvitationRequest { UserId = user.Id, Reason = Text("reason"), Count = Number("count", 1, 5), Days = Number("days", 1, 7), Created = Now };
-            db.InvitationRequests.Add(request);
-            foreach (var admin in await db.Users.Where(u => u.Enabled && u.IsAdmin).ToListAsync()) notify.Message(db, admin.Id, "招待リンク発行リクエスト", user.DisplayName + "：" + request.Reason);
-            Audit("InvitationRequested", request.Id); await db.SaveChangesAsync(); await Reply(new { message = "発行をリクエストしました。" }); return;
-        }
-        if ((action == "issue-invitation" || action == "decide-invitation") && post)
-        {
-            Admin(); await using var tx = await db.Database.BeginTransactionAsync();
-            var ownerId = user.Id; var count = Number("count", 1, 5); var days = Number("days", 1, 7); string? requestId = null;
-            if (action == "decide-invitation")
-            {
-                var r = await db.InvitationRequests.FindAsync(Text("id", 64));
-                if (r is null || r.Status != "Pending") throw new ValidationException("依頼は判断済みです。");
-                var approve = json.TryGetProperty("approve", out var ap) && ap.GetBoolean();
-                r.Status = approve ? "Approved" : "Rejected"; r.DecidedAt = Now; r.DecidedBy = user.Id; ownerId = r.UserId; count = r.Count; days = r.Days; requestId = r.Id;
-                notify.Message(db, ownerId, approve ? "招待リクエストが許可されました" : "招待リクエストが拒否されました", "招待管理を確認してください。");
-                if (!approve) { Audit("InvitationRejected", r.Id); await db.SaveChangesAsync(); await tx.CommitAsync(); await Reply(new { message = "拒否しました。" }); return; }
-            }
-            var token = Secret(); var i = new Invitation { TokenHash = Hash(token), ProtectedToken = protector.Protect(token), OwnerId = ownerId, IssuerId = user.Id, RequestId = requestId, Limit = count, Created = Now, Expires = Now + days * 86400 };
-            db.Invitations.Add(i); Audit("InvitationIssued", i.Id); await db.SaveChangesAsync(); await tx.CommitAsync(); await Reply(new { message = "招待リンクを発行しました。" }); return;
-        }
-        if (action == "revoke-invitation" && post)
-        {
-            Admin(); var i = await db.Invitations.FindAsync(Text("id", 64)); if (i is null) throw new ValidationException("リンクがありません。");
-            i.Disabled = true; i.RevokedBy = user.Id; i.RevokedAt = Now; i.RevocationReason = Text("reason"); Audit("InvitationRevoked", i.Id); await db.SaveChangesAsync(); await Reply(new { message = "即時失効しました。" }); return;
+            Admin();
+            await using var tx = await db.Database.BeginTransactionAsync(c.RequestAborted);
+            var token = Secret(); var i = new Invitation { TokenHash = Hash(token), ProtectedToken = protector.Protect(token), OwnerId = user.Id, IssuerId = user.Id, RequestId = null, Limit = Number("count", 1, 5), Created = Now, Expires = Now + Number("days", 1, 7) * 86400L };
+            db.Invitations.Add(i); Audit("InvitationIssued", i.Id); await db.SaveChangesAsync(c.RequestAborted); await tx.CommitAsync(c.RequestAborted); await Reply(new { message = "招待リンクを発行しました。" }); return;
         }
         if (action == "read-message" && post) { var messageId = Text("id", 64); var m = await db.Messages.FirstOrDefaultAsync(m => m.Id == messageId && m.UserId == user.Id); if (m is not null) { m.ReadAt = Now; await db.SaveChangesAsync(); } await Reply(new { message = "既読にしました。" }); return; }
         if (action == "test-email" && post) { Admin(); if (!notify.EmailConfigured) throw new ValidationException("SMTP未設定です。"); notify.Email(db, user.Id, "SEM テストメール", "実際のSMTP配信テストです。"); await db.SaveChangesAsync(); await Reply(new { message = "テストメールを送信待ちに登録しました。" }); return; }

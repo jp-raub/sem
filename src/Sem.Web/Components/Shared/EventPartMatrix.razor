@@ -1,0 +1,181 @@
+@using Sem.Web.Core
+
+<section class="event-part-matrix" aria-label="タイムテーブルと参加枠">
+    <p class="event-part-matrix-note">
+        曲に登録されているパートだけを列に表示します。イベント定義にあっても曲で使われていないパートは表示されません。
+    </p>
+    @if (Rows.Count == 0 && Slots.Length == 0)
+    {
+        <p class="event-part-matrix-empty">現在、表示できる曲の参加枠はありません。観覧申込みや設問回答は右側から行えます。</p>
+    }
+    else if (Rows.Count == 0)
+    {
+        <p class="event-part-matrix-empty">参加枠はありますが、タイムテーブル行を表示できません。参加操作は右側から行えます。</p>
+    }
+    else
+    {
+        <div class="event-part-matrix-scroll" role="region" aria-label="曲別パート枠一覧（横スクロールできます）" tabindex="0">
+            <table>
+                <thead>
+                    <tr>
+                        <th scope="col">曲・進行</th>
+                        <th scope="col">開始・終了</th>
+                        <th scope="col">所要時間</th>
+                        @foreach (var column in _columns)
+                        {
+                            <th scope="col">@column</th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var timed in Rows)
+                    {
+                        if (timed.Kind == "Song" && timed.SongId is not null)
+                        {
+                            <tr data-event-matrix-row="@timed.Id">
+                                <th scope="row">
+                                    <strong>@timed.Icon @timed.Title</strong>
+                                    @if (!string.IsNullOrWhiteSpace(timed.Artist))
+                                    {
+                                        <small>@timed.Artist</small>
+                                    }
+                                    @if (timed.PrepStart is DateTimeOffset prep)
+                                    {
+                                        <small>準備開始 @TimetableCalculator.Clock(prep, ClockFormat)</small>
+                                    }
+                                </th>
+                                <td class="event-matrix-time">
+                                    @TimetableCalculator.Clock(timed.Start, ClockFormat)
+                                    <span aria-hidden="true">→</span>
+                                    @TimetableCalculator.Clock(timed.End, ClockFormat)
+                                </td>
+                                <td class="event-matrix-duration">@TimetableCalculator.Duration(timed.LengthSeconds, DurationFormat)</td>
+                                @foreach (var column in _columns)
+                                {
+                                    var cellSlots = SlotsFor(timed.SongId, column);
+                                    <td>
+                                        @if (cellSlots.Length == 0)
+                                        {
+                                            <span class="event-matrix-missing" aria-label="@($"{timed.Title} / {column} / 該当枠なし")">—</span>
+                                        }
+                                        else
+                                        {
+                                            @for (var index = 0; index < cellSlots.Length; index++)
+                                            {
+                                                var slot = cellSlots[index];
+                                                var pressed = SelectedIds.Contains(slot.Id);
+                                                <button @key="slot.Id"
+                                                        type="button"
+                                                        class="@SlotClass(slot, pressed)"
+                                                        data-event-matrix-slot="@slot.Id"
+                                                        aria-pressed="@(pressed ? "true" : "false")"
+                                                        aria-label="@SlotLabel(timed.Title, column, slot, index, cellSlots.Length)"
+                                                        disabled="@IsDisabled(slot)"
+                                                        @onclick="() => OnToggle.InvokeAsync(slot.Id)">
+                                                    @SlotText(slot, pressed)
+                                                    @if (cellSlots.Length > 1)
+                                                    {
+                                                        <small>@(index + 1)</small>
+                                                    }
+                                                </button>
+                                            }
+                                        }
+                                    </td>
+                                }
+                            </tr>
+                        }
+                        else
+                        {
+                            <tr class="event-matrix-transition" data-event-matrix-row="@timed.Id">
+                                <th scope="row">
+                                    @timed.Icon @timed.Title
+                                    <small>進行パート</small>
+                                    @if (_columns.Length == 0)
+                                    {
+                                        <small>進行のみ（参加枠なし）</small>
+                                    }
+                                </th>
+                                <td class="event-matrix-time">
+                                    @TimetableCalculator.Clock(timed.Start, ClockFormat)
+                                    <span aria-hidden="true">→</span>
+                                    @TimetableCalculator.Clock(timed.End, ClockFormat)
+                                </td>
+                                <td class="event-matrix-duration">@TimetableCalculator.Duration(timed.LengthSeconds, DurationFormat)</td>
+                                @if (_columns.Length > 0)
+                                {
+                                    <td class="event-matrix-transition-note" colspan="@_columns.Length">進行のみ（参加枠なし）</td>
+                                }
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<TimedPart> Rows { get; set; } = Array.Empty<TimedPart>();
+    [Parameter, EditorRequired] public ParticipationSlot[] Slots { get; set; } = [];
+    [Parameter, EditorRequired] public IReadOnlySet<string> SelectedIds { get; set; } = new HashSet<string>(StringComparer.Ordinal);
+    [Parameter, EditorRequired] public Func<ParticipationSlot, bool> IsDisabled { get; set; } = _ => true;
+    [Parameter] public EventCallback<string> OnToggle { get; set; }
+    [Parameter] public string OwnUserId { get; set; } = "";
+    [Parameter] public bool ReleaseMode { get; set; }
+    [Parameter] public string ClockFormat { get; set; } = "seconds";
+    [Parameter] public string DurationFormat { get; set; } = "units";
+
+    string[] _columns = [];
+    Dictionary<(string SongId, string PartName), ParticipationSlot[]> _slotsByCell = [];
+
+    protected override void OnParametersSet()
+    {
+        _columns = Slots.Select(slot => slot.PartName).Distinct(StringComparer.Ordinal).ToArray();
+        _slotsByCell = Slots
+            .GroupBy(slot => (slot.SongId, slot.PartName))
+            .ToDictionary(group => group.Key, group => group.ToArray());
+    }
+
+    ParticipationSlot[] SlotsFor(string songId, string partName) =>
+        _slotsByCell.GetValueOrDefault((songId, partName), []);
+
+    string SlotClass(ParticipationSlot slot, bool pressed)
+    {
+        if (pressed)
+        {
+            return ReleaseMode ? "event-matrix-slot event-matrix-release" : "event-matrix-slot event-matrix-selected";
+        }
+        return slot.AssignedUserId is null
+            ? "event-matrix-slot event-matrix-empty"
+            : slot.AssignedUserId == OwnUserId
+                ? "event-matrix-slot event-matrix-own"
+                : "event-matrix-slot event-matrix-occupied";
+    }
+
+    string SlotText(ParticipationSlot slot, bool pressed)
+    {
+        if (slot.AssignedUserId is not null)
+        {
+            var owner = slot.AssignedUserId == OwnUserId ? "自分" : "他人";
+            var name = slot.AssignedName ?? "登録済み";
+            var selection = pressed ? (ReleaseMode ? "解除選択中・" : "選択中・") : "";
+            return $"{selection}{owner}: {name}";
+        }
+        if (pressed)
+        {
+            return ReleaseMode ? "解除選択中" : "選択中";
+        }
+        return "＋ 選択";
+    }
+
+    string SlotLabel(string title, string partName, ParticipationSlot slot, int index, int count)
+    {
+        var selected = SelectedIds.Contains(slot.Id);
+        var state = slot.AssignedUserId is null
+            ? (selected ? "選択中" : "空き枠")
+            : $"{(slot.AssignedUserId == OwnUserId ? "自分" : "他人")}: {slot.AssignedName ?? "登録済み"}" +
+              (selected ? (ReleaseMode ? " / 解除選択中" : " / 選択中") : "");
+        var suffix = count > 1 ? $" {index + 1} / {count}" : "";
+        return $"{title} / {partName}{suffix} / {state}";
+    }
+}

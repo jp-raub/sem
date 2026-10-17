@@ -22,6 +22,14 @@ node scripts/device-notification-ui-checks.mjs 2>&1 | tee verification/device-no
 node --check src/Sem.Web/wwwroot/invitation-management.js
 node --check scripts/invitation-management-ui-checks.mjs
 node scripts/invitation-management-ui-checks.mjs 2>&1 | tee verification/invitation-management-ui.log
+node --check src/Sem.Web/wwwroot/admin-accounts.js
+node --check scripts/admin-accounts-checks.cjs
+node scripts/admin-accounts-ui-checks.mjs 2>&1 | tee verification/admin-accounts-ui.log
+node --check src/Sem.Web/wwwroot/account-passkeys.js
+node --check scripts/account-passkeys-native-checks.cjs
+node scripts/account-passkeys-ui-checks.mjs 2>&1 | tee verification/account-passkeys-ui.log
+node scripts/legacy-passkey-url-checks.mjs 2>&1 | tee verification/legacy-passkey-url.log
+node --check scripts/event-matrix-checks.cjs
 node --check src/Sem.Web/wwwroot/join.js
 node --check scripts/application-join-ui-checks.mjs
 node scripts/application-join-ui-checks.mjs 2>&1 | tee verification/application-join-ui.log
@@ -53,6 +61,19 @@ else
 fi
 dotnet publish src/Sem.Web/Sem.Web.csproj -c Release --no-build -o /tmp/sem-integration-publish 2>&1 | tee verification/publish.log
 docker build --platform linux/amd64 -t sem-integration:check -f deploy/Dockerfile . 2>&1 | tee verification/docker-build.log
+# Verify the final image as its configured non-root user, before starting it.
+# No data volume, secrets, network, or application startup is required here.
+docker run --rm --network none --read-only --cap-drop ALL \
+ --security-opt no-new-privileges:true --entrypoint /bin/sh sem-integration:check -ec '
+ test "$(id -u)" != 0
+ test -r /app/appsettings.json
+ test -r /app/Sem.Web.dll
+ test ! -w /app/appsettings.json
+ test ! -w /app/Sem.Web.dll
+ test ! -w /app
+ test -x /app
+ echo "Non-root application files: readable and not writable."
+' 2>&1 | tee verification/docker-file-permissions.log
 docker volume create sem-integration-data
 cleanup() {
  docker logs sem-integration > verification/storage.log 2>&1 || true

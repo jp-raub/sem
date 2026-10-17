@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using System.Net;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -43,6 +44,28 @@ public static class DeploymentConfiguration
             o.ServerDomain = origin.Host;
             o.UserVerificationRequirement = "required";
         });
+        // Identity rebuilds the principal during periodic stamp validation. Preserve only
+        // the already-validated session binding, not arbitrary claims or authorization state.
+        builder.Services.AddOptions<SecurityStampValidatorOptions>()
+            .Configure<Microsoft.Extensions.Options.IOptions<IdentityOptions>>((o, identity) =>
+            {
+                o.OnRefreshingPrincipal = context =>
+                {
+                    var current = context.CurrentPrincipal;
+                    var refreshed = context.NewPrincipal;
+                    var bindings = current.FindAll(PasskeyAdditionService.SessionClaim).ToArray();
+                    var claimTypes = identity.Value.ClaimsIdentity;
+                    var actor = current.FindFirstValue(claimTypes.UserIdClaimType);
+                    var stamp = current.FindFirstValue(claimTypes.SecurityStampClaimType);
+                    if (current.Identity?.IsAuthenticated == true && refreshed?.Identity is ClaimsIdentity target &&
+                        bindings.Length == 1 && !string.IsNullOrWhiteSpace(bindings[0].Value) &&
+                        !string.IsNullOrEmpty(actor) && actor == refreshed.FindFirstValue(claimTypes.UserIdClaimType) &&
+                        !string.IsNullOrEmpty(stamp) && stamp == refreshed.FindFirstValue(claimTypes.SecurityStampClaimType) &&
+                        !refreshed.HasClaim(c => c.Type == PasskeyAdditionService.SessionClaim))
+                        target.AddClaim(bindings[0]);
+                    return Task.CompletedTask;
+                };
+            });
         builder.Services.ConfigureApplicationCookie(o =>
         {
             o.Cookie.Name = "__Host-SEM-Auth";

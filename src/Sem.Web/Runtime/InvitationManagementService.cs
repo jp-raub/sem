@@ -16,7 +16,8 @@ public sealed record InvitationManagementInvitation(
     long? RevokedAt, string? RevokedBy, string RevokerName, string? RevocationReason);
 public sealed record InvitationManagementRequest(
     string Id, string UserId, string UserName, string Reason, int Count, int Days,
-    string Status, long Created, long? DecidedAt, string? DecidedBy, string DeciderName);
+    string Status, long Created, long? DecidedAt, string? DecidedBy, string DeciderName,
+    string? DecisionComment);
 public sealed record InvitationManagementPage(
     string ActorId, bool IsAdmin, int Page, int PageSize, bool HasMoreInvitations,
     bool HasMoreRequests, InvitationManagementInvitation[] Invitations,
@@ -24,12 +25,19 @@ public sealed record InvitationManagementPage(
 public sealed record InvitationManagementRevokeResult(string ActorId, string Id, bool Disabled);
 public sealed record InvitationManagementIssueResult(string ActorId, string Id, string Purpose,
     string IssuanceSource, int Limit, int Uses, long Created, long Expires, string Link);
+public sealed record InvitationManagementRequestResult(string ActorId, string Id, string Status);
+public sealed record InvitationManagementDecisionResult(string ActorId, string Id, string Status,
+    string? DecisionComment, string? InvitationId);
+public sealed record InvitationManagementLinkResult(string ActorId, string Id, int Limit, int Uses,
+    long Created, long Expires, string Link);
 public sealed class InvitationManagementNotFoundException : Exception { }
+public sealed class InvitationManagementUnavailableException : Exception { }
 
-/// <summary>Read-only invitation/request inventory plus audited revocation.</summary>
+/// <summary>Invitation requests, issuance, owner-only link retrieval, and audited administration.</summary>
 public sealed class InvitationManagementService(
     ApplicationDbContext db,
-    IOptions<IdentityOptions> identityOptions)
+    IOptions<IdentityOptions> identityOptions,
+    NotificationService notifications)
 {
     public const int PageSize = 50;
     public const int MaximumPage = 10_000;
@@ -79,7 +87,7 @@ public sealed class InvitationManagementService(
             .Select(x => new
             {
                 x.Id, x.UserId, x.Reason, x.Count, x.Days, x.Status, x.Created,
-                x.DecidedAt, x.DecidedBy
+                x.DecidedAt, x.DecidedBy, x.DecisionComment
             }).ToArrayAsync(ct);
 
         var userIds = new HashSet<string>(StringComparer.Ordinal);
@@ -107,10 +115,135 @@ public sealed class InvitationManagementService(
             x.RevocationReason)).ToArray();
         var requests = requestRows.Take(PageSize).Select(x => new InvitationManagementRequest(
             x.Id, x.UserId, Name(x.UserId), x.Reason, x.Count, x.Days, x.Status,
-            x.Created, x.DecidedAt, x.DecidedBy, Name(x.DecidedBy))).ToArray();
+            x.Created, x.DecidedAt, x.DecidedBy, Name(x.DecidedBy), x.DecisionComment)).ToArray();
 
         return new InvitationManagementPage(actor.Id, actor.IsAdmin, page, PageSize,
             invitationRows.Length > PageSize, requestRows.Length > PageSize, invitations, requests);
+    }
+
+    public async Task<InvitationManagementRequestResult> RequestAsync(HttpContext context,
+        string expectedActor, string reason, int count, int days, CancellationToken ct = default)
+    {
+        var cleanReason = ValidateReason(reason);
+        if (count is < 1 or > 5) throw new ValidationException("人数は1～5で指定してください。");
+        if (days is < 1 or > 7) throw new ValidationException("期間は1～7日で指定してください。");
+
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        var actor = await RequireActorAsync(context, expectedActor, ct: ct);
+        if (actor.IsAdmin) throw new ValidationException("全体管理者は直接発行してください。");
+        var now = SemEndpoints.Now;
+        var request = new InvitationRequest
+        {
+            UserId = actor.Id,
+            Reason = cleanReason,
+            Count = count,
+            Days = days,
+            Status = "Pending",
+            Created = now
+        };
+        db.InvitationRequests.Add(request);
+        var admins = await db.Users.AsNoTracking().Where(x => x.Enabled && x.IsAdmin)
+            .Select(x => x.Id).ToArrayAsync(ct);
+        var requester = await db.Users.AsNoTracking().Where(x => x.Id == actor.Id)
+            .Select(x => x.DisplayName).SingleAsync(ct);
+        var body = $"{requester}：{cleanReason}\n希望人数：{count}名／有効期間：{days}日";
+        foreach (var adminId in admins)
+            notifications.Message(db, adminId, "招待リンク発行リクエスト", body);
+        db.Audits.Add(new Audit { ActorId = actor.Id, Action = "InvitationRequested", EntityId = request.Id, At = now });
+        await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
+        return new InvitationManagementRequestResult(actor.Id, request.Id, request.Status);
+    }
+
+    public async Task<InvitationManagementDecisionResult> DecideAsync(HttpContext context,
+        string expectedActor, string id, bool approve, string? comment, IDataProtector protector,
+        DeploymentSettings settings, CancellationToken ct = default)
+    {
+        var cleanId = ValidateId(id);
+        var cleanComment = ValidateOptionalComment(comment);
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        var actor = await RequireActorAsync(context, expectedActor, adminOnly: true, ct);
+        var request = await db.InvitationRequests.AsNoTracking()
+            .SingleOrDefaultAsync(x => x.Id == cleanId, ct);
+        if (request is null) throw new InvitationManagementNotFoundException();
+        if (approve && (request.Count is < 1 or > 5 || request.Days is < 1 or > 7))
+            throw new ValidationException("保存済みの人数・期間が現在の許容範囲外のため、許可できません。");
+
+        var now = SemEndpoints.Now;
+        var status = approve ? "Approved" : "Rejected";
+        var claimed = await db.InvitationRequests.Where(x => x.Id == cleanId && x.Status == "Pending")
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(x => x.Status, status)
+                .SetProperty(x => x.DecidedAt, (long?)now)
+                .SetProperty(x => x.DecidedBy, actor.Id)
+                .SetProperty(x => x.DecisionComment, cleanComment), ct);
+        if (claimed != 1)
+            throw new DbUpdateConcurrencyException("依頼はすでに判断済みです。");
+
+        Invitation? invitation = null;
+        if (approve)
+        {
+            var token = SemEndpoints.Secret();
+            invitation = new Invitation
+            {
+                TokenHash = SemEndpoints.Hash(token),
+                ProtectedToken = protector.Protect(token),
+                OwnerId = request.UserId,
+                IssuerId = actor.Id,
+                RequestId = request.Id,
+                Limit = request.Count,
+                Uses = 0,
+                Created = now,
+                Expires = now + request.Days * 86400L,
+                Purpose = null,
+                IssuanceSource = "Request"
+            };
+            db.Invitations.Add(invitation);
+        }
+
+        var messageTitle = approve ? "招待リクエストが許可されました" : "招待リクエストが拒否されました";
+        var messageBody = $"{request.Count}名／{request.Days}日\n理由：{request.Reason}\n" +
+            (cleanComment is null ? "" : $"管理者コメント：{cleanComment}\n") +
+            (approve
+                ? "招待管理から本人のリンクを取得できます。人数上限または期限で失効します。"
+                : "招待リンクは発行されていません。");
+        notifications.Message(db, request.UserId, messageTitle, messageBody);
+        db.Audits.Add(new Audit
+        {
+            ActorId = actor.Id,
+            Action = approve ? "InvitationApproved" : "InvitationRejected",
+            EntityId = request.Id,
+            At = now
+        });
+        if (invitation is not null)
+            db.Audits.Add(new Audit
+            {
+                ActorId = actor.Id,
+                Action = "InvitationIssued",
+                EntityId = invitation.Id,
+                At = now
+            });
+        await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
+        return new InvitationManagementDecisionResult(actor.Id, request.Id, status,
+            cleanComment, invitation?.Id);
+    }
+
+    public async Task<InvitationManagementLinkResult> GetOwnerLinkAsync(HttpContext context,
+        string expectedActor, string id, IDataProtector protector, DeploymentSettings settings,
+        CancellationToken ct = default)
+    {
+        var cleanId = ValidateId(id);
+        var actor = await RequireActorAsync(context, expectedActor, ct: ct);
+        var invitation = await db.Invitations.AsNoTracking()
+            .SingleOrDefaultAsync(x => x.Id == cleanId && x.OwnerId == actor.Id, ct);
+        if (invitation is null) throw new InvitationManagementNotFoundException();
+        if (invitation.Disabled || invitation.Uses >= invitation.Limit || invitation.Expires <= SemEndpoints.Now)
+            throw new InvitationManagementUnavailableException();
+        var token = protector.Unprotect(invitation.ProtectedToken);
+        var link = CreateJoinLink(settings, token);
+        return new InvitationManagementLinkResult(actor.Id, invitation.Id, invitation.Limit,
+            invitation.Uses, invitation.Created, invitation.Expires, link);
     }
 
     public async Task<InvitationManagementRevokeResult> RevokeAsync(HttpContext context,
@@ -162,8 +295,7 @@ public sealed class InvitationManagementService(
         var now = SemEndpoints.Now;
         var expires = now + days * 86400L;
         var token = SemEndpoints.Secret();
-        var link = new Uri(new Uri(settings.PublicUrl), "/join#invite=" +
-            Uri.EscapeDataString(token)).ToString();
+        var link = CreateJoinLink(settings, token);
         var invitation = new Invitation
         {
             TokenHash = SemEndpoints.Hash(token),
@@ -217,4 +349,19 @@ public sealed class InvitationManagementService(
             throw new ValidationException("目的は1～500文字で指定してください。");
         return clean;
     }
+
+    private static string? ValidateOptionalComment(string? comment)
+    {
+        if (comment is null) return null;
+        if (comment.Any(char.IsControl))
+            throw new ValidationException("判断コメントに制御文字は使用できません。");
+        var clean = comment.Trim();
+        if (clean.Length > 500)
+            throw new ValidationException("判断コメントは500文字以内で指定してください。");
+        return clean.Length == 0 ? null : clean;
+    }
+
+    private static string CreateJoinLink(DeploymentSettings settings, string token) =>
+        new Uri(new Uri(settings.PublicUrl), "/join#invite=" +
+            Uri.EscapeDataString(token)).ToString();
 }

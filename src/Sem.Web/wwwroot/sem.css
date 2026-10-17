@@ -1,8 +1,8 @@
-body{font-family:system-ui,sans-serif;color:#172b22;background:#f6f8f6}main{max-width:1100px;margin:auto;padding:16px}.panel{background:white;border:1px solid #ccd8ce;border-radius:12px;padding:18px;margin:16px 0}label{display:block;margin:12px 0}input,select{display:block;width:100%;max-width:600px;padding:10px;border:1px solid #aaa;border-radius:6px}button{padding:10px 14px;margin:5px;border:1px solid #bbb;border-radius:7px;cursor:pointer}article{border-top:1px solid #ddd;padding:12px 0}a{overflow-wrap:anywhere}small{color:#53675c}#blazor-error-ui{display:none}
+body{margin:0;font-family:system-ui,sans-serif;color:#172b22;background:#f6f8f6}.app-main{box-sizing:border-box;max-width:1440px;margin:auto;padding:38px 5% 80px}.panel{background:white;border:1px solid #ccd8ce;border-radius:12px;padding:18px;margin:16px 0}label{display:block;margin:12px 0}input,select{display:block;width:100%;max-width:600px;padding:10px;border:1px solid #aaa;border-radius:6px}button{padding:10px 14px;margin:5px;border:1px solid #bbb;border-radius:7px;cursor:pointer}article{border-top:1px solid #ddd;padding:12px 0}a{overflow-wrap:anywhere}small{color:#53675c}#blazor-error-ui{display:none}
 /* Common navigation: scoped to avoid changing existing business forms. */
 .service-navigation{background:#fff;border-bottom:1px solid #d8ded9;color:#26332b;font-size:16px;line-height:1.5}
 .service-navigation [hidden]{display:none!important}
-.service-navigation-inner{max-width:1100px;padding:12px 16px;margin:auto;display:flex;align-items:center;gap:16px;position:relative}
+.service-navigation-inner{box-sizing:border-box;max-width:none;padding:16px 5%;margin:auto;display:flex;align-items:center;gap:20px;position:relative}
 .service-brand{flex:1;min-width:0;text-decoration:none;color:inherit;display:flex;flex-direction:column;overflow-wrap:anywhere}
 .service-brand strong{font-size:20px;line-height:1.35}.service-brand span{font-size:14px;color:#536057}.service-brand small{color:#765018;font-size:14px}
 .navigation-controls{display:flex;align-items:center;flex-shrink:0;gap:8px}
@@ -12,9 +12,37 @@ body{font-family:system-ui,sans-serif;color:#172b22;background:#f6f8f6}main{max-
 .navigation-panel a,.navigation-panel button{display:block;width:100%;text-align:left;overflow-wrap:anywhere}.navigation-panel button{background:transparent;border:0}.navigation-panel p{margin:8px 12px;padding-bottom:8px;border-bottom:1px solid #d8ded9;overflow-wrap:anywhere}
 .navigation-panel a:hover,.navigation-panel button:hover{background:#eef4f9}
 .service-navigation :focus-visible{outline:3px solid #1767ad;outline-offset:3px}
-.navigation-status{max-width:1100px;margin:0 auto;padding:0 16px;font-size:14px}.navigation-status:empty{display:none}
+.navigation-status{box-sizing:border-box;max-width:none;margin:0;padding:0 5%;font-size:14px}.navigation-status:empty{display:none}
 @media(max-width:480px){.service-navigation-inner{gap:8px}.service-brand strong{font-size:18px}.navigation-controls{gap:4px}.navigation-controls a,.navigation-controls button{padding:10px 8px}.navigation-controls button span{display:none}}
 @media(prefers-color-scheme:dark){.service-navigation{background:#191919;color:#fff;border-color:#555}.service-brand span{color:#c2c8c3}.service-brand small{color:#e9bd79}.navigation-panel{background:#202020;border-color:#555}.navigation-controls a,.navigation-controls button{border-color:#555}.navigation-controls button{background:#202020}.navigation-controls a,.navigation-controls button,.navigation-panel a,.navigation-panel button{color:#78b8ff}.navigation-panel p{border-color:#555}.navigation-panel a:hover,.navigation-panel button:hover{background:#303843}.service-navigation :focus-visible{outline-color:#78b8ff}}
 @media(forced-colors:active){.service-navigation,.navigation-panel,.navigation-controls a,.navigation-controls button{border:1px solid CanvasText}.service-navigation :focus-visible{outline-color:Highlight}}
 
 .navigation-controls svg{display:inline-block;vertical-align:middle;flex-shrink:0}
+
+.admin-account-editor{margin-top:20px;padding-top:16px;border-top:1px solid #ccd8ce}
+.admin-account-editor h3{margin-top:0}
+.admin-account-table-wrap{max-width:100%;overflow:auto;border:1px solid #ccd8ce;border-radius:8px}
+.admin-account-table{width:100%;min-width:560px;border-collapse:collapse;background:#fff}
+.admin-account-table th,.admin-account-table td{padding:12px 14px;border-bottom:1px solid #dce4dd;text-align:left;vertical-align:top}
+.admin-account-table th{background:#f0f4f1;font-weight:650;white-space:nowrap}
+.admin-account-table tbody tr:last-child td{border-bottom:0}
+.account-name-button{margin:0;padding:4px 0;border:0;border-radius:3px;background:transparent;color:#075da8;font:inherit;font-weight:650;text-align:left;text-decoration:underline;text-underline-offset:2px}
+.account-role-tags{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.account-role-tag{display:inline-flex;align-items:center;border:1px solid #a9c5b0;border-radius:999px;background:#eef6ef;padding:3px 9px;font-size:.9em;white-space:nowrap}
+.account-role-event{border-color:#b5bfd6;background:#f0f3fa}
+.account-role-pending{border-color:#c58731;background:#fff5dc;color:#613b00}
+.account-admin-toggle{display:flex;align-items:center;gap:8px;margin:14px 0}
+.account-admin-toggle input{display:inline-block;width:1.1rem;height:1.1rem;max-width:none;margin:0}
+.admin-account-backdrop{position:fixed;inset:0;z-index:1500;display:flex;align-items:center;justify-content:center;padding:16px;background:#14221888}
+.admin-account-dialog{box-sizing:border-box;width:min(620px,100%);max-height:min(86vh,760px);overflow:auto;padding:22px;background:#fff;color:#172b22;border:1px solid #9eafa2;border-radius:12px;box-shadow:0 16px 52px #0005}
+.admin-account-dialog-header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;border-bottom:1px solid #dce4dd;padding-bottom:12px}
+.admin-account-dialog-header h4{margin:4px 0}
+.admin-account-details{display:grid;grid-template-columns:minmax(130px, .7fr) minmax(0,1.3fr);gap:8px 14px;margin:18px 0}
+.admin-account-details dt{font-weight:650}
+.admin-account-details dd{margin:0;overflow-wrap:anywhere}
+.admin-account-dialog :focus-visible,.account-name-button:focus-visible,.admin-account-table-wrap:focus-visible{outline:3px solid #1767ad;outline-offset:3px}
+@media(max-width:520px){.admin-account-dialog{padding:16px}.admin-account-details{grid-template-columns:1fr;gap:3px}.admin-account-details dd{margin-bottom:10px}}
+@media(prefers-color-scheme:dark){.admin-account-editor{border-color:#555}.admin-account-table-wrap{border-color:#555}.admin-account-table{background:#202020;color:#f2f4f2}.admin-account-table th{background:#303a33}.admin-account-table th,.admin-account-table td{border-color:#555}.account-name-button{color:#8fc3ff}.account-role-tag{background:#25372a;border-color:#64836c}.account-role-event{background:#2c3344;border-color:#68738d}.account-role-pending{background:#44391f;border-color:#9f7835;color:#ffdc91}.admin-account-dialog{background:#202020;color:#f2f4f2;border-color:#555}.admin-account-dialog-header{border-color:#555}.admin-account-dialog :focus-visible,.account-name-button:focus-visible,.admin-account-table-wrap:focus-visible{outline-color:#8fc3ff}}
+@media(forced-colors:active){.admin-account-table-wrap,.admin-account-table th,.admin-account-table td,.account-role-tag,.admin-account-dialog{border:1px solid CanvasText}.account-name-button{color:LinkText}.admin-account-dialog :focus-visible,.account-name-button:focus-visible,.admin-account-table-wrap:focus-visible{outline-color:Highlight}}
+@media(max-width:700px){.app-main{padding:25px 4% 40px}.service-navigation-inner{padding:12px 4%}.navigation-status{padding:0 4%}}
+@media(min-width:1051px){.app-main{max-width:1920px;padding-left:24px;padding-right:24px}.service-navigation-inner,.navigation-status{padding-left:24px;padding-right:24px}}

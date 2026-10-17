@@ -1,0 +1,21 @@
+.participation-view{min-width:0}
+.participation-view-embedded{padding-top:4px}
+.participation-view-embedded>h2{margin:0 0 14px}
+.participation-view fieldset{min-width:0}
+.participation-table-scroll{max-width:100%;overflow-x:auto;overscroll-behavior-inline:contain}
+.participation-table-scroll table{min-width:560px}
+@media(max-width:600px){.participation-view-embedded>h2{font-size:1.25rem}.participation-table-scroll table{min-width:520px}}
+.participation-entry-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(290px,350px);gap:18px;align-items:start;min-width:0}
+.participation-entry-layout-standalone{display:block}
+.participation-slot-area{min-width:0}
+.participation-entry-panel{min-width:0}
+.participation-view-embedded .participation-entry-panel{position:sticky;top:96px;padding:18px;border:1px solid var(--appearance-line,#cbd8ce);border-radius:12px;background:var(--appearance-surface,#fffefa)}
+.participation-entry-eyebrow{margin:0 0 6px;font-size:.75rem;font-weight:700;letter-spacing:.14em;color:var(--appearance-accent,#1e6557)}
+.participation-entry-panel h3{margin:0 0 12px}
+.participation-selection-list{margin:0 0 14px}
+.participation-selection-empty,.participation-refresh-note,.participation-matrix-fallback{font-size:.8125rem;line-height:1.5;color:var(--appearance-text,#18312e)}
+.participation-selection-chip{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:5px 0;padding:7px 9px;border:1px solid var(--appearance-line,#cbd8ce);border-radius:7px;font-size:.8125rem;overflow-wrap:anywhere}
+.participation-selection-chip button{min-width:36px;min-height:36px;padding:0;border:0;background:transparent;color:var(--appearance-text,#18312e);font-size:1.1rem}
+.participation-refresh-note{max-width:900px;margin:6px 0 14px}
+@media(max-width:960px){.participation-entry-layout-embedded{grid-template-columns:minmax(0,1fr)}.participation-view-embedded .participation-entry-panel{position:static}}
+@media(max-width:600px){.participation-view-embedded>h2{font-size:1.25rem}.participation-table-scroll table{min-width:520px}.participation-view-embedded .participation-entry-panel{padding:14px}}

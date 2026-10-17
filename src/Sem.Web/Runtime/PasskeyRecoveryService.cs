@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Data;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
@@ -107,7 +108,7 @@ public sealed class PasskeyRecoveryService(
         if (!explicitlyConfirmed) throw new ValidationException("認証リセットの明示確認が必要です。");
         if (!notifications.EmailConfigured) throw new ValidationException("SMTPを設定してから復旧を開始してください。");
         var safeReason = NormalizeReason(reason);
-        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
         var liveAdmin = await RequireAdminAsync(context, ct);
         if (liveAdmin.Id != admin.Id) throw new UnauthorizedAccessException();
         var target = await RequireEligibleTargetAsync(targetUserId, liveAdmin.Id, ct);
@@ -414,7 +415,8 @@ public sealed class PasskeyRecoveryService(
     public async Task<PasskeyRecoveryGrant> ConfirmMailAsync(
         string operationId, string token, CancellationToken ct = default)
     {
-        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        // The host recovery branch removes the current credentials here.
+        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
         var operation = await db.PasskeyRecoveryOperations.SingleOrDefaultAsync(x => x.Id == operationId, ct);
         if (operation is null) throw new ValidationException("復旧リンクは無効または期限切れです。");
         var rate = await RateAsync(operation.UserId, ct);
@@ -523,7 +525,7 @@ public sealed class PasskeyRecoveryService(
         CancellationToken ct = default)
     {
         _ = context; // Do not sign in or issue a normal session after enrollment.
-        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
         var (operation, target) = await RequireGrantAsync(targetUserId, grant, ct);
         if (!ChallengeMatches(credential, operation.CreationChallengeHash))
             throw new ValidationException("新しいパスキーを確認できませんでした。");

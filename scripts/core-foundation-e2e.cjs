@@ -41,7 +41,7 @@ module.exports = async ({p,g,ok}) => {
   try { await w.waitForSelector('#service-save'); } catch(e) { throw Error(e.message+'; transport='+JSON.stringify(transportErrors)+'; runtime='+JSON.stringify(browserErrors)); } await w.locator('#service-name').fill('Unsaved preview');
   await w.waitForFunction(()=>document.querySelector('#core-title').textContent==='Unsaved preview');
   ok((await api(g,'workspace')).body.service.name===svc.name,'Blazor service preview is a local draft, not a shared write');
-  await w.locator('#core-service button[type=button]').click();
+  await w.locator('#core-service').getByRole('button',{name:'サービス編集を取消',exact:true}).click();
   await w.waitForSelector('#service-edit');ok((await api(p,'workspace')).body.service.name===svc.name,'Blazor cancel discards service draft without persistence');
   await w.locator('#profile-edit').click();await w.waitForSelector('#profile-save');await w.locator('#profile-name').fill('管理者更新');
   await w.locator('#profile-reading').fill('カンリシャ');await w.locator('#profile-save').click();

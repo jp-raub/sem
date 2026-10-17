@@ -2,21 +2,127 @@
 @rendermode InteractiveServer
 @using Sem.Web.Core
 @using System.Globalization
+@using System.Security.Claims
 @inject AuthenticationStateProvider Authentication
 @inject CoreFoundationService Core
+@inject IJSRuntime JS
+@implements IAsyncDisposable
 <PageTitle>@Title — 業務基盤</PageTitle>
 <h1 id="core-title">@Title</h1>
 @if (View is not null) { <p>@(Editing == "service" ? ServiceDescription : View.Service.Description)</p> }
-<p>サービス・プロフィール・イベント概要の実DB基盤です。カスタムフェーズは専用画面で管理できます。曲・参加登録・当日進行・受付等の実装済み画面は、イベント一覧から開けます。画面の統合と実機受入は別工程です。</p>
-<p><a id="workspace-auth-link" data-enhance-nav="false" href="/auth?returnUrl=%2Fworkspace">ログイン画面へ</a> ／ <a href="/">外部テスト画面</a></p>
+<p class="workspace-lead">開催予定・現在のフェーズ・お知らせを確認し、各イベントの参加・運営画面へ移動できます。</p>
+<p class="workspace-login-link"><a id="workspace-auth-link" data-enhance-nav="false" href="/auth?returnUrl=%2Fworkspace">ログイン画面へ</a></p>
 <p id="core-error" role="alert">@Error</p><p id="core-message" role="status">@Message</p>
 @if (View is null)
 {
     <p>通常のパスキー認証が必要です。上のリンクからログインしてください。</p>
+    <p class="workspace-secondary-link"><a href="/">外部テスト画面（補助）</a></p>
 }
 else
 {
     <button id="core-refresh" disabled="@(Busy || Editing is not null)" @onclick="Load">最新状態を取得</button>
+    <section class="panel workspace-event-panel" id="core-events" aria-labelledby="core-events-heading">
+        <div class="workspace-events-heading">
+            <div>
+                <h2 id="core-events-heading">イベント一覧</h2>
+                <p>開催日時の降順に表示しています。行の「関連画面」から参加・運営機能を開けます。</p>
+            </div>
+            @if (View.IsAdmin) { <button id="event-new" disabled="@(Busy || Editing is not null)" @onclick="NewEvent">イベントを新規作成</button> }
+        </div>
+        @if (View.Events.Length == 0)
+        {
+            <p>閲覧できるイベントはありません。</p>
+        }
+        else
+        {
+            <div class="workspace-event-table-wrap">
+                <table class="workspace-event-table">
+                    <thead>
+                        <tr>
+                            <th scope="col">イベント</th>
+                            <th scope="col">開催日時</th>
+                            <th scope="col">現在のフェーズ</th>
+                            <th scope="col">お知らせ</th>
+                            <th scope="col">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in View.Events.OrderByDescending(eventItem => DateTimeOffset.Parse(eventItem.ScheduledDate, CultureInfo.InvariantCulture)))
+                        {
+                            <tr @key="item.Id" data-core-event="@item.Id">
+                                <td class="workspace-event-name">
+                                    <a class="workspace-event-overview" data-event-overview="@item.Id" href="@($"/events/{Uri.EscapeDataString(item.Id)}")">@item.Title</a>
+                                    @if (!string.IsNullOrWhiteSpace(item.Description)) { <p>@item.Description</p> }
+                                    @if (!string.IsNullOrWhiteSpace(item.Location)) { <small>@item.Location</small> }
+                                    @if (item.ManagerIds.Length > 0)
+                                    {
+                                        <small>担当管理者：@string.Join("、", item.ManagerIds.Select(id => View.Members.FirstOrDefault(member => member.UserId == id)?.DisplayName ?? "不明"))</small>
+                                    }
+                                </td>
+                                <td class="workspace-event-date">
+                                    <time datetime="@item.ScheduledDate">@Japan(item.ScheduledDate)</time>
+                                    <small>開場：@(item.OpensAt is null ? "未指定" : Japan(item.OpensAt))</small>
+                                </td>
+                                <td class="workspace-event-phase">
+                                    <span>@item.ActivePhaseName</span>
+                                    <small>@(item.ManualPhaseOverride ? "手動優先" : "日時による自動切替")</small>
+                                </td>
+                                <td class="workspace-event-announcement">
+                                    @(string.IsNullOrWhiteSpace(item.AnnouncementMessage) ? "お知らせはありません。" : item.AnnouncementMessage)
+                                </td>
+                                <td class="workspace-event-actions-cell">
+                                    <details class="workspace-event-actions">
+                                        <summary>関連画面</summary>
+                                        <div class="workspace-event-action-list">
+                                            <a href="@($"/events/{Uri.EscapeDataString(item.Id)}/progress")">当日進行</a>
+                                            <a href="@($"/events/{Uri.EscapeDataString(item.Id)}/timetable")">タイムテーブル</a>
+                                            <a href="@($"/events/{Uri.EscapeDataString(item.Id)}/participation")">参加登録・観覧</a>
+                                            <a href="@($"/events/{Uri.EscapeDataString(item.Id)}/qr")">自分の受付QR</a>
+                                            <a href="@($"/events/{Uri.EscapeDataString(item.Id)}/public-answers")">公開回答集計</a>
+                                            <a href="@($"/events/{Uri.EscapeDataString(item.Id)}/participants")">参加者名簿</a>
+                                            <a href="@($"/events/{Uri.EscapeDataString(item.Id)}/comments")">コメント</a>
+                                            @if (item.CanManage)
+                                            {
+                                                <span class="workspace-event-action-divider" aria-hidden="true"></span>
+                                                <a href="@($"/events/{Uri.EscapeDataString(item.Id)}/reception")">受付対象の検索</a>
+                                                <button type="button" disabled="@(Busy || Editing is not null)" @onclick="() => EditEvent(item)">概要・管理者を編集</button>
+                                                <a href="@($"/events/{Uri.EscapeDataString(item.Id)}/phases")">フェーズ管理</a>
+                                                <a href="@($"/events/{Uri.EscapeDataString(item.Id)}/definitions")">演奏パート定義</a>
+                                                <a href="@($"/events/{Uri.EscapeDataString(item.Id)}/questions")">設問管理</a>
+                                                <a href="@($"/events/{Uri.EscapeDataString(item.Id)}/songs")">曲・枠管理</a>
+                                                <a href="@($"/events/{Uri.EscapeDataString(item.Id)}/event-import")">CSV一括追記</a>
+                                            }
+                                        </div>
+                                    </details>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        @if (Editing == "event")
+        {
+            <form id="event-core-form" @onsubmit="SaveEvent" @onsubmit:preventDefault>
+                <label>イベント名<input id="event-title" @bind="EventTitle" maxlength="100" required /></label>
+                <label>概要<textarea @bind="EventDescription" maxlength="2000"></textarea></label>
+                <label>会場・URL<input @bind="EventLocation" maxlength="500" /></label>
+                <label>開始（日本時間）<input id="event-starts" type="datetime-local" step="1" value="@Starts" @onchange="e => Starts = e.Value?.ToString() ?? string.Empty" required /></label>
+                <label>開場（日本時間・任意）<input id="event-opens" type="datetime-local" step="1" value="@Opens" @onchange="e => Opens = e.Value?.ToString() ?? string.Empty" /></label>
+                <label>お知らせ<textarea @bind="Announcement" maxlength="2000"></textarea></label>
+                <label>表示<select id="event-phase" @bind="Phase"><option value="Hidden">非表示</option><option value="View">閲覧公開</option></select></label>
+                <fieldset>
+                    <legend>担当管理者（0名以上・複数選択可）</legend>
+                    @foreach (var member in View.Members)
+                    {
+                        <label><input type="checkbox" checked="@Managers.Contains(member.UserId)" @onchange="e => ToggleManager(member.UserId, e.Value is true)" />@member.DisplayName</label>
+                    }
+                </fieldset>
+                <p>閲覧公開は参加受付ではありません。曲・枠・フェーズ別の受付は後続実装です。</p>
+                <button id="event-core-save" disabled="@Busy">保存</button><button type="button" disabled="@Busy" @onclick="Cancel">取消</button>
+            </form>
+        }
+    </section>
     <section class="panel" id="core-account"><h2>自分のアカウント</h2>
         <p>@View.Profile.DisplayName ／ @(View.IsAdmin ? "全体管理者" : "一般ユーザー・担当イベント管理")</p>
         <p>認証メール：@View.Email（読取専用）</p>
@@ -54,48 +160,95 @@ else
                 <label>サービス名<input id="service-name" @bind="ServiceName" @bind:event="oninput" maxlength="60" required /></label>
                 <label>表示説明<input id="service-description" @bind="ServiceDescription" @bind:event="oninput" maxlength="80" /></label>
                 <p>表示は下書きプレビューです。保存するまで共有設定は変わりません。</p>
-                <button id="service-save" disabled="@Busy">保存</button><button type="button" disabled="@Busy" @onclick="Cancel">取消</button>
+                <button id="service-save" disabled="@(Busy || AdminRolesDirty)">サービス設定を保存</button>
+                <button type="button" disabled="@(Busy || AdminAccountsLoading)" @onclick="Cancel">サービス編集を取消</button>
             </form>
+            <section class="admin-account-editor" id="global-admin-accounts">
+                <h3>アカウント一覧・全体管理者権限</h3>
+                <p>権限だけを変更します。イベント限定管理者は各イベントで管理します。認証状態、最終ログイン、復旧操作はこの画面から変更しません。</p>
+                @if (AdminAccountsLoading)
+                {
+                    <p role="status">アカウント一覧を確認しています…</p>
+                }
+                else if (AdminAccounts is null)
+                {
+                    <p role="alert">@AdminAccountsError</p>
+                    <button type="button" disabled="@Busy" @onclick="LoadAdminAccounts">一覧を再取得</button>
+                }
+                else
+                {
+                    <div class="admin-account-table-wrap" tabindex="0" aria-label="アカウント権限一覧">
+                        <table class="admin-account-table">
+                            <thead><tr><th scope="col">表示名</th><th scope="col">権限タグ</th><th scope="col">最終ログイン</th></tr></thead>
+                            <tbody>
+                            @foreach (var account in AdminAccounts.Accounts)
+                            {
+                                var draftIsAdmin = AdminRoleDraft.TryGetValue(account.UserId, out var draft) ? draft : account.IsAdmin;
+                                var eventAdminCount = View.Events.Count(e => e.ManagerIds.Contains(account.UserId, StringComparer.Ordinal));
+                                <tr @key="account.UserId">
+                                    <td><button type="button" class="account-name-button" @onclick="() => OpenAdminAccount(account.UserId)">@account.DisplayName</button></td>
+                                    <td>
+                                        <div class="account-role-tags">
+                                            @if (draftIsAdmin) { <span class="account-role-tag">全体管理者</span> }
+                                            @if (eventAdminCount > 0) { <span class="account-role-tag account-role-event">イベント管理者 × @eventAdminCount</span> }
+                                            @if (!draftIsAdmin && eventAdminCount == 0) { <span>一般ユーザー</span> }
+                                            @if (draftIsAdmin != account.IsAdmin) { <span class="account-role-tag account-role-pending">未保存</span> }
+                                        </div>
+                                    </td>
+                                    <td>@account.LastLoginDisplay</td>
+                                </tr>
+                            }
+                            </tbody>
+                        </table>
+                    </div>
+                    @if (SelectedAdminAccount is not null)
+                    {
+                        var selected = SelectedAdminAccount!;
+                        var selectedDraftIsAdmin = AdminRoleDraft.TryGetValue(selected.UserId, out var selectedDraft) ? selectedDraft : selected.IsAdmin;
+                        var selectedCanReceiveAdmin = selected.Enabled && selected.EmailConfirmed && !selected.IsRecovering;
+                        var selectedEventAdminCount = View.Events.Count(e => e.ManagerIds.Contains(selected.UserId, StringComparer.Ordinal));
+                        <div class="admin-account-backdrop" @onclick="CloseAdminAccount">
+                            <section class="admin-account-dialog" role="dialog" aria-modal="true" aria-labelledby="admin-account-dialog-title"
+                                tabindex="-1" @onclick:stopPropagation @onkeydown="HandleAdminDialogKeyDown">
+                                <header class="admin-account-dialog-header">
+                                    <h4 id="admin-account-dialog-title">@selected.DisplayName</h4>
+                                    <button type="button" aria-label="閉じる" @onclick="CloseAdminAccount">閉じる</button>
+                                </header>
+                                <dl class="admin-account-details">
+                                    <dt>認証メール（読取専用）</dt><dd>@selected.Email</dd>
+                                    <dt>アカウント状態</dt><dd>@(selected.Enabled ? "有効" : "未有効") ／ @(selected.EmailConfirmed ? "メール確認済み" : "メール未確認")</dd>
+                                    <dt>最終ログイン</dt><dd>@selected.LastLoginDisplay</dd>
+                                    @if (selected.IsRecovering) { <dt>復旧状態</dt><dd>復旧中のため新しい全体管理者権限を付与できません。</dd> }
+                                    @if (selected.Bootstrap && selected.IsAdmin) { <dt>保護</dt><dd>Bootstrap管理者の全体管理者権限は解除できません。</dd> }
+                                </dl>
+                                <h5>権限</h5>
+                                <div class="account-role-tags">
+                                    @if (selectedDraftIsAdmin) { <span class="account-role-tag">全体管理者</span> }
+                                    @if (selectedEventAdminCount > 0) { <span class="account-role-tag account-role-event">イベント管理者 × @selectedEventAdminCount（イベント側で管理）</span> }
+                                    @if (!selectedDraftIsAdmin && selectedEventAdminCount == 0) { <span>一般ユーザー</span> }
+                                </div>
+                                <label class="account-admin-toggle">
+                                    <input type="checkbox" checked="@selectedDraftIsAdmin"
+                                        disabled="@(Busy || (!selected.IsAdmin && !selectedCanReceiveAdmin) || (selected.Bootstrap && selected.IsAdmin))"
+                                        aria-label="全体管理者権限: @selected.DisplayName"
+                                        @onchange="e => SetAdminRoleDraft(selected.UserId, e.Value is true)" />
+                                    全体管理者にする（下書き）
+                                </label>
+                                <p>表示名・プロフィールの編集、アカウント停止・削除、認証リセットはここでは行いません。</p>
+                            </section>
+                        </div>
+                    }
+                    <p>権限変更は下書きです。未有効・メール未確認・復旧中のアカウントには新しい権限を付与できません。Bootstrap管理者と最後の有効な全体管理者は解除できません。</p>
+                    <p>保存時に最新の権限と更新版を確認します。競合時は下書き全体を保存せず、最新一覧を取得してください。権限変更だけではSecurityStampや既存セッションを失効させず、各サーバー操作でDB権限を再確認します。</p>
+                    <button id="admin-roles-save" type="button" disabled="@(Busy || !AdminRolesDirty)" @onclick="SaveAdminRoles">権限変更を保存</button>
+                    <button id="admin-roles-cancel" type="button" disabled="@(Busy || !AdminRolesDirty)" @onclick="CancelAdminRoleDraft">権限の下書きを取消</button>
+                    <button id="admin-roles-refresh" type="button" disabled="@(Busy || AdminRolesDirty)" @onclick="LoadAdminAccounts">最新一覧を取得</button>
+                }
+            </section>
         }
         else { <button id="service-edit" disabled="@(Busy || Editing is not null)" @onclick="EditService">編集</button> }
         </section>
     }
-    <section class="panel" id="core-events"><h2>正式イベント</h2>
-        @if (View.IsAdmin) { <button id="event-new" disabled="@(Busy || Editing is not null)" @onclick="NewEvent">イベントを新規作成</button> }
-        @foreach (var item in View.Events)
-        {
-            <article data-core-event="@item.Id"><h3><a data-event-overview="@item.Id" href="@($"/events/{Uri.EscapeDataString(item.Id)}")">@item.Title</a></h3><p>@item.Description</p><p>@item.Location ／ @Japan(item.ScheduledDate)</p>
-                <p>開場：@(item.OpensAt is null ? "未指定" : Japan(item.OpensAt)) ／ @item.ActivePhaseName ／ @(item.ManualPhaseOverride ? "手動優先" : "自動")</p>
-                <p>@item.AnnouncementMessage</p>
-                <p>担当管理者：@string.Join("、", item.ManagerIds.Select(id => View.Members.FirstOrDefault(m => m.UserId == id)?.DisplayName ?? "不明"))</p>
-                <a href="@($"/events/{item.Id}/progress")">当日進行</a>
-                <a href="@($"/events/{item.Id}/timetable")">タイムテーブル</a>
-                <a href="@($"/events/{item.Id}/participation")">参加登録・観覧</a> <a href="@($"/events/{item.Id}/qr")">自分の受付QR</a> <a href="@($"/events/{item.Id}/public-answers")">公開回答集計</a> <a href="@($"/events/{item.Id}/participants")">参加者名簿</a> <a href="@($"/events/{item.Id}/comments")">コメント</a>
-                @if (item.CanManage) { <a href="@($"/events/{item.Id}/reception")">受付対象の検索</a> <button disabled="@(Busy || Editing is not null)" @onclick="() => EditEvent(item)">概要・管理者を編集</button> <a href="@($"/events/{item.Id}/phases")">フェーズ管理</a> <a href="@($"/events/{item.Id}/definitions")">演奏パート定義</a> <a href="@($"/events/{item.Id}/questions")">設問管理</a> <a href="@($"/events/{item.Id}/songs")">曲・枠管理</a> <a href="@($"/events/{item.Id}/event-import")">CSV一括追記</a> }
-            </article>
-        }
-        @if (View.Events.Length == 0) { <p>閲覧できるイベントはありません。</p> }
-        @if (Editing == "event")
-        {
-            <form id="event-core-form" @onsubmit="SaveEvent" @onsubmit:preventDefault>
-                <label>イベント名<input id="event-title" @bind="EventTitle" maxlength="100" required /></label>
-                <label>概要<textarea @bind="EventDescription" maxlength="2000"></textarea></label>
-                <label>会場・URL<input @bind="EventLocation" maxlength="500" /></label>
-                <label>開始（日本時間）<input id="event-starts" type="datetime-local" step="1" value="@Starts" @onchange="e => Starts = e.Value?.ToString() ?? string.Empty" required /></label>
-                <label>開場（日本時間・任意）<input id="event-opens" type="datetime-local" step="1" value="@Opens" @onchange="e => Opens = e.Value?.ToString() ?? string.Empty" /></label>
-                <label>お知らせ<textarea @bind="Announcement" maxlength="2000"></textarea></label>
-                <label>表示<select id="event-phase" @bind="Phase"><option value="Hidden">非表示</option><option value="View">閲覧公開</option></select></label>
-                <fieldset><legend>担当管理者（0名以上・複数選択可）</legend>
-                @foreach (var member in View.Members)
-                {
-                    <label><input type="checkbox" checked="@Managers.Contains(member.UserId)" @onchange="e => ToggleManager(member.UserId, e.Value is true)" />@member.DisplayName</label>
-                }
-                </fieldset>
-                <p>閲覧公開は参加受付ではありません。曲・枠・フェーズ別の受付は後続実装です。</p>
-                <button id="event-core-save" disabled="@Busy">保存</button><button type="button" disabled="@Busy" @onclick="Cancel">取消</button>
-            </form>
-        }
-    </section>
     <section class="panel"><h2>メンバープロフィールの閲覧</h2>
         @foreach (var member in View.Members) { <button disabled="@Busy" @onclick="() => PreviewProfile(member.UserId)">@member.DisplayName</button> }
         @if (Preview is not null)
@@ -106,18 +259,28 @@ else
             </article>
         }
     </section>
+    <p class="workspace-secondary-link"><a href="/">外部テスト画面（補助）</a></p>
 }
 @code {
     WorkspaceView? View;
+    GlobalAdminAccountsView? AdminAccounts;
     ProfileView? Preview;
+    IJSObjectReference? AdminAccountsModule;
     string Error = "", Message = "";
+    string AdminAccountsError = "";
     string? Editing, EventId;
-    bool Busy;
+    string? SelectedAdminAccountId;
+    bool Busy, AdminAccountsLoading;
+    int AdminLoadGeneration;
     string ServiceName = "", ServiceDescription = "", ProfileName = "", Reading = "", CallName = "";
     string EventTitle = "", EventDescription = "", EventLocation = "", Starts = "", Opens = "", Announcement = "", Phase = "Hidden";
     long Version;
     List<SocialDraft> Social = [];
     HashSet<string> Managers = [];
+    Dictionary<string, bool> AdminRoleDraft = new(StringComparer.Ordinal);
+    GlobalAdminAccountView? SelectedAdminAccount => AdminAccounts?.Accounts.SingleOrDefault(x => x.UserId == SelectedAdminAccountId);
+    bool AdminRolesDirty => AdminAccounts is not null &&
+        AdminAccounts.Accounts.Any(account => AdminRoleDraft.TryGetValue(account.UserId, out var draft) && draft != account.IsAdmin);
     string Title => Editing == "service" ? ServiceName : View?.Service.Name ?? "SEM";
     static TimeZoneInfo JapanZone => TimeZoneInfo.FindSystemTimeZoneById("Asia/Tokyo");
     static string Japan(string value) => TimeZoneInfo.ConvertTime(DateTimeOffset.Parse(value, CultureInfo.InvariantCulture), JapanZone).ToString("yyyy/MM/dd HH:mm:ss");
@@ -137,8 +300,98 @@ else
         catch { Error = "状態を取得できませんでした。保存せず再読み込みしてください。"; }
         finally { Busy = false; }
     }
-    void Cancel() { Editing = null; Error = ""; Message = "下書きを取り消しました。"; }
-    void EditService() { Editing = "service"; ServiceName = View!.Service.Name; ServiceDescription = View.Service.Description; Version = View.Service.RowVersion; }
+    void Cancel()
+    {
+        Editing = null; Error = ""; Message = "下書きを取り消しました。";
+        ClearAdminAccountDraft();
+    }
+    async Task EditService()
+    {
+        Editing = "service"; ServiceName = View!.Service.Name; ServiceDescription = View.Service.Description; Version = View.Service.RowVersion;
+        await LoadAdminAccounts();
+    }
+    async Task LoadAdminAccounts()
+    {
+        var generation = ++AdminLoadGeneration;
+        AdminAccountsLoading = true; AdminAccountsError = "";
+        try
+        {
+            AdminAccountsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "/admin-accounts.js");
+            var result = await AdminAccountsModule.InvokeAsync<GlobalAdminAccountsView>("load");
+            if (generation != AdminLoadGeneration || Editing != "service") return;
+            var actorId = (await Authentication.GetAuthenticationStateAsync()).User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (View?.IsAdmin != true || string.IsNullOrEmpty(actorId) || result.ActorId != actorId)
+                throw new InvalidOperationException("操作者が一致しません。");
+            AdminAccounts = result;
+            AdminRoleDraft = result.Accounts.ToDictionary(x => x.UserId, x => x.IsAdmin, StringComparer.Ordinal);
+        }
+        catch
+        {
+            if (generation == AdminLoadGeneration)
+            {
+                AdminAccounts = null; AdminRoleDraft.Clear();
+                AdminAccountsError = "管理者専用の一覧を取得できません。権限を確認して再試行してください。";
+            }
+        }
+        finally { if (generation == AdminLoadGeneration) AdminAccountsLoading = false; }
+    }
+    void SetAdminRoleDraft(string userId, bool isAdmin)
+    {
+        if (AdminAccounts is null) return;
+        AdminRoleDraft[userId] = isAdmin;
+    }
+    async Task OpenAdminAccount(string userId)
+    {
+        SelectedAdminAccountId = userId;
+        await InvokeAsync(StateHasChanged);
+        if (AdminAccountsModule is not null) await AdminAccountsModule.InvokeVoidAsync("focusDialog");
+    }
+    async Task CloseAdminAccount()
+    {
+        SelectedAdminAccountId = null;
+        await InvokeAsync(StateHasChanged);
+        if (AdminAccountsModule is not null) await AdminAccountsModule.InvokeVoidAsync("restoreDialogFocus");
+    }
+    async Task HandleAdminDialogKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape") await CloseAdminAccount();
+    }
+    void CancelAdminRoleDraft()
+    {
+        if (AdminAccounts is null) return;
+        AdminRoleDraft = AdminAccounts.Accounts.ToDictionary(x => x.UserId, x => x.IsAdmin, StringComparer.Ordinal);
+        Error = ""; Message = "権限の下書きを取り消しました。";
+    }
+    async Task SaveAdminRoles()
+    {
+        if (AdminAccounts is null || AdminAccountsModule is null) return;
+        var changes = AdminAccounts.Accounts
+            .Where(account => AdminRoleDraft.TryGetValue(account.UserId, out var draft) && draft != account.IsAdmin)
+            .Select(account => new { userId = account.UserId, expectedConcurrencyStamp = account.ConcurrencyStamp, isAdmin = AdminRoleDraft[account.UserId] })
+            .ToArray();
+        if (changes.Length == 0) return;
+        var actorId = AdminAccounts.ActorId;
+        var actorWillBeDemoted = changes.Any(change => change.userId == actorId && !change.isAdmin);
+        Busy = true; Error = ""; Message = "";
+        try
+        {
+            await AdminAccountsModule.InvokeVoidAsync("save", actorId, changes);
+            Message = "アカウント権限を保存しました。";
+            if (actorWillBeDemoted)
+            {
+                Editing = null; ClearAdminAccountDraft();
+                await Load();
+            }
+            else await LoadAdminAccounts();
+        }
+        catch (JSException e) { Error = string.IsNullOrWhiteSpace(e.Message) ? "権限を保存できません。最新一覧を確認してください。" : e.Message; }
+        finally { Busy = false; }
+    }
+    void ClearAdminAccountDraft()
+    {
+        AdminLoadGeneration++;
+        AdminAccounts = null; AdminRoleDraft.Clear(); AdminAccountsError = ""; AdminAccountsLoading = false; SelectedAdminAccountId = null;
+    }
     void EditProfile()
     {
         Editing = "profile"; var p = View!.Profile; ProfileName = p.DisplayName; Reading = p.Reading; CallName = p.CallName; Version = p.RowVersion;
@@ -157,7 +410,7 @@ else
     async Task Save(Func<System.Security.Claims.ClaimsPrincipal, Task> action)
     {
         Busy = true; Error = ""; Message = "";
-        try { await action((await Authentication.GetAuthenticationStateAsync()).User); Editing = null; Message = "保存しました。"; await Load(); }
+        try { await action((await Authentication.GetAuthenticationStateAsync()).User); Editing = null; ClearAdminAccountDraft(); Message = "保存しました。"; await Load(); }
         catch (UnauthorizedAccessException) { View = null; Preview = null; Editing = null; Error = "ログイン状態と権限を確認し、再ログインしてください。"; }
         catch (Exception e) when (e is System.ComponentModel.DataAnnotations.ValidationException or CoreConflictException) { Error = e.Message; }
         catch { Error = "保存できませんでした。下書きを確認し、最新状態を取得してください。"; }
@@ -169,4 +422,10 @@ else
         catch { Preview = null; Error = "プロフィールを閲覧できません。"; }
     }
     sealed class SocialDraft { public string Service { get; set; } = "その他"; public string Url { get; set; } = ""; }
+    public async ValueTask DisposeAsync()
+    {
+        if (AdminAccountsModule is null) return;
+        try { await AdminAccountsModule.DisposeAsync(); }
+        catch (JSDisconnectedException) { }
+    }
 }

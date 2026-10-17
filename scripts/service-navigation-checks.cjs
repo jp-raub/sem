@@ -11,7 +11,7 @@ module.exports = async ({p,g,ok}) => {
   ok(post===405,'Header endpoint rejects mutation');
   await p.locator('#navigation-toggle').click();await p.waitForSelector('#navigation-panel:visible');
   const labels=await p.locator('#navigation-panel a').allTextContents();
-  ok(labels.join('|')==='サービス管理|イベント一覧|プロフィール管理|アカウント管理|通知管理|招待管理','Shared menu keeps approved service/own-management order');
+  ok(labels.join('|')==='サービス管理|イベント一覧|プロフィール管理|アカウント管理|通知管理|表示設定|招待管理','Shared menu keeps approved service/own-management order');
   ok(await p.locator('#navigation-panel a').first().evaluate(e=>e===document.activeElement),'Opening menu focuses first permitted link');
   await p.keyboard.press('Escape');
   ok(await p.locator('#navigation-panel').isHidden()&&await p.locator('#navigation-toggle').evaluate(e=>e===document.activeElement),'Escape closes menu and returns focus');
@@ -30,7 +30,7 @@ module.exports = async ({p,g,ok}) => {
   const prior=await p.locator('#navigation-name').innerText();await p.locator('#service-name').fill('Preview <script> harmless');
   await p.waitForFunction(()=>document.getElementById('navigation-name').textContent==='Preview <script> harmless');
   ok(await p.locator('#navigation-draft').isVisible()&&await p.locator('#navigation-name script').count()===0,'Service draft previews as text without applying or executing markup');
-  await p.locator('#core-service').getByRole('button',{name:'取消',exact:true}).click();await p.waitForFunction(()=>document.getElementById('navigation-draft').hidden);
+  await p.locator('#core-service').getByRole('button',{name:'サービス編集を取消',exact:true}).click();await p.waitForFunction(()=>document.getElementById('navigation-draft').hidden);
   ok(await p.locator('#navigation-name').innerText()===prior,'Cancel discards header preview and restores saved service name');
   await p.goto(origin+'/?panel=notifications');await p.waitForSelector('#sem-notification-panel');
   ok(await p.locator('#sem-notification-panel').isVisible(),'Notification menu leads to the existing real device settings');

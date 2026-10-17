@@ -3,11 +3,10 @@
 @attribute [AllowAnonymous]
 
 <PageTitle>パスキーでログイン</PageTitle>
-<h1>パスキーでログイン</h1>
-<section class="panel" aria-labelledby="auth-heading">
-    <h2 id="auth-heading">アカウント確認</h2>
-    <p>登録済みメールアドレスとパスキーを使ってログインします。パスワードは使用しません。</p>
-    <p id="auth-status" role="status" aria-live="polite">ログイン画面を準備しています。JavaScript または画面スクリプトを読み込めない場合、ログイン操作は無効のままです。再読み込みしても改善しない場合は管理者に連絡してください。</p>
+<section class="panel auth-page" aria-labelledby="auth-heading">
+    <p class="auth-eyebrow">PASSKEY SIGN IN</p>
+    <h1 id="auth-heading">また、一緒に音楽を。</h1>
+    <p class="auth-introduction">登録済みメールアドレスとパスキーでログイン。<br />セッションへの参加・パート登録はこちら。</p>
     <p id="auth-error" role="alert" aria-live="assertive"></p>
     <form id="auth-form" method="post" action="/auth" autocomplete="on" novalidate>
         <fieldset id="auth-fields" disabled>
@@ -17,6 +16,8 @@
         </fieldset>
     </form>
     <button id="auth-reconcile" type="button" hidden disabled>ログイン状態を確認</button>
-    <p>招待を受け取った方は、<a href="/join" data-enhance-nav="false">招待コードで新規登録</a>へ進んでください。</p>
+    <p class="auth-invitation">招待を受け取った方は<br /><a href="/join" data-enhance-nav="false">招待コードで新規登録</a></p>
+    <p class="auth-security">パスワードは使用しません。パスキーの確認は、お使いの端末・ブラウザーの案内に従ってください。</p>
+    <p id="auth-status" role="status" aria-live="polite">ログイン画面を準備しています。JavaScript または画面スクリプトを読み込めない場合、ログイン操作は無効のままです。再読み込みしても改善しない場合は管理者に連絡してください。</p>
 </section>
 <script src="/auth.js" defer></script>

@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Data;
 using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
@@ -10,8 +11,7 @@ using Sem.Web.Data;
 namespace Sem.Web.Runtime;
 
 public class PasskeyAdditionService(ApplicationDbContext db, UserManager<ApplicationUser> users,
-    SignInManager<ApplicationUser> signin, NotificationService notifications, DeploymentSettings settings,
-    TimeProvider clock)
+    SignInManager<ApplicationUser> signin, NotificationService notifications, TimeProvider clock)
 {
     public const string SessionClaim = "sem.authentication-session";
     public const long OperationSeconds = 15 * 60;
@@ -39,7 +39,7 @@ public class PasskeyAdditionService(ApplicationDbContext db, UserManager<Applica
     {
         if (!notifications.EmailConfigured) throw new ValidationException("SMTPを設定してから追加してください。");
         var hash = SessionHash(context);
-        await using var tx = await db.Database.BeginTransactionAsync();
+        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
         await db.Entry(user).ReloadAsync();
         RequireOwner(user);
         await db.PasskeyAdditions.Where(p => p.UserId == user.Id && p.SessionHash == hash &&
@@ -62,7 +62,7 @@ public class PasskeyAdditionService(ApplicationDbContext db, UserManager<Applica
 
     public async Task ReauthenticateAsync(HttpContext context, ApplicationUser user, string id, string credential)
     {
-        await using var tx = await db.Database.BeginTransactionAsync();
+        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
         var flow = await RequireAsync(context, user, id);
         if (flow.ReauthenticatedAt != null) throw new ValidationException("再認証は完了済みです。");
         CheckChallenge(credential, flow.ReauthenticationChallengeHash);
@@ -82,7 +82,7 @@ public class PasskeyAdditionService(ApplicationDbContext db, UserManager<Applica
 
     public async Task ResendAsync(HttpContext context, ApplicationUser user, string id)
     {
-        await using var tx = await db.Database.BeginTransactionAsync();
+        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
         var flow = await RequireAsync(context, user, id);
         RequireReauthentication(flow);
         // All mutations remain under the existing global API rate limiter.
@@ -96,12 +96,12 @@ public class PasskeyAdditionService(ApplicationDbContext db, UserManager<Applica
     public async Task ConfirmEmailAsync(HttpContext context, ApplicationUser user, string token)
     {
         var hash = SemEndpoints.Hash(token);
-        await using var tx = await db.Database.BeginTransactionAsync();
+        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
         var candidate = await db.PasskeyAdditions.FirstOrDefaultAsync(p => p.EmailTokenHash == hash);
-        if (candidate is null) throw new ValidationException("確認リンクは無効・使用済みです。");
+        if (candidate is null) throw new ValidationException("確認コードは無効・使用済みです。");
         var flow = await RequireAsync(context, user, candidate.Id);
         RequireReauthentication(flow);
-        if (flow.EmailVerifiedAt != null) throw new ValidationException("確認リンクは使用済みです。");
+        if (flow.EmailVerifiedAt != null) throw new ValidationException("確認コードは使用済みです。");
         flow.EmailTokenHash = null;
         flow.EmailVerifiedAt = Now;
         flow.RegistrationUntil = RegistrationDeadline(flow.Expires, Now);
@@ -113,7 +113,7 @@ public class PasskeyAdditionService(ApplicationDbContext db, UserManager<Applica
 
     public async Task<string> CreationOptionsAsync(HttpContext context, ApplicationUser user)
     {
-        await using var tx = await db.Database.BeginTransactionAsync();
+        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
         var flow = await RequireAsync(context, user);
         RequireRegistration(flow);
         var options = await signin.MakePasskeyCreationOptionsAsync(new()
@@ -127,7 +127,7 @@ public class PasskeyAdditionService(ApplicationDbContext db, UserManager<Applica
 
     public async Task CompleteAsync(HttpContext context, ApplicationUser user, string credential)
     {
-        await using var tx = await db.Database.BeginTransactionAsync();
+        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
         var flow = await RequireAsync(context, user);
         RequireRegistration(flow);
         CheckChallenge(credential, flow.CreationChallengeHash);
@@ -209,9 +209,9 @@ public class PasskeyAdditionService(ApplicationDbContext db, UserManager<Applica
         flow.EmailVerifiedAt = null;
         flow.RegistrationUntil = null;
         flow.CreationChallengeHash = null;
-        var link = new Uri(new Uri(settings.PublicUrl), "?passkeyAddToken=" + token);
         notifications.Email(db, flow.UserId, "SEM パスキー追加のメール確認",
-            "再認証した同じブラウザで次のリンクを開いてください。追加操作全体の期限は再認証から15分です。\n" + link);
+            "プロフィール管理の「アカウント管理：パスキー」で、次の64桁の確認コードを入力してください。\n\n" +
+            token + "\n\n追加操作全体の期限は既存パスキーの再認証から15分です。再送しても期限は延長されません。");
     }
 
     private static void CheckChallenge(string credential, string? expectedHash)
