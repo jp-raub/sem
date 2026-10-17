@@ -1,0 +1,38 @@
+[
+  {
+    "script": "passkey-recovery-ui-checks.mjs",
+    "exit": 0
+  },
+  {
+    "script": "application-auth-checks.mjs",
+    "exit": 0
+  },
+  {
+    "script": "device-notification-ui-checks.mjs",
+    "exit": 0
+  },
+  {
+    "script": "invitation-management-ui-checks.mjs",
+    "exit": 0
+  },
+  {
+    "script": "admin-accounts-ui-checks.mjs",
+    "exit": 0
+  },
+  {
+    "script": "account-passkeys-ui-checks.mjs",
+    "exit": 0
+  },
+  {
+    "script": "legacy-passkey-url-checks.mjs",
+    "exit": 0
+  },
+  {
+    "script": "application-join-ui-checks.mjs",
+    "exit": 0
+  },
+  {
+    "script": "application-inbox-ui-checks.mjs",
+    "exit": 0
+  }
+]
