@@ -6,11 +6,12 @@ module.exports=async({p,g,ok})=>{
   const memberEmail=await g.evaluate(async()=> (await(await fetch('/api/core/workspace')).json()).email);
   let pickerWrites=0;const watch=r=>{if(r.method()==='POST'&&r.url().includes('/api/core/'))pickerWrites++;};adminPage.on('request',watch);
   await adminPage.locator('#event-new').click();await adminPage.locator('#event-manager-search').waitFor();
-  const picker=adminPage.locator('.admin-candidate-picker');await picker.locator('label').filter({hasText:'メール'}).waitFor();
+  const picker=adminPage.locator('.admin-candidate-picker[data-admin-picker-interactive="true"]');await picker.waitFor();await picker.locator('label').filter({hasText:'メール'}).waitFor();
   await adminPage.locator('#event-manager-search').fill(memberEmail.toUpperCase());
   await adminPage.locator('[data-admin-picker-candidate]').waitFor();
   ok(await adminPage.locator('[data-admin-picker-candidate]').count()===1,'Global event manager search matches email incrementally');
   await adminPage.locator('#event-manager-search').press('ArrowDown');
+  await adminPage.waitForFunction(()=>document.activeElement?.hasAttribute('data-admin-picker-candidate'));
   ok(await adminPage.locator('[data-admin-picker-candidate]').evaluate(e=>e===document.activeElement),'ArrowDown moves from search to first candidate');
   await adminPage.keyboard.press('Enter');await adminPage.locator('[data-admin-picker-remove]').waitFor();
   await adminPage.waitForFunction(()=>!document.querySelector('.admin-candidate-results'));
