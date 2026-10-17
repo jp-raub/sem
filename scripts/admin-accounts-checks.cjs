@@ -15,6 +15,14 @@ module.exports=async({p,g,ok})=>{
   await page.locator('#admin-roles-refresh').waitFor();
   ok(await page.locator('#global-admin-accounts thead th').allTextContents().then(x=>x.join(',')==='表示名,権限タグ,最終ログイン'),'Native account table keeps approved three-column layout');
   ok((await row().innerText()).includes('記録なし'),'Native account table does not invent last-login time');
+  await page.locator('#admin-account-search').fill(member.displayName);
+  await page.waitForFunction(()=>document.querySelectorAll('#global-admin-accounts tbody tr').length===1);
+  ok(await page.locator('#global-admin-accounts tbody tr').count()===1,'Account name search filters incrementally without changing permissions');
+  await page.locator('#admin-account-search').fill('not-a-real-account');
+  await page.waitForFunction(()=>document.querySelectorAll('#global-admin-accounts tbody tr').length===0);
+  ok(await page.locator('#global-admin-accounts tbody tr').count()===0,'Account search has an empty result state');
+  await page.locator('#admin-account-search').fill('');
+  await row().waitFor();
   await openMember();await page.getByRole('dialog').getByRole('checkbox').check();await close();
   ok((await row().innerText()).includes('未保存')&&(await read(p)).body.accounts.find(a=>a.userId===member.userId).isAdmin===false,'Native role toggle remains an unsaved local draft');
   ok(await page.locator('#service-save').isDisabled(),'Native service settings save is blocked while a role draft exists');

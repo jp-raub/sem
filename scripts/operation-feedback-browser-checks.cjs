@@ -6,8 +6,8 @@ const path = require('node:path');
 const root = path.resolve(__dirname, '../src/Sem.Web/wwwroot');
 let checks=0;
 function ok(value,name){assert.ok(value,name);checks++;console.log('PASS '+name);}
-const html=`<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><link rel="stylesheet" href="/theme-appearance.css"><link rel="stylesheet" href="/operation-feedback.css"></head><body><input id="draft" value="preserved"><button id="action">操作</button><span id="owner" hidden></span><span id="second" hidden></span><p id="inline" role="status">永続的な項目別結果</p><script type="module">import {notify,release} from '/operation-feedback.js';window.present=(kind,text)=>notify(document.getElementById('owner'),kind,text);window.releaseOwner=()=>release(document.getElementById('owner'));window.ready=true;</script></body></html>`;
-const server=http.createServer((req,res)=>{if(req.url==='/'){res.setHeader('Content-Type','text/html; charset=utf-8');res.end(html);return;}if(!['/operation-feedback.js','/operation-feedback.css','/theme-appearance.css'].includes(req.url)){res.statusCode=404;res.end();return;}res.setHeader('Content-Type',req.url.endsWith('.js')?'text/javascript':'text/css');res.end(fs.readFileSync(path.join(root,req.url)));});
+const html=`<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><link rel="stylesheet" href="/theme-appearance.css"><link rel="stylesheet" href="/operation-feedback.css"></head><body><input id="draft" value="preserved"><button id="action">操作</button><span id="owner" hidden></span><span id="second" hidden></span><p id="inline" role="status">永続的な項目別結果</p><script type="module">import {notify,release} from '/operation-feedback.js';import {createResultPresenter} from '/operation-result-presenter.js';window.currentOwner=true;window.presenter=createResultPresenter(document.getElementById('owner'),()=>window.currentOwner);window.present=(kind,text)=>notify(document.getElementById('owner'),kind,text);window.releaseOwner=()=>release(document.getElementById('owner'));window.ready=true;</script></body></html>`;
+const server=http.createServer((req,res)=>{if(req.url==='/'){res.setHeader('Content-Type','text/html; charset=utf-8');res.end(html);return;}if(!['/operation-feedback.js','/operation-result-presenter.js','/operation-feedback.css','/theme-appearance.css'].includes(req.url)){res.statusCode=404;res.end();return;}res.setHeader('Content-Type',req.url.endsWith('.js')?'text/javascript':'text/css');res.end(fs.readFileSync(path.join(root,req.url)));});
 (async()=>{
  await new Promise(r=>server.listen(0,'127.0.0.1',r));
  const browser=await chromium.launch({headless:true,...(process.env.SEM_CHROMIUM_PATH?{executablePath:process.env.SEM_CHROMIUM_PATH}:{})});
@@ -49,6 +49,15 @@ const server=http.createServer((req,res)=>{if(req.url==='/'){res.setHeader('Cont
  await page.reload();await page.waitForFunction(()=>window.ready);await page.setViewportSize({width:390,height:844});await page.evaluate(()=>{document.documentElement.dataset.appearanceMode='dark';present('error','狭い画面の検査');});
  const box=await page.locator('.operation-result-dialog').boundingBox();ok(box.x>=0&&box.x+box.width<=390,'Result dialog fits mobile viewport');
  ok(await page.locator('.operation-result-dialog').evaluate(e=>getComputedStyle(e).color!==getComputedStyle(e).backgroundColor),'Result surface follows dark theme');
+ await page.locator('.operation-result-dialog button').click();
+ await page.evaluate(()=>window.presenter.show('success','Adapter saved'));
+ ok(await page.locator('.operation-toast').isVisible(),'JS adapter presents confirmed success through the common renderer');
+ await page.evaluate(()=>{window.presenter.clear();window.currentOwner=false;window.presenter.show('error','Stale account');});
+ ok(await page.locator('.operation-result-dialog').count()===0&&await page.locator('.operation-toast').count()===0,'Stale account adapter cannot display a result for a newer owner');
+ await page.evaluate(()=>{window.currentOwner=true;window.presenter.show('unknown','Response lost');});
+ ok(await page.locator('.operation-result-dialog h2').innerText()==='結果が未確認です','JS adapter preserves uncertain outcome classification');
+ await page.evaluate(()=>window.presenter.clear());
+ ok(await page.locator('.operation-result-dialog').count()===0,'JS owner cleanup releases the common overlay');
  ok(writes===0,'Feedback never submits, refreshes, or retries');ok(errors.length===0,'No browser errors');
  console.log(`Operation feedback browser checks passed: ${checks}`);
  }finally{await browser.close();server.close();}

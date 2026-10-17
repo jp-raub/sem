@@ -1,3 +1,4 @@
+import { createResultPresenter } from './operation-result-presenter.js';
 const API = '/api/core/';
 const JSON_LIMIT = 4 * 1024 * 1024;
 const IMAGE_FILE_LIMIT = 10 * 1024 * 1024;
@@ -5,6 +6,7 @@ const SAVED_IMAGE_LIMIT = 1024 * 1024;
 const PNG_DATA_PREFIX = 'data:image/png;base64,';
 const PNG_SIGNATURE = [137, 80, 78, 71, 13, 10, 26, 10];
 const ALLOWED_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
+let resultPresenter;
 let state = null;
 let busy = false;
 let qrObjectUrl = null;
@@ -12,7 +14,7 @@ let imageWriteNeedsRefresh = false;
 let ownerGeneration=0, ownerRoot=null;
 const activeRequests=new Set();
 const currentOwner=mine=>mine===ownerGeneration && ownerRoot?.isConnected && ownerRoot===document.getElementById('profile-settings');
-export function cleanup(){ ownerGeneration++;for(const c of activeRequests)c.abort();activeRequests.clear();state=null;busy=false;imageWriteNeedsRefresh=false;if(qrObjectUrl){URL.revokeObjectURL(qrObjectUrl);qrObjectUrl=null;}ownerRoot=null; }
+export function cleanup(){ resultPresenter?.clear();resultPresenter=null; ownerGeneration++;for(const c of activeRequests)c.abort();activeRequests.clear();state=null;busy=false;imageWriteNeedsRefresh=false;if(qrObjectUrl){URL.revokeObjectURL(qrObjectUrl);qrObjectUrl=null;}ownerRoot=null; }
 
 const $ = id => document.getElementById(id);
 const elem = (tag, text = null) => {
@@ -113,12 +115,15 @@ async function csrf(signal) {
     const value=await boundedJson(response,64*1024);if(typeof value.token!=='string'||!value.token||value.token.length>8192)throw new Error('CSRFトークンを確認できません。');return value.token;
 }
 async function post(url,body,headers={}) {
+    let submitted=false, rejected=false;
     const mine=ownerGeneration,controller=new AbortController(),timer=setTimeout(()=>controller.abort(),25000);activeRequests.add(controller);
     try {
         const token=await csrf(controller.signal);
+        submitted=true;
         const response=await fetch(url,{method:'POST',credentials:'same-origin',mode:'same-origin',cache:'no-store',redirect:'error',headers:{Accept:'application/json','Content-Type':'application/json','X-CSRF-TOKEN':token,...headers},body:JSON.stringify(body),signal:controller.signal});
-        if(!response.ok||response.redirected){if(currentOwner(mine)&&(response.status===401||response.status===403))clearIdentity();await response.body?.cancel();throw new Error(`処理に失敗しました（${response.status}）。再読込して状態を確認してください。`);}
+        if(!response.ok||response.redirected){rejected=!response.redirected&&response.status>=400&&response.status<500&&response.status!==408;if(currentOwner(mine)&&(response.status===401||response.status===403))clearIdentity();await response.body?.cancel();throw new Error(`処理に失敗しました（${response.status}）。再読込して状態を確認してください。`);}
         const value=await boundedJson(response,JSON_LIMIT);return {json:async()=>value};
+    } catch(error) { if(error && typeof error==='object') error.resultKind=submitted&&!rejected?'unknown':'error';throw error;
     } finally {clearTimeout(timer);activeRequests.delete(controller);}
 }
 async function readJson(url) {
@@ -275,8 +280,9 @@ async function load(mine=ownerGeneration) {
 async function mutate(action) {
     if (busy || imageWriteNeedsRefresh) return;
     const mine=ownerGeneration;busy = true; setImageControls();setError(''); setStatus('保存しています…');
-    try { await action();if(!currentOwner(mine))return;await load(mine);if(currentOwner(mine))setStatus('保存しました。'); }
-    catch (error) { if(currentOwner(mine)){setError(error.message || '保存できませんでした。再読込して状態を確認してください。');setStatus('');} }
+    let saved=false;
+    try { await action();saved=true;if(!currentOwner(mine))return;await load(mine);if(currentOwner(mine)){setStatus('保存しました。');resultPresenter?.show('success','プロフィール設定を保存しました。');} }
+    catch (error) { if(currentOwner(mine)){setError(error.message || '保存できませんでした。再読込して状態を確認してください。');setStatus('');resultPresenter?.show(saved?'partial':error.resultKind||'error',saved?'保存処理は完了しましたが、最新表示を取得できませんでした。再保存せずプロフィールを再取得してください。':error.message||'処理を開始できませんでした。');} }
     finally { if(currentOwner(mine)){busy = false;setImageControls();} }
 }
 async function saveProfile(event) {
@@ -453,7 +459,7 @@ function bind() {
     $('profile-image-refresh').addEventListener('click', () => manualRefresh());
 }
 export async function init() {
-    cleanup();ownerRoot=$('profile-settings');const mine=ownerGeneration;if(!ownerRoot)return;
+    cleanup();ownerRoot=$('profile-settings');const mine=ownerGeneration;if(!ownerRoot)return;resultPresenter=createResultPresenter(ownerRoot,()=>currentOwner(mine));
     bind();
     try { await load(mine); }
     catch (error) { if(currentOwner(mine)){setError(error.message || 'プロフィールを読み込めません。');setStatus('');} }

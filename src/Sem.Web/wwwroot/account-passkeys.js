@@ -1,8 +1,10 @@
+import { createResultPresenter } from './operation-result-presenter.js';
 const API = '/api/account-passkeys/';
 const JSON_LIMIT = 64 * 1024;
 const CSRF_LIMIT = 16 * 1024;
 const TIMEOUT_MS = 25_000;
 
+let resultPresenter;
 let actorId = null;
 let stopped = false;
 let busy = false;
@@ -13,6 +15,7 @@ const $ = id => document.getElementById(id);
 function message(id, text = '') {
     const node = $(id);
     if (node) node.textContent = text;
+    if (id === 'account-passkeys-status' && ['パスキー名を変更しました。', '新しいパスキーを追加しました。', 'パスキーを削除しました。'].includes(text)) resultPresenter?.show('success', text);
 }
 
 function boundedJson(response, limit) {
@@ -338,6 +341,7 @@ async function refresh() {
 
 async function run(operation) {
     if (busy || stopped) return;
+    const completionPresenter = resultPresenter;
     busy = true;
     $('account-passkeys-add').disabled = true;
     message('account-passkeys-error', '');
@@ -348,6 +352,7 @@ async function run(operation) {
             ? '通信結果が不明です。操作を再送せず、一覧を再取得して状態を確認してください。'
             : (error instanceof Error ? error.message.slice(0, 400) : '操作できませんでした。'));
         if (error?.writeOutcomeUnknown) message('account-passkeys-status', '完了状態を照合してください。');
+        completionPresenter?.show(error?.writeOutcomeUnknown ? 'unknown' : 'error', $('account-passkeys-error')?.textContent || '操作結果を確認してください。');
     } finally {
         busy = false;
         if (!stopped) $('account-passkeys-add').disabled = false;
@@ -446,6 +451,9 @@ async function deleteFlow(key) {
 export async function init() {
     stopped = false;
     generation++;
+    resultPresenter?.clear();
+    const owner = $('account-passkeys'), mine = generation;
+    resultPresenter = createResultPresenter(owner, () => !stopped && mine === generation);
     $('account-passkeys-add').onclick = () => run(beginAddition);
     $('account-passkeys-refresh').onclick = () => run(refresh);
     try {
@@ -457,6 +465,7 @@ export async function init() {
 }
 
 export function cleanup() {
+    resultPresenter?.clear(); resultPresenter = null;
     stopped = true;
     generation++;
     for (const controller of controllers) controller.abort();

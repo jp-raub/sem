@@ -1,3 +1,4 @@
+import '../src/Sem.Web/wwwroot/operation-result-presenter.js';
 import fs from 'node:fs/promises';
 
 const editorSource=await fs.readFile(new URL('../src/Sem.Web/wwwroot/profile-editor.js',import.meta.url),'utf8');
@@ -74,7 +75,7 @@ try {
         }
         throw new Error('Unexpected editor request '+parsed.pathname);
     };
-    const editor=await import('data:text/javascript;base64,'+Buffer.from(editorSource).toString('base64')+'#success');
+    const editor=await import('data:text/javascript;base64,'+Buffer.from(editorSource.replace("'./operation-result-presenter.js'",JSON.stringify(new URL('../src/Sem.Web/wwwroot/operation-result-presenter.js',import.meta.url).href))).toString('base64')+'#success');
     await editor.init();
     check(document.getElementById('profile-image-preview').src===PNG&&!document.getElementById('profile-image-preview').hidden,
         'editor renders only a validated saved PNG data URL');
@@ -151,7 +152,7 @@ try {
         if(parsed.pathname==='/api/core/profile-image')throw new TypeError('network outcome unknown');
         throw new Error('Unexpected unknown-outcome request '+parsed.pathname);
     };
-    const uncertain=await import('data:text/javascript;base64,'+Buffer.from(editorSource).toString('base64')+'#uncertain');
+    const uncertain=await import('data:text/javascript;base64,'+Buffer.from(editorSource.replace("'./operation-result-presenter.js'",JSON.stringify(new URL('../src/Sem.Web/wwwroot/operation-result-presenter.js',import.meta.url).href))).toString('base64')+'#uncertain');
     await uncertain.init();
     const uncertainFile=new File([new Uint8Array([4])],'uncertain.png',{type:'image/png'});
     const uncertainInput=document.getElementById('profile-image-file');uncertainInput.files=[uncertainFile];
@@ -182,7 +183,7 @@ try {
         if(parsed.pathname==='/api/core/profile-image')return new Response('denied',{status:403});
         throw new Error('Unexpected denied request '+parsed.pathname);
     };
-    const deniedModule=await import('data:text/javascript;base64,'+Buffer.from(editorSource).toString('base64')+'#denied');
+    const deniedModule=await import('data:text/javascript;base64,'+Buffer.from(editorSource.replace("'./operation-result-presenter.js'",JSON.stringify(new URL('../src/Sem.Web/wwwroot/operation-result-presenter.js',import.meta.url).href))).toString('base64')+'#denied');
     await deniedModule.init();
     document.getElementById('profile-image-file').files=[new File([new Uint8Array([6])],'denied.png',{type:'image/png'})];
     await document.getElementById('profile-image-file').dispatch('change');
