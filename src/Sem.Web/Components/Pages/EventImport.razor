@@ -32,11 +32,11 @@
             <p><a id="event-import-sample" download="event-import-sample.csv" href="@($"/api/core/event-import-sample?id={Uri.EscapeDataString(LoadedId)}")">CSVサンプルをダウンロード</a></p>
             <fieldset disabled="@(!State.CanEdit || !ComposerBound)">
                 <legend>CSV入力（必須列 Kind, Title, Duration）</legend>
-                <label for="event-import-file">UTF-8 CSVファイル（最大1 MiB）</label>
+                <label for="event-import-file">UTF-8 CSVファイル（最大1 MiB）<FieldHelp HelpKey="import.file" Label="CSVファイル" /></label>
                 <input id="event-import-file" @ref="FileInput" type="file" accept=".csv,text/csv" @onchange="FileSelected" />
-                <label for="import-csv">CSVを貼り付け</label>
+                <label for="import-csv">CSVを貼り付け<FieldHelp HelpKey="import.csv" Label="CSV本文" /></label>
                 <textarea id="import-csv" @ref="CsvInput" rows="10" spellcheck="false" autocomplete="off"></textarea>
-                <label for="import-sheet-url">GoogleスプレッドシートURL（匿名CSV公開が必要）</label>
+                <label for="import-sheet-url">GoogleスプレッドシートURL（匿名CSV公開が必要）<FieldHelp HelpKey="import.sheet" Label="公開CSV URL" /></label>
                 <input id="import-sheet-url" type="url" inputmode="url" autocomplete="off" spellcheck="false" maxlength="2048" value="@SpreadsheetUrl" @oninput="SpreadsheetUrlChanged" aria-describedby="event-import-sheet-help" />
                 <p id="event-import-sheet-help">docs.google.com のシートURLだけを受け付けます。公開CSVとしてブラウザーから取得できるシートに限ります。Googleログイン・OAuthは使いません。取得に失敗する場合はCSVをダウンロードするか貼り付けてください。</p>
                 <button id="import-sheet-fetch" disabled="@(!State.CanEdit || string.IsNullOrWhiteSpace(SpreadsheetUrl))" @onclick="FetchSpreadsheet">公開CSVを取得して入力へ読み込む</button>

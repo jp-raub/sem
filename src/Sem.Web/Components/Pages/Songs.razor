@@ -10,16 +10,16 @@
 <p id="song-error" role="alert">@Error</p><p id="song-message" role="status">@Message</p>
 @if(Plan is not null){
  @if(!Editing){<button id="song-edit" @onclick="()=>{Editing=true;Message=string.Empty;}">編集</button><button id="song-refresh" @onclick="Load">最新状態を取得</button><p>イベント既定準備時間：@SongDuration.Format(Plan.DefaultPrepSeconds)</p>}
- else{<p>変更は下書きです。最後の保存まで共有されません。</p><label>イベント既定準備時間（m:ss / h:mm:ss）<input id="song-default-prep" @bind="DefaultPrep" disabled="@(Busy||Modal)" /></label><button id="song-add" disabled="@(Busy||Modal||Plan.Definitions.Length==0)" @onclick="New">曲を追加</button>}
+ else{<p>変更は下書きです。最後の保存まで共有されません。</p><label>イベント既定準備時間（m:ss / h:mm:ss）<FieldHelp HelpKey="event.defaultPrep" Label="既定準備時間" /><input id="song-default-prep" @bind="DefaultPrep" disabled="@(Busy||Modal)" /></label><button id="song-add" disabled="@(Busy||Modal||Plan.Definitions.Length==0)" @onclick="New">曲を追加</button>}
  @if(Plan.Definitions.Length==0){<p>先に演奏パート定義を作成してください。</p>}
  <table><thead><tr><th>曲名</th><th>アーティスト</th><th>演奏時間</th><th>準備時間</th><th>枠</th><th>順序</th></tr></thead><tbody>
  @foreach(var row in Rows){<tr data-song="@row.Id"><td>@if(Editing){<button data-song-title="@row.Id" disabled="@(Busy||Modal)" @onclick="()=>Open(row)">@row.Title</button>}else{@row.Title}</td><td>@row.Artist</td><td>@SongDuration.Format(row.PerformanceSeconds)</td><td>@(row.PrepSeconds is null?"イベント既定を継承":SongDuration.Format(row.PrepSeconds.Value))</td><td>@string.Join(" ／ ",row.Parts.Select(p=>p.Name+(p.Assigned?"（担当あり）":"")))</td><td>@if(Editing){<button data-song-up="@row.Id" disabled="@(Busy||Modal||Rows.IndexOf(row)==0)" @onclick="()=>Move(row,-1)">↑</button><button data-song-down="@row.Id" disabled="@(Busy||Modal||Rows.IndexOf(row)==Rows.Count-1)" @onclick="()=>Move(row,1)">↓</button>}</td></tr>}
  </tbody></table>
  @if(Editing){<button id="song-save" disabled="@(Busy||Modal)" @onclick="Save">保存</button><button id="song-cancel" disabled="@Busy" @onclick="Cancel">取消</button>}
  @if(Modal){<section role="dialog" aria-modal="true" aria-label="曲編集" class="panel"><h2>曲編集</h2>
- <label>曲名<input id="song-title" @bind="Title" maxlength="200" /></label><label>アーティスト<input id="song-artist" @bind="Artist" maxlength="200" /></label>
- <label>演奏時間（m:ss / h:mm:ss）<input id="song-performance" @bind="Performance" /></label>
- <label><input id="song-inherit" type="checkbox" @bind="Inherit" />イベント既定の準備時間を継承</label><label>個別準備時間（0:00は準備なし）<input id="song-prep" @bind="Prep" disabled="@Inherit" /></label>
+ <label>曲名<FieldHelp HelpKey="song.title" Label="曲名" /><input id="song-title" @bind="Title" maxlength="200" /></label><label>アーティスト<FieldHelp HelpKey="song.artist" Label="アーティスト" /><input id="song-artist" @bind="Artist" maxlength="200" /></label>
+ <label>演奏時間（m:ss / h:mm:ss）<FieldHelp HelpKey="song.duration" Label="演奏時間" /><input id="song-performance" @bind="Performance" /></label>
+ <label><input id="song-inherit" type="checkbox" @bind="Inherit" />イベント既定の準備時間を継承<FieldHelp HelpKey="song.inheritPrep" Label="既定準備時間を使用" /></label><label>個別準備時間（0:00は準備なし）<FieldHelp HelpKey="song.prep" Label="曲別準備時間" /><input id="song-prep" @bind="Prep" disabled="@Inherit" /></label>
  <fieldset><legend>演奏パート枠（各定義1枠）</legend>@foreach(var d in Plan.Definitions){<label><input data-song-part="@d.Id" type="checkbox" checked="@Chosen.Contains(d.Id)" disabled="@(Selected?.Parts.Any(p=>p.DefinitionId==d.Id&&p.Assigned)==true)" @onchange="a=>Toggle(d.Id,a.Value is true)" />@d.Name（@(d.Category=="Sing"?"声":"楽器")）</label>}</fieldset>
  <p>担当者のいる枠と曲は削除不可。登録済みの同種複数枠を勝手に統合しません。</p>
  <button id="song-apply" @onclick="Apply">下書きに反映</button><button id="song-close" @onclick="()=>Modal=false">閉じる</button>

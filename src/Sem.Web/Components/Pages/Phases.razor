@@ -14,7 +14,7 @@
  <p id="phase-mode">@(Plan.ManualOverride ? "手動優先（自動切替停止中）" : "自動（実際のサーバー時刻で評価）")</p>
  @if(!Editing) { <button id="phase-edit" @onclick="Edit">編集</button> <button id="phase-refresh" @onclick="Load">最新状態を取得</button> }
  else { <p>変更は下書きです。最後の保存まで共有されません。</p>
-  <label><input id="phase-manual" type="checkbox" @bind="Manual" />手動優先</label>
+  <label><input id="phase-manual" type="checkbox" @bind="Manual" />手動優先<FieldHelp HelpKey="phase.manual" Label="手動優先" /></label>
   <button type="button" id="phase-add" @onclick="New">カスタムフェーズを追加</button>
  }
  <table><thead><tr><th>有効</th><th>フェーズ</th><th>登録曲数上限</th><th>自動有効期間（日本時間）</th></tr></thead><tbody>
@@ -30,10 +30,10 @@
  {
   <section role="dialog" aria-modal="true" aria-label="カスタムフェーズ編集" class="panel">
    <h2>カスタムフェーズ編集</h2>
-   <label>名前<input id="phase-name" @bind="Name" maxlength="100" /></label>
-   <label>最大登録曲数（-1=無制限）<input id="phase-max" type="number" @bind="Maximum" min="-1" /></label>
-   <label>有効化（日本時間・任意）<input id="phase-start" type="datetime-local" step="1" value="@Starts" @onchange="e=>Starts=e.Value?.ToString()??string.Empty" /></label>
-   <label>無効化（日本時間・任意）<input id="phase-end" type="datetime-local" step="1" value="@Ends" @onchange="e=>Ends=e.Value?.ToString()??string.Empty" /></label>
+   <label>名前<FieldHelp HelpKey="phase.name" Label="フェーズ名" /><input id="phase-name" @bind="Name" maxlength="100" /></label>
+   <label>最大登録曲数（-1=無制限）<FieldHelp HelpKey="phase.maxPicks" Label="最大登録曲数" /><input id="phase-max" type="number" @bind="Maximum" min="-1" /></label>
+   <label>有効化（日本時間・任意）<FieldHelp HelpKey="phase.activate" Label="有効化日時" /><input id="phase-start" type="datetime-local" step="1" value="@Starts" @onchange="e=>Starts=e.Value?.ToString()??string.Empty" /></label>
+   <label>無効化（日本時間・任意）<FieldHelp HelpKey="phase.deactivate" Label="無効化日時" /><input id="phase-end" type="datetime-local" step="1" value="@Ends" @onchange="e=>Ends=e.Value?.ToString()??string.Empty" /></label>
    <button id="phase-draft-apply" @onclick="Apply">下書きに反映</button><button type="button" @onclick="()=>Modal=false">閉じる</button>
    @if(Selected is not null){<button id="phase-delete" disabled="@(Selected.Id==Active)" @onclick="Delete">下書きから削除</button>}
    <p>有効なフェーズは削除できません。既定フェーズは編集／削除できません。</p>

@@ -10,7 +10,7 @@
     <p id="auth-error" role="alert" aria-live="assertive"></p>
     <form id="auth-form" method="post" action="/auth" autocomplete="on" novalidate>
         <fieldset id="auth-fields" disabled>
-            <label for="auth-email">登録済みメールアドレス</label>
+            <label for="auth-email">登録済みメールアドレス<FieldHelp HelpKey="account.email" Label="登録済みメールアドレス" /></label>
             <input id="auth-email" type="email" autocomplete="username webauthn" maxlength="254" required inputmode="email" />
             <button id="auth-submit" type="submit" disabled>パスキーでログイン</button>
         </fieldset>

@@ -15,17 +15,17 @@
     <section class="panel" aria-labelledby="profile-edit-heading">
         <h2 id="profile-edit-heading">本人のプロフィール</h2>
         <form id="profile-editor-form">
-            <label>表示名<input id="profile-display-name" maxlength="60" required /></label>
-            <label>読み（カタカナは保存時にひらがなへ）<input id="profile-reading" maxlength="80" /></label>
-            <label>対面での呼び<input id="profile-call-name" maxlength="60" /></label>
-            <label>絵文字アイコン（任意）<input id="profile-icon" maxlength="16" autocomplete="off" /></label>
+            <label>表示名<FieldHelp HelpKey="profile.display" Label="表示名" /><input id="profile-display-name" maxlength="60" required /></label>
+            <label>読み（カタカナは保存時にひらがなへ）<FieldHelp HelpKey="profile.reading" Label="読み" /><input id="profile-reading" maxlength="80" /></label>
+            <label>対面での呼び<FieldHelp HelpKey="profile.call" Label="対面での呼び" /><input id="profile-call-name" maxlength="60" /></label>
+            <label>絵文字アイコン（任意）<FieldHelp HelpKey="profile.icon" Label="絵文字アイコン" /><input id="profile-icon" maxlength="16" autocomplete="off" /></label>
             <h3>プロフィール画像（任意）</h3>
             <div aria-live="polite">
                 <img id="profile-image-preview" alt="保存済みのプロフィール画像" style="max-width:8rem;max-height:8rem;object-fit:contain;" hidden />
                 <span id="profile-image-fallback" aria-hidden="true">🙂</span>
             </div>
             <label>画像ファイル（PNG・JPEG・WebP、10 MiB以下）
-                <input id="profile-image-file" type="file" accept="image/png,image/jpeg,image/webp" />
+                <FieldHelp HelpKey="profile.image" Label="プロフィール画像" /><input id="profile-image-file" type="file" accept="image/png,image/jpeg,image/webp" />
             </label>
             <p id="profile-image-selection" aria-live="polite">画像は選択されていません。</p>
             <button type="button" id="profile-image-upload">選択した画像をアップロード</button>
@@ -55,7 +55,7 @@
             <h3>パスキー追加の本人確認</h3>
             <p id="account-passkeys-add-status" role="status" aria-live="polite"></p>
             <div id="account-passkeys-email-code-panel">
-                <label for="account-passkeys-email-code">保存済みメールに届いた64桁の確認コード</label>
+                <label for="account-passkeys-email-code">保存済みメールに届いた64桁の確認コード<FieldHelp HelpKey="account.emailCode" Label="確認コード" /></label>
                 <input id="account-passkeys-email-code" type="text" inputmode="latin" maxlength="64"
                        autocomplete="off" autocapitalize="off" spellcheck="false" disabled />
                 <button type="button" id="account-passkeys-add-confirm" disabled>確認コードを確認</button>
@@ -74,7 +74,7 @@
         <p id="profile-email-change-status" role="status" aria-live="polite">変更状況を確認しています。</p>
         <p id="profile-email-change-error" role="alert"></p>
         <form id="profile-email-change-form" method="post" action="/profile/settings">
-            <label for="profile-email-change-address">新しいメールアドレス</label>
+            <label for="profile-email-change-address">新しいメールアドレス<FieldHelp HelpKey="account.newEmail" Label="新しいメールアドレス" /></label>
             <input id="profile-email-change-address" name="newEmail" type="email" maxlength="254" autocomplete="email" required disabled />
             <button id="profile-email-change-begin" type="submit" disabled>変更を開始して再認証</button>
         </form>
@@ -95,9 +95,9 @@
     <section class="panel" id="profile-question-admin" aria-labelledby="profile-question-admin-heading" hidden>
         <h2 id="profile-question-admin-heading">プロフィール設問の管理</h2>
         <form id="profile-question-add">
-            <label>設問（200文字以内）<input id="profile-question-new-text" maxlength="200" required /></label>
+            <label>設問（200文字以内）<FieldHelp HelpKey="question.text" Label="設問" /><input id="profile-question-new-text" maxlength="200" required /></label>
             <label>回答形式
-                <select id="profile-question-new-type"><option value="Text">自由記述</option><option value="YesNo">はい／いいえ</option></select>
+                <FieldHelp HelpKey="question.type" Label="回答形式" /><select id="profile-question-new-type"><option value="Text">自由記述</option><option value="YesNo">はい／いいえ</option></select>
             </label>
             <button>設問を追加</button>
         </form>

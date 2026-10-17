@@ -1,0 +1,92 @@
+// Isolated browser/HTTP fixture. No application DB, credentials, SMTP, or external requests.
+const { chromium } = require('playwright');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const http = require('node:http');
+const root = path.resolve(__dirname, '../src/Sem.Web/wwwroot');
+let checks = 0;
+function ok(value, name) { assert.ok(value, name); checks++; console.log('PASS ' + name); }
+const trigger = (key, label) => `<button type="button" class="field-help-trigger" data-field-help="${key}" data-field-label="${label}" aria-label="${label}の説明" aria-haspopup="dialog" aria-expanded="false">?</button>`;
+const html = `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><link rel="stylesheet" href="/sem.css"><link rel="stylesheet" href="/theme-appearance.css"><link rel="stylesheet" href="/field-help.css"></head><body><form><label>表示名${trigger('profile.display', '表示名')}<input id="name" value="unchanged"></label><label><input id="check" type="checkbox">必須${trigger('question.required', '必須')}</label><button id="submit">保存</button></form><button id="outside">別の操作</button><button id="open">編集を開く</button><dialog id="editor"><form><label>曲名${trigger('song.title', '曲名')}<input id="song" value="draft"></label></form><button id="close">閉じる</button></dialog><script>window.sends=0;document.querySelector('form').onsubmit=e=>{e.preventDefault();window.sends++};document.querySelector('#open').onclick=()=>editor.showModal();document.querySelector('#close').onclick=()=>editor.close();</script><script type="module" src="/field-help.js"></script></body></html>`;
+const server = http.createServer((req, res) => {
+    if (req.url === '/') { res.setHeader('Content-Type', 'text/html; charset=utf-8'); res.end(html); return; }
+    const allowed = ['/sem.css', '/theme-appearance.css', '/field-help.css', '/field-help.js', '/i18n/field-help.ja.json'];
+    if (!allowed.includes(req.url)) { res.statusCode = 404; res.end(); return; }
+    res.setHeader('Content-Type', req.url.endsWith('.json') ? 'application/json' : req.url.endsWith('.js') ? 'text/javascript' : 'text/css');
+    res.end(fs.readFileSync(path.join(root, req.url)));
+});
+(async () => {
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    const browser = await chromium.launch({ headless: true, ...(process.env.SEM_CHROMIUM_PATH ? { executablePath: process.env.SEM_CHROMIUM_PATH } : {}) });
+    const errors = [];
+    try {
+        const page = await browser.newPage();
+        page.on('pageerror', error => errors.push(error.message));
+        await page.goto(`http://127.0.0.1:${server.address().port}/`);
+        const help = page.locator('[data-field-help="profile.display"]');
+        await help.click();
+        await page.locator('.field-help-panel p').filter({ hasText: 'プロフィールや参加枠' }).waitFor();
+        ok(await help.getAttribute('aria-expanded') === 'true', 'Expanded help has accessible trigger state');
+        ok(await page.locator('.field-help-panel').evaluate(el => el.matches(':popover-open')), 'Help uses browser top layer');
+        ok(await page.locator('.field-help-panel button').evaluate(el => el === document.activeElement), 'Focus moves to help close');
+        await page.keyboard.press('Escape');
+        ok(await page.locator('.field-help-panel').count() === 0, 'Escape closes help');
+        ok(await help.evaluate(el => el === document.activeElement), 'Focus returns to invoking field help');
+        await page.keyboard.press('Enter');
+        await page.locator('.field-help-panel').waitFor();
+        await page.getByRole('button', { name: '説明を閉じる', exact: true }).click();
+        ok(await page.locator('#name').inputValue() === 'unchanged' && await page.evaluate(() => window.sends) === 0, 'Keyboard help does not change field or submit form');
+        await page.locator('[data-field-help="question.required"]').click();
+        ok(!await page.locator('#check').isChecked(), 'Help nested in checkbox label never toggles input');
+        await page.locator('#outside').click();
+        ok(await page.locator('.field-help-panel').count() === 0, 'Outside click dismisses without interfering with action');
+        await page.locator('#open').click();
+        await page.locator('[data-field-help="song.title"]').click();
+        ok(await page.locator('#editor .field-help-panel').count() === 1, 'Help remains non-inert inside native modal');
+        ok(await page.locator('.field-help-panel').evaluate(el => { const r=el.getBoundingClientRect(); return el.contains(document.elementFromPoint(r.x+20,r.y+20)); }), 'Help is displayed above modal');
+        await page.keyboard.press('Escape');
+        ok(await page.locator('#editor').evaluate(el => el.open), 'First Escape closes only help, not containing modal');
+        ok(await page.locator('#song').inputValue() === 'draft', 'Modal draft preserved');
+        await page.locator('[data-field-help="song.title"]').click();
+        await page.locator('#editor').evaluate(el => el.close());
+        await page.waitForFunction(() => !document.querySelector('.field-help-panel'));
+        ok(true, 'Closing modal removes stale help');
+        await help.click();
+        await page.locator('#name').focus();
+        ok(await page.locator('.field-help-panel').count() === 0, 'Tab/focus moving outside dismisses nonmodal help');
+        await help.click();
+        await help.evaluate(el => el.remove());
+        await page.waitForFunction(() => !document.querySelector('.field-help-panel'));
+        ok(true, 'Removed Blazor editor leaves no orphan overlay');
+        await page.reload();
+        await page.locator('[data-field-help="profile.display"]').evaluate(el => { el.dataset.fieldHelp = 'unknown'; el.dataset.fieldLabel = '<img src=x onerror=alert(1)>'; });
+        await page.locator('[data-field-help="unknown"]').click();
+        await page.locator('.field-help-panel p').filter({ hasText: '準備中' }).waitFor();
+        ok(await page.locator('.field-help-panel img').count() === 0, 'Labels are literal text, never HTML');
+        await page.keyboard.press('Escape');
+        await page.reload();
+        let requests = 0;
+        await page.route('**/i18n/field-help.ja.json', route => { requests++; return requests === 1 ? route.fulfill({status:503, contentType:'text/plain',body:'offline'}) : route.continue(); });
+        await help.click();
+        await page.locator('.field-help-panel p').filter({ hasText: '取得できません' }).waitFor();
+        await page.keyboard.press('Escape');
+        await help.click();
+        await page.locator('.field-help-panel p').filter({ hasText: 'プロフィールや参加枠' }).waitFor();
+        ok(requests === 2, 'Catalog failure retries only after explicit help reopen');
+        await page.keyboard.press('Escape');
+        const mobile = await browser.newContext({viewport:{width:390,height:844},hasTouch:true,isMobile:true});
+        const m = await mobile.newPage();
+        await m.goto(`http://127.0.0.1:${server.address().port}/`);
+        await m.locator('[data-field-help="profile.display"]').tap();
+        await m.locator('.field-help-panel').waitFor();
+        const box = await m.locator('.field-help-panel').boundingBox();
+        ok(box.x >= 0 && box.x+box.width <= 390, 'Touch help fits narrow viewport');
+        ok((await m.locator('.field-help-trigger').first().boundingBox()).height >= 44, 'Touch help target is at least 44px');
+        await m.evaluate(() => document.documentElement.dataset.appearanceMode='dark');
+        ok(await m.locator('.field-help-panel').evaluate(el => getComputedStyle(el).color !== getComputedStyle(el).backgroundColor), 'Dark theme keeps distinct foreground/surface');
+        await mobile.close();
+        ok(errors.length === 0, 'No browser runtime errors');
+        console.log(`Field help browser checks passed: ${checks}`);
+    } finally { await browser.close(); server.close(); }
+})().catch(error => { console.error(error); server.close(); process.exitCode=1; });

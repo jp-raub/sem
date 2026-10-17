@@ -17,7 +17,7 @@
  </tbody></table>
  @if(Editing){<button id="definition-save" disabled="@(Busy||Modal)" @onclick="Save">保存</button><button id="definition-cancel" disabled="@Busy" @onclick="Cancel">取消</button>}
  @if(Modal){<section role="dialog" aria-modal="true" aria-label="パート定義編集" class="panel"><h2>パート定義編集</h2>
- <label>パート名<input id="definition-name" @bind="Name" maxlength="40" /></label><label>分類<select id="definition-category" @bind="Category"><option value="Sing">Sing（声）</option><option value="Play">Play（楽器）</option></select></label>
+ <label>パート名<FieldHelp HelpKey="part.name" Label="パート名" /><input id="definition-name" @bind="Name" maxlength="40" /></label><label>分類<FieldHelp HelpKey="part.category" Label="分類" /><select id="definition-category" @bind="Category"><option value="Sing">Sing（声）</option><option value="Play">Play（楽器）</option></select></label>
  <button id="definition-apply" @onclick="Apply">下書きに反映</button><button id="definition-close" @onclick="()=>Modal=false">閉じる</button>
  @if(Selected is not null){<button id="definition-delete" @onclick="Delete">下書きから削除</button>}
  </section>}

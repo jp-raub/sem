@@ -13,11 +13,11 @@
     <form id="join-register-form" method="post" action="/join" autocomplete="off" novalidate>
         <fieldset id="join-register-fields" disabled>
             <legend>招待コードと登録情報</legend>
-            <label for="join-invite">招待コード</label>
+            <label for="join-invite">招待コード<FieldHelp HelpKey="account.invitation" Label="招待コード" /></label>
             <input id="join-invite" type="text" maxlength="128" autocomplete="off" autocapitalize="off" spellcheck="false" required />
-            <label for="join-name">表示名</label>
+            <label for="join-name">表示名<FieldHelp HelpKey="profile.display" Label="表示名" /></label>
             <input id="join-name" type="text" maxlength="60" autocomplete="name" required />
-            <label for="join-email">メールアドレス</label>
+            <label for="join-email">メールアドレス<FieldHelp HelpKey="account.email" Label="メールアドレス" /></label>
             <input id="join-email" type="email" maxlength="254" autocomplete="email" inputmode="email" required />
             <button id="join-register-submit" type="submit" disabled>確認メールを依頼</button>
         </fieldset>
