@@ -159,8 +159,22 @@ module.exports = async ({ p, g, ok }) => {
             'Embedded timetable exposes one refresh action for callback-state check');
 
         await memberPage.locator(`[data-event-matrix-slot="${memberVoiceSlot.id}"]`).evaluate(e=>e.scrollIntoView({block:"center",inline:"end"}));
-        await memberPage.locator(`[data-event-matrix-slot="${memberVoiceSlot.id}"]`).click();
-        await memberPage.waitForFunction(() => document.querySelectorAll('.participation-selection-chip').length === 1);
+        // Exercise the real keyboard path after horizontal panning. Do not retry a
+        // toggle: a delayed first activation could otherwise select and then clear it.
+        const firstCell = memberPage.locator(`[data-event-matrix-slot="${memberVoiceSlot.id}"]`);
+        await firstCell.focus();
+        await firstCell.press('Space');
+        await memberPage.waitForFunction(() => document.querySelectorAll('.participation-selection-chip').length === 1)
+            .catch(async error => {
+                const state = await firstCell.evaluate(element => ({
+                    disabled: element.matches(':disabled'),
+                    pressed: element.getAttribute('aria-pressed'),
+                    focused: document.activeElement === element,
+                    interactive: element.closest('[data-participation-interactive]')?.getAttribute('data-participation-interactive'),
+                    selections: document.querySelectorAll('.participation-selection-chip').length,
+                }));
+                throw new Error('Matrix keyboard selection state '+JSON.stringify(state)+'; '+error.message);
+            });
         await memberPage.locator(`[data-participation-answer="${question.id}"]`).selectOption('YES');
         ok(await memberPage.locator('.participation-selection-chip').count() === 1,
             'Selecting a matrix cell updates the existing YOUR ENTRY selection chip');
