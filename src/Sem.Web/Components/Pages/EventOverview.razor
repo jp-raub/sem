@@ -15,6 +15,7 @@
     @if (View is not null)
     {
         <header class="event-overview-hero">
+            @if (!string.IsNullOrEmpty(View.HeaderImageDataUrl)) { <img id="event-header-image" class="event-header-image" src="@View.HeaderImageDataUrl" alt="@($"{View.Title}のヘッダー画像")" /> }
             <div class="event-overview-meta">
                 <span class="event-overview-eyebrow">SESSION EVENT</span>
                 <span class="event-overview-phase">@View.PhaseName</span>
@@ -30,7 +31,7 @@
             }
             @if (!string.IsNullOrWhiteSpace(View.Description))
             {
-                <p class="event-overview-description">@View.Description</p>
+                <EventDescriptionContent Source="@View.Description" Format="@View.DescriptionFormat" />
             }
         </header>
 

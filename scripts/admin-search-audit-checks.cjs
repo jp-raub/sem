@@ -8,7 +8,7 @@ module.exports=async({p,g,ok})=>{
   await adminPage.locator('#event-new').click();await adminPage.locator('#event-manager-search').waitFor();
   const picker=adminPage.locator('.admin-candidate-picker[data-admin-picker-interactive="true"]');await picker.waitFor();await picker.locator('label').filter({hasText:'メール'}).waitFor();
   await adminPage.locator('#event-manager-search').fill(memberEmail.toUpperCase());
-  await adminPage.locator('[data-admin-picker-candidate]').waitFor();
+  await adminPage.waitForFunction(email=>{const candidates=[...document.querySelectorAll('[data-admin-picker-candidate]')];return candidates.length===1&&candidates[0].textContent.toLowerCase().includes(email.toLowerCase());},memberEmail);
   ok(await adminPage.locator('[data-admin-picker-candidate]').count()===1,'Global event manager search matches email incrementally');
   await adminPage.locator('#event-manager-search').press('ArrowDown');
   await adminPage.waitForFunction(()=>document.activeElement?.hasAttribute('data-admin-picker-candidate'));

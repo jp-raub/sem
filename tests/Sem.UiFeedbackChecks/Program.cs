@@ -74,6 +74,24 @@ var pickerHtml=await renderer.Dispatcher.InvokeAsync(async()=>{
  var rendered=await renderer.RenderComponentAsync<AdminCandidatePicker>(ParameterView.FromDictionary(new Dictionary<string,object?>{["Options"]=options,["SelectedIds"]=new HashSet<string>{"a"},["ShowEmail"]=false}));return rendered.ToHtmlString();});
 Check(!pickerHtml.Contains("alice@example.test")&&!pickerHtml.Contains("bob@example.test"),"Name-only picker never renders email into SSR");
 Check(!pickerHtml.Contains("<script>")&&pickerHtml.Contains("aria-expanded=\"false\""),"Candidate names are encoded and initial disclosure is closed");
+// The same server-side renderer owns both draft preview and saved display.
+var html=Sem.Web.Core.EventDescription.Render("<strong>music</strong>\nnext", "text");
+Check(html.Contains("&lt;strong&gt;")&&!html.Contains("<strong>music"),"Plain descriptions remain encoded legacy text");
+html=Sem.Web.Core.EventDescription.Render("## Music\n**bold** and `code`\n[map](https://venue.example/)","markdown");
+Check(html.Contains("<h2>Music</h2>")&&html.Contains("<strong>bold</strong>")&&html.Contains("<code>code</code>"),"Markdown supports headings emphasis and code");
+Check(html.Contains("target=\"_blank\"")&&html.Contains("noopener noreferrer"),"Markdown external links have fixed opener and referrer protection");
+foreach(var attack in new[]{"<script>alert(1)</script><strong>safe</strong>","<img src=x onerror=alert(1)><p onclick=alert(1)>safe</p>","<svg><a xlink:href='javascript:alert(1)'>bad</a></svg><p>safe</p>","<form action='https://evil.example'><input name=password></form><p>safe</p>","<iframe srcdoc='<script>alert(1)</script>'></iframe><p>safe</p>","<math><mtext><table><mglyph><style><!--</style><img title='--><img src=x onerror=alert(1)>'></math><p>safe</p>"}) {
+    html=Sem.Web.Core.EventDescription.Render(attack,"html");var document=new AngleSharp.Html.Parser.HtmlParser().ParseDocument(html);
+    Check(!document.QuerySelectorAll("script,img,svg,math,form,input,iframe,style,object,embed").Any()&&!document.All.SelectMany(e=>e.Attributes).Any(a=>a.Name.StartsWith("on")||a.Name=="style"),"HTML sanitizer rejects active elements and attributes: "+attack.Split('>')[0]);
+}
+html=Sem.Web.Core.EventDescription.Render("<a href='javascript:alert(1)'>script</a><a href='//evil.example/'>relative</a><a href='https://user:password@evil.example/'>credential</a><a href='https://venue.example/' style='color:red' id='spoof' target='_self'>map</a>","html");
+var links=new AngleSharp.Html.Parser.HtmlParser().ParseDocument(html).QuerySelectorAll("a");
+Check(links.Length==4&&links.Take(3).All(e=>!e.HasAttribute("href"))&&links[3].GetAttribute("href")=="https://venue.example/","Only absolute credential-free HTTP(S) links survive HTML sanitization");
+Check(links.All(e=>!e.HasAttribute("style")&&!e.HasAttribute("id"))&&links[3].GetAttribute("rel")=="noopener noreferrer","HTML attributes cannot spoof layout IDs or navigation policy");
+html=Sem.Web.Core.EventDescription.Render("<strong>untrusted</strong>","unknown");
+Check(!html.Contains("<strong>"),"Unknown persisted description format fails closed to text");
+var renderedDescription=await renderer.Dispatcher.InvokeAsync(async()=>{var result=await renderer.RenderComponentAsync<EventDescriptionContent>(ParameterView.FromDictionary(new Dictionary<string,object?>{["Source"]="<b>music</b><script>bad()</script>",["Format"]="html"}));return result.ToHtmlString();});
+Check(renderedDescription.Contains("<b>music</b>")&&new AngleSharp.Html.Parser.HtmlParser().ParseDocument(renderedDescription).QuerySelectorAll("script").Length==0&&!renderedDescription.Contains("bad()"),"Real preview component uses sanitized markup without active content");
 Console.WriteLine($"UI feedback, sort and admin picker checks passed: {checks}");
 
 sealed class FakeJs : IJSRuntime

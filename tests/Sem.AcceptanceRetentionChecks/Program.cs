@@ -24,14 +24,14 @@ try{
  var upgrade=Path.Combine(root,"venue-upgrade");Directory.CreateDirectory(upgrade);
  using(var provider=Provider(upgrade)){
   var db=provider.GetRequiredService<ApplicationDbContext>();await db.Database.MigrateAsync();
-  db.SessionEvents.Add(new SessionEvent{Id="pre-url-event",Title="Existing event",Location="Legacy venue https://old.example/ unparsed",Description="Existing description",ScheduledDate="2099-01-02T03:00:00Z",CreatedAt="2026-10-17T00:00:00Z",RowVersion=7});await db.SaveChangesAsync();
+  db.SessionEvents.Add(new SessionEvent{Id="pre-url-event",Title="Existing event",Location="Legacy venue https://old.example/ unparsed",Description="<b>Existing description</b>",ScheduledDate="2099-01-02T03:00:00Z",CreatedAt="2026-10-17T00:00:00Z",RowVersion=7});await db.SaveChangesAsync();
   var migrations=db.Database.GetMigrations().ToArray();var venueIndex=Array.FindIndex(migrations,x=>x.EndsWith("AddEventLocationUrl"));
   Check(venueIndex>0,"Venue migration follows an existing schema");var previous=migrations[venueIndex-1];
   var migrator=db.GetService<IMigrator>();await migrator.MigrateAsync(previous);
   db.ChangeTracker.Clear();
   await migrator.MigrateAsync();
   var row=await db.SessionEvents.SingleAsync();
-  Check(row.Location=="Legacy venue https://old.example/ unparsed"&&row.LocationUrl==""&&row.RowVersion==7&&row.Description=="Existing description"&&row.Title=="Existing event","Venue migration preserves existing event values and defaults new URL to empty without parsing legacy text");
+  Check(row.Location=="Legacy venue https://old.example/ unparsed"&&row.LocationUrl==""&&row.RowVersion==7&&row.Description=="<b>Existing description</b>"&&row.DescriptionFormat=="text"&&row.Title=="Existing event","Venue migration preserves existing event values and defaults new URL to empty without parsing legacy text");
   Check(!db.Database.HasPendingModelChanges(),"Venue migration snapshot matches current Identity V3 model");
  }
  string protectedText;
@@ -39,8 +39,9 @@ try{
   var db=provider.GetRequiredService<ApplicationDbContext>();await SqliteStorageInitializer.InitializeAsync(db);
   db.Users.Add(new ApplicationUser{Id="member",UserName="fixture@example.test",Email="fixture@example.test",EmailConfirmed=true,Enabled=true,DisplayName="Synthetic member",SecurityStamp="synthetic-stamp"});
   db.SiteStates.Add(new SiteState{Initialized=true,Name="Acceptance synthetic"});
-  var e=new SessionEvent{Id="event",Title="Persistent event",ScheduledDate="2099-01-02T03:00:00Z",CreatedAt="2026-10-17T00:00:00Z",RowVersion=3,Location="Retained venue text",LocationUrl="https://venue.example/access?map=1#entry",ManualPhaseOverride=true};
+  var e=new SessionEvent{Id="event",Title="Persistent event",Description="## Retained description",DescriptionFormat="markdown",ScheduledDate="2099-01-02T03:00:00Z",CreatedAt="2026-10-17T00:00:00Z",RowVersion=3,Location="Retained venue text",LocationUrl="https://venue.example/access?map=1#entry",ManualPhaseOverride=true};
   e.Phases.Add(new(){Id="phase",EventId="event",Kind="Custom",Name="Open",MaxPicks=-1,IsActive=true});db.SessionEvents.Add(e);
+  db.EventHeaderImages.Add(new(){EventId="event",Data=new byte[]{137,80,78,71,13,10,26,10},Width=80,Height=40});
   db.EventPartDefinitions.Add(new(){Id="part",EventId="event",Name="Voice",NormalizedName="VOICE",Category="Sing"});
   db.Songs.Add(new Song{Id="song",EventId="event",Title="Synthetic song",PerformanceSeconds=91});
   db.SongParts.Add(new SongPart{Id="slot",EventId="event",SongId="song",PartDefinitionId="part",AssignedUserId="member",PhaseId="phase"});
@@ -63,7 +64,10 @@ try{
  Check(JsonSerializer.Serialize(FileHashes(original))==JsonSerializer.Serialize(FileHashes(restored)),"Stopped full-directory backup/restore preserves every byte including keys and private files");
  using(var provider=Provider(restored)){
   var db=provider.GetRequiredService<ApplicationDbContext>();await SqliteStorageInitializer.InitializeAsync(db);
+  var retainedImage=await db.EventHeaderImages.SingleAsync();
+  Check(retainedImage.Data.SequenceEqual(new byte[]{137,80,78,71,13,10,26,10})&&retainedImage.Width==80&&retainedImage.Height==40,"Event header blob and dimensions survive startup and complete directory backup/restore");
   var retainedEvent=await db.SessionEvents.SingleAsync();
+  Check(retainedEvent.Description=="## Retained description"&&retainedEvent.DescriptionFormat=="markdown","Description source and format survive restart and whole-directory restore");
   Check(retainedEvent.Location=="Retained venue text"&&retainedEvent.LocationUrl=="https://venue.example/access?map=1#entry","Separate venue text and URL survive restart and full-directory restore");
   Check(before==await Dump(restored),"Restored application storage preserves all table values and passkey bytes");
   var protector=provider.GetRequiredService<IDataProtectionProvider>().CreateProtector("synthetic-retention");

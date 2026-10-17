@@ -402,6 +402,31 @@ namespace Sem.Web.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Sem.Web.Core.EventHeaderImage", b =>
+                {
+                    b.Property<string>("EventId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<byte[]>("Data")
+                        .IsRequired()
+                        .HasColumnType("BLOB");
+
+                    b.Property<int>("Height")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Width")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("EventId");
+
+                    b.ToTable("EventHeaderImages", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_EventHeaderImages_Data", "length(\"Data\") BETWEEN 8 AND 1048576");
+
+                            t.HasCheckConstraint("CK_EventHeaderImages_Size", "\"Width\" BETWEEN 1 AND 1600 AND \"Height\" BETWEEN 1 AND 1600");
+                        });
+                });
+
             modelBuilder.Entity("Sem.Web.Core.EventImportOperation", b =>
                 {
                     b.Property<string>("Id")
@@ -1920,6 +1945,13 @@ namespace Sem.Web.Data.Migrations
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasColumnType("TEXT");
+
+                    b.Property<string>("DescriptionFormat")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("text");
 
                     b.Property<string>("DurationFormat")
                         .IsRequired()
@@ -3499,6 +3531,15 @@ namespace Sem.Web.Data.Migrations
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.EventHeaderImage", b =>
+                {
+                    b.HasOne("Sem.Web.Core.SessionEvent", null)
+                        .WithOne()
+                        .HasForeignKey("Sem.Web.Core.EventHeaderImage", "EventId")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 

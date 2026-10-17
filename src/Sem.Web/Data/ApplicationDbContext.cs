@@ -33,6 +33,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<RevokedAuthSession> RevokedAuthSessions => Set<RevokedAuthSession>();
     public DbSet<ServiceSettings> ServiceSettings => Set<ServiceSettings>();
     public DbSet<UserProfile> UserProfiles => Set<UserProfile>();
+    public DbSet<EventHeaderImage> EventHeaderImages => Set<EventHeaderImage>();
     public DbSet<ProfileImage> ProfileImages => Set<ProfileImage>();
     public DbSet<ProfileQuestion> ProfileQuestions => Set<ProfileQuestion>();
     public DbSet<ProfileAnswer> ProfileAnswers => Set<ProfileAnswer>();
@@ -361,7 +362,14 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             t.HasCheckConstraint("CK_ProfileQrCredentials_Hash", "length(\"TokenHash\")=64");
             t.HasCheckConstraint("CK_ProfileQrCredentials_Expiry", "\"ExpiresAt\">\"IssuedAt\" AND \"RowVersion\">0");
         });
+        b.Entity<EventHeaderImage>().HasKey(x => x.EventId);
+        b.Entity<EventHeaderImage>().HasOne<SessionEvent>().WithOne().HasForeignKey<EventHeaderImage>(x => x.EventId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<EventHeaderImage>().ToTable("EventHeaderImages", t => {
+            t.HasCheckConstraint("CK_EventHeaderImages_Data", "length(\"Data\") BETWEEN 8 AND 1048576");
+            t.HasCheckConstraint("CK_EventHeaderImages_Size", "\"Width\" BETWEEN 1 AND 1600 AND \"Height\" BETWEEN 1 AND 1600");
+        });
         b.Entity<SessionEvent>().Property(x => x.RowVersion).IsConcurrencyToken();
+        b.Entity<SessionEvent>().Property(x => x.DescriptionFormat).HasMaxLength(16).HasDefaultValue("text");
         b.Entity<SessionEvent>().Property(x => x.LocationUrl).HasMaxLength(2048).HasDefaultValue("");
         b.Entity<SessionEvent>().Property(x=>x.DefaultPrepSeconds).HasDefaultValue(600).HasSentinel(-1);
         b.Entity<SessionEvent>().ToTable("SessionEvents", t => t.HasCheckConstraint("CK_SessionEvents_PhaseKind", "\"PhaseKind\" IN ('Hidden','View')"));

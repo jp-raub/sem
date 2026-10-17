@@ -46,6 +46,8 @@ node --check scripts/participant-profile-checks.cjs
 node --check scripts/acceptance-navigation-checks.cjs
 node --check scripts/admin-search-audit-checks.cjs
 node --check scripts/event-location-checks.cjs
+node --check scripts/event-description-checks.cjs
+node --check scripts/event-header-checks.cjs
 node --check scripts/acceptance-retention-checks.cjs
 node --check scripts/comment-checks.cjs
 bash -n scripts/acceptance-browser-fixture.sh
