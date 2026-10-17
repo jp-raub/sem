@@ -5,7 +5,7 @@
 @inject CoreFoundationService Core
 <PageTitle>イベント設問管理</PageTitle>
 <h1>イベント設問管理：@Plan?.Title</h1><p><a href="/workspace">業務基盤へ戻る</a></p>
-<p>設問の定義を管理します。申込み・回答入力・公開集計は後続実装で、この画面から参加登録や回答送信はできません。</p>
+<p>設問の定義と回答の公開範囲を管理します。申込み・回答入力はイベント画面、集計は公開回答画面から確認できます。この画面の保存では回答は送信されません。</p>
 <p id="question-error" role="alert">@Error</p><p id="question-message" role="status">@Message</p>
 @if(Plan is not null){
  @if(!Editing){<button id="question-edit" @onclick="()=>{Editing=true;Message=string.Empty;}">編集</button><button id="question-refresh" @onclick="Load">最新状態を取得</button>}

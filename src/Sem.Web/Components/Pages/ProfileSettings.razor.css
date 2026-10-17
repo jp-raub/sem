@@ -120,3 +120,4 @@
         max-width: 100%;
     }
 }
+.profile-settings-sections{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 18px}.profile-settings-sections a{display:inline-flex;align-items:center;min-height:44px;padding:4px 12px;border:1px solid var(--appearance-line,#cbd8ce);border-radius:6px}

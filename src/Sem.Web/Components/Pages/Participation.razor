@@ -29,9 +29,7 @@ else
  <button id="participation-refresh" disabled="@Busy" @onclick="Load">最新状態を取得</button>
  @if(Embedded){<p class="participation-refresh-note">他の画面でイベントが更新されて競合した場合は、最新状態を取得してから再操作してください。最新状態の取得では未保存の枠選択・設問回答が再読込されます。</p>}
  <fieldset disabled="@Uncertain">
- @if(Plan.CanManage){<section class="panel"><h2>管理者操作</h2><label>対象者<select id="participation-subject" value="@(Subject??CurrentId)" @onchange="ChangeSubject" disabled="@Busy">@foreach(var u in Members){<option value="@u.UserId">@u.DisplayName</option>}</select></label>
- <label><input id="participation-exception" type="checkbox" @bind="Exception" disabled="@Busy" />声／楽器の兼務制約の例外登録</label><label><input id="participation-release-mode" type="checkbox" @bind="ReleaseMode" disabled="@Busy" />登録解除モード</label><label>例外／解除理由<input id="participation-reason" @bind="Reason" maxlength="500" /></label><p>例外は兼務制約のみ。現在の受付フェーズ・曲数・人数上限を回避しません。他人の保存済み回答は表示しません。</p>
- <label>参加人数上限（空欄は制限なし）<input id="participation-capacity" @bind="Capacity" /></label><button id="participation-capacity-save" disabled="@Busy" @onclick="SaveCapacity">人数上限を保存</button></section>}
+
  <div class="participation-entry-layout @(Embedded ? "participation-entry-layout-embedded" : "participation-entry-layout-standalone")">
   <div class="participation-slot-area">
    @if(ShowMatrix)
@@ -43,6 +41,7 @@ else
                                                 OnToggle="OnMatrixToggle"
                                                 OwnUserId="@Plan.OwnUserId"
                                                 ReleaseMode="@ReleaseMode"
+                                                EventDate="@EventDate"
                                                 ClockFormat="@TimetableClockFormat"
                                                 DurationFormat="@TimetableDurationFormat" />
    }
@@ -60,6 +59,10 @@ else
     @foreach(var p in FallbackSlots){<tr data-participation-slot="@p.Id"><td><input data-participation-select="@p.Id" type="checkbox" checked="@Selected.Contains(p.Id)" disabled="@SlotDisabled(p)" @onchange="a=>Toggle(p.Id,a.Value is true)" /></td><td>@p.Title</td><td>@p.PartName（@(p.Category=="Sing"?"声":"楽器")）</td><td>@(p.AssignedName??"空き枠")</td></tr>}
     </tbody></table></div>
    }
+   @if(Embedded){<section class="participation-comments" aria-labelledby="event-comments-heading"><Comments EventId="@EventId" Embedded="true" /></section>}
+ @if(Plan.CanManage){<details class="participation-admin-tools"><summary>管理者操作（対象者・登録解除・人数上限）</summary><section class="panel"><h3>管理者操作</h3><label>対象者<select id="participation-subject" value="@(Subject??CurrentId)" @onchange="ChangeSubject" disabled="@Busy">@foreach(var u in Members){<option value="@u.UserId">@u.DisplayName</option>}</select></label>
+ <label><input id="participation-exception" type="checkbox" @bind="Exception" disabled="@Busy" />声／楽器の兼務制約の例外登録</label><label><input id="participation-release-mode" type="checkbox" @bind="ReleaseMode" disabled="@Busy" />登録解除モード</label><label>例外／解除理由<input id="participation-reason" @bind="Reason" maxlength="500" /></label><p>例外は兼務制約のみ。現在の受付フェーズ・曲数・人数上限を回避しません。他人の保存済み回答は表示しません。</p>
+ <label>参加人数上限（空欄は制限なし）<input id="participation-capacity" @bind="Capacity" /></label><button id="participation-capacity-save" disabled="@Busy" @onclick="SaveCapacity">人数上限を保存</button></section></details>}
   </div>
   <aside class="participation-entry-panel">
    @if(Embedded)
@@ -90,7 +93,7 @@ else
   </aside>
  </div>
  <section><h2>観覧のみの申込み</h2>@foreach(var s in Plan.Spectators){<p>@s.Name @if(Plan.CanManage){<button data-participation-remove-spectator="@s.UserId" disabled="@Busy" @onclick="()=>RemoveSpectator(s.UserId)">管理者による削除</button>}</p>}</section>
- <p><a href="@($"/events/{EventId}/public-answers")">公開回答集計を見る</a>。<a href="@($"/events/{EventId}/comments")">コメントのみ投稿・一覧へ</a>。通知・進行はそれぞれの専用画面で確認してください。</p>
+ <p><a href="@($"/events/{EventId}/public-answers")">公開回答集計を見る</a>。<a href="@(Embedded?"#event-comments-heading":$"/events/{EventId}/comments")">コメントのみ投稿・一覧へ</a>。通知・進行はそれぞれの専用画面で確認してください。</p>
  </fieldset>
  @if(Uncertain){<p role="alert">送信結果が未確認です。同じ操作IDで結果を確認します。入力は変更しないでください。</p><button id="participation-retry" disabled="@Busy" @onclick="Submit">同じ操作IDで結果を確認／再試行</button>}
 }
@@ -98,6 +101,7 @@ else
 @code{
  [Parameter]public string EventId{get;set;}="";
  [Parameter]public bool Embedded{get;set;}
+ [Parameter]public string? EventDate{get;set;}
  [Parameter]public long ContextGeneration{get;set;}
  [Parameter]public string? TimedRowsEventId{get;set;}
  [Parameter]public long TimedRowsContextGeneration{get;set;}=-1;

@@ -52,6 +52,7 @@ public static class DeploymentConfiguration
                 o.OnRefreshingPrincipal = context =>
                 {
                     var current = context.CurrentPrincipal;
+                    if (current is null) return Task.CompletedTask;
                     var refreshed = context.NewPrincipal;
                     var bindings = current.FindAll(PasskeyAdditionService.SessionClaim).ToArray();
                     var claimTypes = identity.Value.ClaimsIdentity;

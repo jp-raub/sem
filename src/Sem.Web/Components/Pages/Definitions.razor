@@ -7,7 +7,7 @@
 <PageTitle>演奏パート定義</PageTitle>
 <h1>演奏パート定義：@Plan?.Title</h1>
 <p><a href="/workspace">業務基盤へ戻る</a></p>
-<p>サービスプリセットは新規イベントへコピーされ、既存イベントへは自動反映されません。曲／参加受付は後続実装です。</p>
+<p>サービスプリセットは新規イベントへコピーされ、既存イベントへは自動反映されません。曲・枠管理で使用するパートを設定します。参加登録はイベント画面から行います。</p>
 <p id="definition-error" role="alert">@Error</p><p id="definition-message" role="status">@Message</p>
 @if(Plan is not null){
  @if(!Editing){<button id="definition-edit" @onclick="()=>{Editing=true;Message=string.Empty;}">編集</button><button id="definition-refresh" @onclick="Load">最新状態を取得</button>}

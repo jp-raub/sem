@@ -118,7 +118,7 @@ else
                         <label><input type="checkbox" checked="@Managers.Contains(member.UserId)" @onchange="e => ToggleManager(member.UserId, e.Value is true)" />@member.DisplayName</label>
                     }
                 </fieldset>
-                <p>閲覧公開は参加受付ではありません。曲・枠・フェーズ別の受付は後続実装です。</p>
+                <p>閲覧公開は参加受付ではありません。参加受付は各イベントのフェーズ管理で設定してください。</p>
                 <button id="event-core-save" disabled="@Busy">保存</button><button type="button" disabled="@Busy" @onclick="Cancel">取消</button>
             </form>
         }
@@ -150,7 +150,7 @@ else
         @foreach (var link in View.Profile.Social) { <p><a href="@link.Url" target="_blank" rel="noopener noreferrer">@link.Service</a></p> }
         <button id="profile-edit" disabled="@(Busy || Editing is not null)" @onclick="EditProfile">編集</button>
     }
-    <p>基本プロフィールはログイン済みメンバーに公開されます。<a href="/profile/settings">追加設問・プロフィールQR（24時間）の管理</a>。メール・登録履歴はプロフィールQRに含まれません。</p></section>
+    <p>基本プロフィールはログイン済みメンバーに公開されます。<a href="/profile/settings">プロフィール全項目・メール変更・パスキーの管理</a>。メール・登録履歴はプロフィールQRに含まれません。</p></section>
     @if (View.IsAdmin)
     {
         <section class="panel" id="core-service"><h2>サービス管理</h2><p><a href="/service/part-presets">新規イベント用パートプリセット</a> ／ <a id="digest-preview-link" href="/service/digest-preview">日次ダイジェスト文面プレビュー</a> ／ <a id="manual-push-control-link" href="/service/manual-push">手動Pushの運用制御</a> ／ <a id="recovery-admin-link" href="/service/passkey-recovery">パスキー認証の復旧</a></p>
@@ -242,6 +242,8 @@ else
                     <p>保存時に最新の権限と更新版を確認します。競合時は下書き全体を保存せず、最新一覧を取得してください。権限変更だけではSecurityStampや既存セッションを失効させず、各サーバー操作でDB権限を再確認します。</p>
                     <button id="admin-roles-save" type="button" disabled="@(Busy || !AdminRolesDirty)" @onclick="SaveAdminRoles">権限変更を保存</button>
                     <button id="admin-roles-cancel" type="button" disabled="@(Busy || !AdminRolesDirty)" @onclick="CancelAdminRoleDraft">権限の下書きを取消</button>
+                    <button id="admin-roles-reconcile" type="button" disabled="@(Busy || AdminAccountsLoading)" @onclick="ReconcileAdminRoles">下書きを破棄して保存結果を再確認</button>
+                    <p>通信に失敗した場合も保存済みの可能性があります。再保存せず「保存結果を再確認」で一覧を取得してください。この操作は権限を書き込みません。</p>
                     <button id="admin-roles-refresh" type="button" disabled="@(Busy || AdminRolesDirty)" @onclick="LoadAdminAccounts">最新一覧を取得</button>
                 }
             </section>
@@ -362,6 +364,14 @@ else
         AdminRoleDraft = AdminAccounts.Accounts.ToDictionary(x => x.UserId, x => x.IsAdmin, StringComparer.Ordinal);
         Error = ""; Message = "権限の下書きを取り消しました。";
     }
+    async Task ReconcileAdminRoles()
+    {
+        if (Busy || AdminAccountsLoading) return;
+        await CloseAdminAccount();
+        CancelAdminRoleDraft();
+        await LoadAdminAccounts();
+        Message = AdminAccounts is not null ? "最新の保存結果を取得しました。必要な変更だけを選び直してください。" : "一覧を再確認できませんでした。保存は再送していません。";
+    }
     async Task SaveAdminRoles()
     {
         if (AdminAccounts is null || AdminAccountsModule is null) return;
@@ -425,7 +435,7 @@ else
     public async ValueTask DisposeAsync()
     {
         if (AdminAccountsModule is null) return;
-        try { await AdminAccountsModule.DisposeAsync(); }
+        try { await AdminAccountsModule.InvokeVoidAsync("releaseDialog"); await AdminAccountsModule.DisposeAsync(); }
         catch (JSDisconnectedException) { }
     }
 }

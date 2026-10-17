@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# Disposable localhost-only fixture. Never use an existing application data directory.
+set -euo pipefail
+root=$(cd "$(dirname "$0")/.." && pwd)
+run=$(mktemp -d)
+export SEM_FIXTURE_RUN="$run"
+cleanup(){ for name in host smtp; do if [[ -f "$run/$name.pid" ]]; then kill "$(cat "$run/$name.pid")" 2>/dev/null || true; fi; done; rm -rf "$run"; }
+trap cleanup EXIT
+umask 077
+cd "$root"
+for port in 18080 18443 18025 2525; do
+ python3 - "$port" <<'PY'
+import socket,sys
+s=socket.socket(); s.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1); s.bind(('127.0.0.1',int(sys.argv[1]))); s.close()
+PY
+done
+dotnet publish src/Sem.Web/Sem.Web.csproj -c Release -o "$run/app" > "$run/publish.log"
+openssl req -x509 -newkey rsa:2048 -nodes -keyout "$run/key.pem" -out "$run/cert.pem" -days 1 -subj /CN=localhost > /dev/null 2>&1
+cat > "$run/start.sh" <<'START'
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$SEM_FIXTURE_RUN/app"
+export ASPNETCORE_URLS=http://127.0.0.1:18080 ASPNETCORE_ENVIRONMENT=Development
+export Sem__PublicUrl=https://localhost:18443/ Sem__DataDirectory="$SEM_FIXTURE_RUN/storage" Sem__TrustedProxies__0=127.0.0.1
+export Sem__BootstrapSecret=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+export Smtp__Host=127.0.0.1 Smtp__Port=2525 Smtp__Tls=None Smtp__AllowInsecureLocalTest=true
+exec dotnet Sem.Web.dll
+START
+cat > "$run/restore.sh" <<'RESTORE'
+#!/usr/bin/env bash
+set -euo pipefail
+run="$SEM_FIXTURE_RUN"
+kill "$(cat "$run/host.pid")"
+for i in $(seq 1 60); do if ! kill -0 "$(cat "$run/host.pid")" 2>/dev/null; then break; fi; sleep 1; done
+if curl -fsS http://127.0.0.1:18080/health/ready >/dev/null 2>&1; then echo 'Fixture host failed to stop'; exit 1; fi
+# SQLite WAL, protected tokens, private images and Data Protection keys travel together.
+stamp=$(date +%s%N)
+tar -czf "$run/data-$stamp.tgz" -C "$run/storage" .
+gzip -t "$run/data-$stamp.tgz"
+mv "$run/storage" "$run/before-$stamp"
+mkdir "$run/storage"
+tar -xzf "$run/data-$stamp.tgz" -C "$run/storage"
+diff -qr "$run/before-$stamp" "$run/storage" >/dev/null
+nohup bash "$run/start.sh" >> "$run/host.log" 2>&1 & echo $! > "$run/host.pid"
+for i in $(seq 1 60); do if curl -fsS http://127.0.0.1:18080/health/ready >/dev/null 2>&1; then echo 'Disposable whole-directory restore passed'; exit 0; fi; sleep 1; done
+exit 1
+RESTORE
+chmod +x "$run/restore.sh"
+python3 scripts/smtp-fixture.py > "$run/smtp.log" 2>&1 & echo $! > "$run/smtp.pid"
+bash "$run/start.sh" > "$run/host.log" 2>&1 & echo $! > "$run/host.pid"
+ready=false
+for i in $(seq 1 60); do if curl -fsS http://127.0.0.1:18080/health/ready >/dev/null 2>&1; then ready=true; break; fi; sleep 1; done
+[[ "$ready" == true ]]
+export SEM_E2E_KEY="$run/key.pem" SEM_E2E_CERT="$run/cert.pem"
+export SEM_STORAGE_UPGRADE_COMMAND="$run/restore.sh" SEM_ACCEPTANCE_RETENTION_COMMAND="$run/restore.sh"
+export SEM_EVENT_MATRIX_CHECKS=1 SEM_COMMENT_CHECKS=1 SEM_PACED_API_CHECKS=1 SEM_ACCEPTANCE_WORKFLOW_CHECKS=1
+export SEM_E2E_RESULTS="$root/verification/acceptance-native"
+node scripts/e2e.cjs

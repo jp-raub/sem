@@ -41,13 +41,13 @@
                                     }
                                     @if (timed.PrepStart is DateTimeOffset prep)
                                     {
-                                        <small>準備開始 @TimetableCalculator.Clock(prep, ClockFormat)</small>
+                                        <small>準備開始 @Clock(prep)</small>
                                     }
                                 </th>
                                 <td class="event-matrix-time">
-                                    @TimetableCalculator.Clock(timed.Start, ClockFormat)
+                                    <time datetime="@timed.Start.ToString("O")" title="@TimetableCalculator.Clock(timed.Start, ClockFormat)">@Clock(timed.Start)</time>
                                     <span aria-hidden="true">→</span>
-                                    @TimetableCalculator.Clock(timed.End, ClockFormat)
+                                    <time datetime="@timed.End.ToString("O")" title="@TimetableCalculator.Clock(timed.End, ClockFormat)">@Clock(timed.End)</time>
                                 </td>
                                 <td class="event-matrix-duration">@TimetableCalculator.Duration(timed.LengthSeconds, DurationFormat)</td>
                                 @foreach (var column in _columns)
@@ -96,9 +96,9 @@
                                     }
                                 </th>
                                 <td class="event-matrix-time">
-                                    @TimetableCalculator.Clock(timed.Start, ClockFormat)
+                                    <time datetime="@timed.Start.ToString("O")" title="@TimetableCalculator.Clock(timed.Start, ClockFormat)">@Clock(timed.Start)</time>
                                     <span aria-hidden="true">→</span>
-                                    @TimetableCalculator.Clock(timed.End, ClockFormat)
+                                    <time datetime="@timed.End.ToString("O")" title="@TimetableCalculator.Clock(timed.End, ClockFormat)">@Clock(timed.End)</time>
                                 </td>
                                 <td class="event-matrix-duration">@TimetableCalculator.Duration(timed.LengthSeconds, DurationFormat)</td>
                                 @if (_columns.Length > 0)
@@ -125,6 +125,8 @@
     [Parameter] public string ClockFormat { get; set; } = "seconds";
     [Parameter] public string DurationFormat { get; set; } = "units";
 
+    [Parameter] public string? EventDate { get; set; }
+    string Clock(DateTimeOffset value) => TimetableDisplay.Clock(value, ClockFormat, EventDate is not null ? TimetableCalculator.Instant(EventDate) : Rows.Count > 0 ? Rows[0].Start : value);
     string[] _columns = [];
     Dictionary<(string SongId, string PartName), ParticipationSlot[]> _slotsByCell = [];
 

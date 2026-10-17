@@ -1,0 +1,5 @@
+.comment-composer{width:min(560px,calc(100% - 32px));max-height:85dvh;overflow:auto;border:1px solid var(--appearance-line,#cbd8ce);border-radius:12px;padding:24px;background:var(--appearance-surface,#fffefa);color:var(--appearance-text,#18312e)}
+.comment-composer::backdrop{background:#0008}
+.comment-composer textarea{display:block;width:100%;min-height:140px;box-sizing:border-box}
+.comment-composer button{min-height:44px}
+.comment-text{margin:8px 0}

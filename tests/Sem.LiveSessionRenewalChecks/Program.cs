@@ -71,5 +71,7 @@ try{
  }
  await renewal(new SecurityStampRefreshingPrincipalContext{CurrentPrincipal=Principal("same","stamp","fixture-session"),NewPrincipal=null});
  Check(true,"Missing replacement principal is handled without adding authority");
+ await renewal(new SecurityStampRefreshingPrincipalContext{CurrentPrincipal=null!,NewPrincipal=Principal("same","stamp",null)});
+ Check(true,"Missing original principal is handled without adding authority");
  Console.WriteLine($"Session renewal checks: {checks} passed");
 }finally{await app.StopAsync();await app.DisposeAsync();Directory.Delete(root,true);}

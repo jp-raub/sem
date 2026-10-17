@@ -37,3 +37,31 @@ jobs:
           name: main-integration-verification
           path: verification/
           retention-days: 7
+
+  acceptance-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install isolated browser dependencies
+        run: |
+          npm install --prefix "$RUNNER_TEMP/sem-browser" --no-save playwright@1.56.1
+          "$RUNNER_TEMP/sem-browser/node_modules/.bin/playwright" install --with-deps chromium
+      - name: Verify populated local acceptance and whole-directory restore
+        env:
+          NODE_PATH: ${{ runner.temp }}/sem-browser/node_modules
+        run: bash scripts/acceptance-browser-fixture.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: acceptance-browser-results
+          path: verification/acceptance-native/e2e-result.json
+          retention-days: 7

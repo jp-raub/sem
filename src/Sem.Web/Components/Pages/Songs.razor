@@ -5,7 +5,7 @@
 @inject CoreFoundationService Core
 <PageTitle>曲・演奏パート枠管理</PageTitle>
 <h1>曲・演奏パート枠管理：@Plan?.Title</h1><p><a href="/workspace">業務基盤へ戻る</a></p>
-<p>曲と各パート1枠を管理します。参加登録・タイムテーブルは別画面から利用できます。当日進行は後続実装です。この画面から担当者の割当／解除はできません。</p>
+<p>曲と各パート1枠を管理します。参加登録・タイムテーブルはイベント画面、当日進行は進行画面から利用できます。この画面から担当者の割当／解除はできません。</p>
 <NavigationLock ConfirmExternalNavigation="@Editing" />
 <p id="song-error" role="alert">@Error</p><p id="song-message" role="status">@Message</p>
 @if(Plan is not null){

@@ -96,4 +96,9 @@ html = await renderer.Dispatcher.InvokeAsync(async () =>
     return output.ToHtmlString();
 });
 Check(!html.Contains("<Alice>") && !html.Contains("<song>"), "Assigned names and song names are HTML encoded");
+Check(TimetableDisplay.Clock(start,"seconds",start)=="10:00:00", "Same-day display omits repeated date but retains seconds");
+Check(TimetableDisplay.Clock(start,"minutes",start)=="10:00", "Configured minute display retains minute precision");
+Check(TimetableDisplay.Clock(start.AddDays(1),"seconds",start)=="2026/10/18 10:00:00", "Day crossing keeps explicit full date");
+Check(TimetableDisplay.Clock(start.AddDays(-1),"seconds",start)=="2026/10/16 10:00:00", "Prior-day opening keeps explicit date");
+Check(start.Second==0 && TimetableCalculator.Clock(start,"seconds")=="2026/10/17 10:00:00", "Existing calculation/editor date format is unchanged");
 Console.WriteLine($"PASS {checks} matrix rendering checks (not interactive browser acceptance)");
