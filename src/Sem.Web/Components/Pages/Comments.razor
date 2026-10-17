@@ -46,7 +46,7 @@
  [Parameter]public bool Embedded{get;set;}
  string? BoundContext;bool ComposerOpen,Disposed;ElementReference ComposerDialog;IJSObjectReference? DialogModule;
  RenderFragment CommentForm => @<div>
-  <label>コメント（前後の空白を除いて3文字以上）<textarea id="comment-body" @bind="Body" @bind:event="oninput" disabled="@(Busy||Pending is not null||Plan?.CanPost!=true)"></textarea></label>
+  <label>コメント（前後の空白を除いて3文字以上）<FieldHelp HelpKey="event.comment" Label="コメント本文" /><textarea id="comment-body" @bind="Body" @bind:event="oninput" disabled="@(Busy||Pending is not null||Plan?.CanPost!=true)"></textarea></label>
   <button id="comment-post" disabled="@(Busy||PendingDelete is not null||Pending is null&&(Plan?.CanPost!=true||Body.Trim().EnumerateRunes().Count()<3))" @onclick="Post">@(Pending is null?"コメントのみ投稿":"同じ操作IDで結果を確認／再試行")</button>
   @if(Embedded){<p role="alert">@Error</p>}
  </div>;

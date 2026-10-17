@@ -61,9 +61,9 @@ else
     </tbody></table></div>
    }
    @if(Embedded){<section class="participation-comments" aria-labelledby="event-comments-heading"><Comments EventId="@EventId" Embedded="true" /></section>}
- @if(Plan.CanManage){<details class="participation-admin-tools"><summary>管理者操作（対象者・登録解除・人数上限）</summary><section class="panel"><h3>管理者操作</h3><label>対象者<select id="participation-subject" value="@(Subject??CurrentId)" @onchange="ChangeSubject" disabled="@Busy">@foreach(var u in Members){<option value="@u.UserId">@u.DisplayName</option>}</select></label>
- <label><input id="participation-exception" type="checkbox" @bind="Exception" disabled="@Busy" />声／楽器の兼務制約の例外登録</label><label><input id="participation-release-mode" type="checkbox" @bind="ReleaseMode" disabled="@Busy" />登録解除モード</label><label>例外／解除理由<input id="participation-reason" @bind="Reason" maxlength="500" /></label><p>例外は兼務制約のみ。現在の受付フェーズ・曲数・人数上限を回避しません。他人の保存済み回答は表示しません。</p>
- <label>参加人数上限（空欄は制限なし）<input id="participation-capacity" @bind="Capacity" /></label><button id="participation-capacity-save" disabled="@Busy" @onclick="SaveCapacity">人数上限を保存</button></section></details>}
+ @if(Plan.CanManage){<details class="participation-admin-tools"><summary>管理者操作（対象者・登録解除・人数上限）</summary><section class="panel"><h3>管理者操作</h3><label>対象者<FieldHelp HelpKey="admin.target" Label="対象者" /><select id="participation-subject" value="@(Subject??CurrentId)" @onchange="ChangeSubject" disabled="@Busy">@foreach(var u in Members){<option value="@u.UserId">@u.DisplayName</option>}</select></label>
+ <label><input id="participation-exception" type="checkbox" @bind="Exception" disabled="@Busy" />声／楽器の兼務制約の例外登録<FieldHelp HelpKey="admin.exception" Label="例外登録" /></label><label><input id="participation-release-mode" type="checkbox" @bind="ReleaseMode" disabled="@Busy" />登録解除モード</label><label>例外／解除理由<FieldHelp HelpKey="admin.reason" Label="例外・解除理由" /><input id="participation-reason" @bind="Reason" maxlength="500" /></label><p>例外は兼務制約のみ。現在の受付フェーズ・曲数・人数上限を回避しません。他人の保存済み回答は表示しません。</p>
+ <label>参加人数上限（空欄は制限なし）<FieldHelp HelpKey="event.capacity" Label="参加人数上限" /><input id="participation-capacity" @bind="Capacity" /></label><button id="participation-capacity-save" disabled="@Busy" @onclick="SaveCapacity">人数上限を保存</button></section></details>}
   </div>
   <aside class="participation-entry-panel">
    @if(Embedded)
@@ -88,7 +88,7 @@ else
     </div>
    }
    <section class="panel"><h2>イベント設問</h2>@foreach(var q in Plan.Questions){<label>@q.Text（@(q.Required?"必須":"任意")）<span data-answer-publication="@q.Id">@(q.Public?(q.Type=="Text"&&q.PublicText?"回答数・回答者・回答本文がイベント閲覧者に公開されます。":q.Type=="Text"?"回答数と回答者がイベント閲覧者に公開されます。本文は公開されません。":"YES／NOの回答と回答者がイベント閲覧者に公開されます。"):"回答は公開集計に含めません。")</span>@if(q.Type=="YesNo"){<select data-participation-answer="@q.Id" value="@Values.GetValueOrDefault(q.Id)" @onchange="a=>Values[q.Id]=a.Value?.ToString()" disabled="@(Busy||ReleaseMode||Plan.PhaseKind!="Custom")"><option value="">未回答</option><option value="YES">YES</option><option value="NO">NO</option></select>}else{<textarea data-participation-answer="@q.Id" value="@Values.GetValueOrDefault(q.Id)" @onchange="a=>Values[q.Id]=a.Value?.ToString()" maxlength="2000" disabled="@(Busy||ReleaseMode||Plan.PhaseKind!="Custom")"></textarea>}</label>}</section>
-   <label>申込みと一緒に本人として投稿するコメント（任意・3文字以上・イベント閲覧者に公開）<textarea id="participation-comment" @bind="Comment" disabled="@(Busy||ReleaseMode)"></textarea></label>
+   <label>申込みと一緒に本人として投稿するコメント（任意・3文字以上・イベント閲覧者に公開）<FieldHelp HelpKey="participation.comment" Label="申込みと一緒に投稿するコメント" /><textarea id="participation-comment" @bind="Comment" disabled="@(Busy||ReleaseMode)"></textarea></label>
    <button id="participation-submit" disabled="@(Busy||ReleaseMode&&Selected.Count==0||!ReleaseMode&&Plan.PhaseKind!="Custom"||!ReleaseMode&&Selected.Count>0&&Plan.MaxPicks==0||!ReleaseMode&&Subject is not null&&Subject!=CurrentId&&Selected.Count==0)" @onclick="Submit">@(ReleaseMode?"選択した登録を解除":Selected.Count>0?"選択枠を登録":HasParticipation?"設問回答を更新":"観覧のみで申し込む")</button>
    @if(Last is not null){<ul id="participation-results">@foreach(var item in Last.Items){<li>@(item.Success?"成功":"未登録")：@Code(item.Code)</li>}</ul>}
   </aside>

@@ -45,7 +45,7 @@ else if (!Embedded)
   <label>時刻表示<select id="timetable-clock" @bind="ClockFormat" @bind:after="Invalidate"><option value="seconds">HH:mm:ss</option><option value="minutes">HH:mm（秒は保持）</option></select></label>
   <label>所要時間<select id="timetable-duration-format" @bind="DurationFormat" @bind:after="Invalidate"><option value="units">単位表示</option><option value="colon">m:ss / h:mm:ss</option></select></label>
   <label>曲の既定アイコン<select id="timetable-icon" @bind="Icon" @bind:after="Invalidate">@foreach(var icon in TimetableCalculator.Icons){<option value="@icon">@icon</option>}</select></label>
-  <label>終了予定（任意・日本時間 yyyy/MM/dd HH:mm）<input id="timetable-planned-end" @bind="PlannedEnd" @bind:after="Invalidate" placeholder="2026/11/01 17:00" /></label>
+  <label>終了予定（任意・日本時間 yyyy/MM/dd HH:mm）<FieldHelp HelpKey="event.plannedEnd" Label="終了予定" /><input id="timetable-planned-end" @bind="PlannedEnd" @bind:after="Invalidate" placeholder="2026/11/01 17:00" /></label>
   <button id="timetable-add" disabled="@(Busy||Modal)" @onclick="New">進行パートを追加</button>
  }
  var preview=Preview();
@@ -71,7 +71,7 @@ else if (!Embedded)
  @if(Editing){@if(preview?.OverrunSeconds>0){<label><input id="timetable-ack" type="checkbox" @bind="Acknowledge" />表示された超過を確認し、このまま保存する</label>}<button id="timetable-save" disabled="@(Busy||Modal)" @onclick="Save">保存</button><button id="timetable-cancel" disabled="@Busy" @onclick="Cancel">取消</button>}
  @if(Modal){<section role="dialog" aria-modal="true" aria-label="タイムパート編集" class="panel"><h2>タイムパート編集</h2>
   @if(Selected?.Kind=="Song"){<p>曲名・曲長・枠・準備時間は曲・枠管理で変更してください。担当者や申込みはこの編集で変更しません。</p><label>曲別アイコン<select id="timetable-row-icon" @bind="RowIcon"><option value="">イベント既定を継承</option>@foreach(var icon in TimetableCalculator.Icons){<option value="@icon">@icon</option>}</select></label>}
-  else{<label>進行名<input id="timetable-name" @bind="Name" maxlength="200" /></label><label>所要時間（0秒以上・m:ss / h:mm:ss）<input id="timetable-length" @bind="Length" /></label>}
+  else{<label>進行名<FieldHelp HelpKey="transition.title" Label="進行名" /><input id="timetable-name" @bind="Name" maxlength="200" /></label><label>所要時間（0秒以上・m:ss / h:mm:ss）<FieldHelp HelpKey="transition.duration" Label="進行の所要時間" /><input id="timetable-length" @bind="Length" /></label>}
   <button id="timetable-apply" @onclick="Apply">下書きに反映</button><button id="timetable-close" @onclick="()=>Modal=false">キャンセル</button>
   @if(Selected?.Kind=="Transition"){<button id="timetable-delete" @onclick="Delete">下書きから削除</button>}
  </section>}

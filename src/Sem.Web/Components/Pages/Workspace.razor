@@ -20,6 +20,7 @@
 }
 else
 {
+    <DevelopmentNotice />
     <button id="core-refresh" disabled="@(Busy || Editing is not null)" @onclick="Load">最新状態を取得</button>
     <section class="panel workspace-event-panel" id="core-events" aria-labelledby="core-events-heading">
         <div class="workspace-events-heading">
@@ -103,13 +104,14 @@ else
         }
         @if (Editing == "event")
         {
+            <p class="development-note">概要はプレーンテキストで保存します。Markdown／HTMLプレビュー・イベントのヘッダー画像は未実装です。会場名とURLは1項目です。</p>
             <form id="event-core-form" @onsubmit="SaveEvent" @onsubmit:preventDefault>
-                <label>イベント名<input id="event-title" @bind="EventTitle" maxlength="100" required /></label>
-                <label>概要<textarea @bind="EventDescription" maxlength="2000"></textarea></label>
-                <label>会場・URL<input @bind="EventLocation" maxlength="500" /></label>
-                <label>開始（日本時間）<input id="event-starts" type="datetime-local" step="1" value="@Starts" @onchange="e => Starts = e.Value?.ToString() ?? string.Empty" required /></label>
-                <label>開場（日本時間・任意）<input id="event-opens" type="datetime-local" step="1" value="@Opens" @onchange="e => Opens = e.Value?.ToString() ?? string.Empty" /></label>
-                <label>お知らせ<textarea @bind="Announcement" maxlength="2000"></textarea></label>
+                <label>イベント名<FieldHelp HelpKey="event.title" Label="イベント名" /><input id="event-title" @bind="EventTitle" maxlength="100" required /></label>
+                <label>概要<FieldHelp HelpKey="event.description" Label="概要" /><textarea @bind="EventDescription" maxlength="2000"></textarea></label>
+                <label>会場・URL<FieldHelp HelpKey="event.location" Label="会場・URL" /><input @bind="EventLocation" maxlength="500" /></label>
+                <label>開始（日本時間）<FieldHelp HelpKey="event.date" Label="開催日時" /><input id="event-starts" type="datetime-local" step="1" value="@Starts" @onchange="e => Starts = e.Value?.ToString() ?? string.Empty" required /></label>
+                <label>開場（日本時間・任意）<FieldHelp HelpKey="event.opens" Label="開場日時" /><input id="event-opens" type="datetime-local" step="1" value="@Opens" @onchange="e => Opens = e.Value?.ToString() ?? string.Empty" /></label>
+                <label>お知らせ<FieldHelp HelpKey="event.announcement" Label="お知らせ" /><textarea @bind="Announcement" maxlength="2000"></textarea></label>
                 <label>表示<select id="event-phase" @bind="Phase"><option value="Hidden">非表示</option><option value="View">閲覧公開</option></select></label>
                 <fieldset>
                     <legend>担当管理者（0名以上・複数選択可）</legend>
@@ -131,9 +133,9 @@ else
     @if (Editing == "profile")
     {
         <form @onsubmit="SaveProfile" @onsubmit:preventDefault>
-            <label>表示名<input id="profile-name" @bind="ProfileName" maxlength="60" required /></label>
-            <label>読み（カタカナは保存時にひらがなへ）<input id="profile-reading" @bind="Reading" maxlength="80" /></label>
-            <label>対面での呼び<input id="profile-call" @bind="CallName" maxlength="60" /></label>
+            <label>表示名<FieldHelp HelpKey="profile.display" Label="表示名" /><input id="profile-name" @bind="ProfileName" maxlength="60" required /></label>
+            <label>読み（カタカナは保存時にひらがなへ）<FieldHelp HelpKey="profile.reading" Label="読み" /><input id="profile-reading" @bind="Reading" maxlength="80" /></label>
+            <label>対面での呼び<FieldHelp HelpKey="profile.call" Label="対面での呼び" /><input id="profile-call" @bind="CallName" maxlength="60" /></label>
             <h3>SNS</h3>
             @foreach (var link in Social)
             {
@@ -157,8 +159,8 @@ else
         @if (Editing == "service")
         {
             <form @onsubmit="SaveService" @onsubmit:preventDefault>
-                <label>サービス名<input id="service-name" @bind="ServiceName" @bind:event="oninput" maxlength="60" required /></label>
-                <label>表示説明<input id="service-description" @bind="ServiceDescription" @bind:event="oninput" maxlength="80" /></label>
+                <label>サービス名<FieldHelp HelpKey="service.name" Label="サービス名" /><input id="service-name" @bind="ServiceName" @bind:event="oninput" maxlength="60" required /></label>
+                <label>表示説明<FieldHelp HelpKey="service.description" Label="表示説明" /><input id="service-description" @bind="ServiceDescription" @bind:event="oninput" maxlength="80" /></label>
                 <p>表示は下書きプレビューです。保存するまで共有設定は変わりません。</p>
                 <button id="service-save" disabled="@(Busy || AdminRolesDirty)">サービス設定を保存</button>
                 <button type="button" disabled="@(Busy || AdminAccountsLoading)" @onclick="Cancel">サービス編集を取消</button>

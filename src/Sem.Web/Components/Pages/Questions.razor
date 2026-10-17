@@ -16,9 +16,9 @@
  @if(Rows.Count==0){<p>設問はありません。</p>}
  @if(Editing){<button id="question-save" disabled="@(Busy||Modal)" @onclick="Save">保存</button><button id="question-cancel" disabled="@Busy" @onclick="Cancel">取消</button>}
  @if(Modal){<section role="dialog" aria-modal="true" aria-label="イベント設問編集" class="panel"><h2>イベント設問編集</h2>
- <label>質問文<input id="question-text" @bind="QuestionText" maxlength="200" /></label><label>回答形式<select id="question-type" @bind="Kind" disabled="@(Selected is not null)"><option value="YesNo">YES / NO</option><option value="Text">自由記述</option></select></label>
- <label><input id="question-required" type="checkbox" @bind="Required" />必須回答</label><label><input id="question-disabled" type="checkbox" @bind="Disabled" />使用停止</label>
- <label><input id="question-public" type="checkbox" @bind="Public" />回答数と回答者をイベント閲覧者へ公開</label><label><input id="question-public-text" type="checkbox" @bind="PublicText" disabled="@(Kind!="Text"||!Public)" />自由記述の回答本文を公開</label>
+ <label>質問文<FieldHelp HelpKey="question.text" Label="設問文" /><input id="question-text" @bind="QuestionText" maxlength="200" /></label><label>回答形式<FieldHelp HelpKey="question.type" Label="回答形式" /><select id="question-type" @bind="Kind" disabled="@(Selected is not null)"><option value="YesNo">YES / NO</option><option value="Text">自由記述</option></select></label>
+ <label><input id="question-required" type="checkbox" @bind="Required" />必須回答<FieldHelp HelpKey="question.required" Label="必須" /></label><label><input id="question-disabled" type="checkbox" @bind="Disabled" />使用停止<FieldHelp HelpKey="question.disabled" Label="無効" /></label>
+ <label><input id="question-public" type="checkbox" @bind="Public" />回答数と回答者をイベント閲覧者へ公開<FieldHelp HelpKey="question.public" Label="回答数と回答者を公開" /></label><label><input id="question-public-text" type="checkbox" @bind="PublicText" disabled="@(Kind!="Text"||!Public)" />自由記述の回答本文を公開<FieldHelp HelpKey="question.publicText" Label="自由記述本文を公開" /></label>
  <p>既定は非公開。本文公開は自由記述＋集計公開の場合のみ。回答形式は作成後に変更できません。回答レコードのある設問は削除せず使用停止を利用してください。</p>
  <button id="question-apply" @onclick="Apply">下書きに反映</button><button id="question-close" @onclick="()=>Modal=false">閉じる</button>
  @if(Selected is not null){<button id="question-delete" disabled="@(Selected.AnswerCount>0)" @onclick="Delete">下書きから削除</button>}

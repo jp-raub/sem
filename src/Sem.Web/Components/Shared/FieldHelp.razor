@@ -1,0 +1,8 @@
+<button type="button" class="field-help-trigger" data-field-help="@HelpKey"
+        data-field-label="@Label" aria-label="@(Label + "の説明")"
+        aria-haspopup="dialog" aria-expanded="false">?</button>
+
+@code {
+    [Parameter, EditorRequired] public string HelpKey { get; set; } = "";
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+}
