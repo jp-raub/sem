@@ -36,6 +36,8 @@ else if (!Embedded)
 {
     <p><a id="part-start-preferences-link" href="@($"/events/{EventId}/part-start-preferences")">タイムパート開始通知のON／OFF</a></p>
 }
+
+<OperationFeedback Revision="FeedbackRevision" Busy="Busy" Success="@Message" Error="@Error" Unknown="FeedbackUnknown" />
 <p id="timetable-error" role="alert">@Error</p><p id="timetable-message" role="status">@Message</p>
 @if(Plan is not null){
  @if(!Editing){<button id="timetable-refresh" @onclick="Load">最新状態を取得</button>@if(Plan.CanManage){<button id="timetable-edit" @onclick="()=>Editing=true">編集</button>@if(!Embedded){<a href="@($"/events/{EventId}/songs")">曲・枠の追加／編集</a><a id="notification-plan-link" href="@($"/events/{EventId}/notification-plan")">通知予定プレビュー</a>}}}
@@ -55,6 +57,7 @@ else if (!Embedded)
   @if(preview is not null){
   <p>イベント開始：@TimetableCalculator.Clock(TimetableCalculator.Instant(Plan.ScheduledDate),ClockFormat) ／ 既定準備：@SongDuration.Format(Plan.DefaultPrepSeconds) ／ 計算上の終了：<span id="timetable-end">@TimetableCalculator.Clock(preview.End,ClockFormat)</span></p>
   @if(preview.OverrunSeconds>0){<p id="timetable-overrun" role="alert">終了予定超過：@preview.OverrunSeconds 秒（表示で秒を隠しても計算には保持）</p>}
+ <p class="manual-order-note">並び順：手動。列見出しでは変更しません。編集時の順序操作で保存順を変更します。</p>
   <div class="timetable-table-scroll"><table><thead><tr><th>曲・進行</th><th>準備開始</th><th>演奏／進行開始</th><th>曲長／進行時間</th><th>終了</th>@if(Editing){<th>順序</th>}</tr></thead><tbody>
   @foreach(var timed in preview.Rows){var draft=Parts.SingleOrDefault(x=>x.Id==timed.Id);
    <tr data-timetable-part="@timed.Id" draggable="@(Editing&&draft is not null&&!Modal&&!Busy)" @ondragstart="()=>Drag=timed.Id" @ondragover:preventDefault @ondrop="()=>Drop(timed.Id)">
@@ -78,6 +81,8 @@ else if (!Embedded)
 }
 </div>
 @code{
+ long FeedbackRevision; bool FeedbackUnknown;
+
  [Parameter]public string EventId{get;set;}="";
  [Parameter]public bool Embedded{get;set;}
  [Parameter]public long ContextGeneration{get;set;}
@@ -109,5 +114,5 @@ else if (!Embedded)
  void Drop(string id){if(Busy||Modal||!Editing||id=="opening")return;var from=Parts.FindIndex(x=>x.Id==Drag);var to=Parts.FindIndex(x=>x.Id==id);if(from>=0&&to>=0&&from!=to){var p=Parts[from];Parts.RemoveAt(from);Parts.Insert(to,p);Acknowledge=false;}Drag="";}
  void Apply(){TimePartEdit row;if(Selected?.Kind=="Song")row=Selected with{Icon=RowIcon.Length==0?null:RowIcon};else{if(Name.Trim().Length is <1 or >200||!SongDuration.TryParse(Length,out var seconds)){Error="進行名と0秒以上の所要時間を確認してください。";return;}row=new(Selected?.Id??Guid.NewGuid().ToString(),"Transition",null,Name.Trim(),seconds);}if(Selected is null)Parts.Add(row);else Parts[Parts.FindIndex(x=>x.Id==Selected.Id)]=row;Modal=false;Acknowledge=false;Error="";}
  void Delete(){if(Selected?.Kind=="Transition"){Parts.Remove(Selected);Modal=false;Acknowledge=false;}}
- async Task Save(){if(Busy||Modal||!Editing)return;Busy=true;Error="";try{var edit=new TimetableEdit(Plan!.RowVersion,Round,ClockFormat,DurationFormat,Icon,End(),Parts.ToArray(),Acknowledge);await Core.SaveTimetableAsync((await Authentication.GetAuthenticationStateAsync()).User,EventId,edit);Editing=Modal=false;await Load();Message="保存しました。";}catch(UnauthorizedAccessException){Plan=null;Parts=[];Editing=Modal=false;Error="再ログインと管理権限を確認してください。";await PublishRows(ContextGeneration,ContextIdentityKey,null);}catch(Exception e)when(e is CoreConflictException or System.ComponentModel.DataAnnotations.ValidationException){Error=e.Message;}catch{Error="保存結果を確認できませんでした。再読込して結果を確認してください。";}finally{Busy=false;}}
+ async Task Save(){if(Busy||Modal||!Editing)return;FeedbackRevision++;FeedbackUnknown=false;Busy=true;Error="";try{var edit=new TimetableEdit(Plan!.RowVersion,Round,ClockFormat,DurationFormat,Icon,End(),Parts.ToArray(),Acknowledge);await Core.SaveTimetableAsync((await Authentication.GetAuthenticationStateAsync()).User,EventId,edit);Editing=Modal=false;await Load();Message="保存しました。";}catch(UnauthorizedAccessException){Plan=null;Parts=[];Editing=Modal=false;Error="再ログインと管理権限を確認してください。";await PublishRows(ContextGeneration,ContextIdentityKey,null);}catch(Exception e)when(e is CoreConflictException or System.ComponentModel.DataAnnotations.ValidationException){Error=e.Message;}catch{FeedbackUnknown=true;Error="保存結果を確認できませんでした。再読込して結果を確認してください。";}finally{Busy=false;}}
 }

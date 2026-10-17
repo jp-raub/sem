@@ -14,12 +14,13 @@
 <button id="participant-roster-refresh" disabled="@Busy" @onclick="Refresh">最新の先頭ページを取得</button>
 @if (View is not null)
 {
-    <p id="participant-roster-summary">現在の登録者 @View.ParticipantCount 名 ／ このページ @View.People.Length 名。安定したユーザー識別子順・最大100名ずつ表示します。</p>
+    <p id="participant-roster-summary">現在の登録者 @View.ParticipantCount 名 ／ このページ @View.People.Length 名。ページの取得は安定したユーザー識別子順・最大100名ずつです。</p>
+    <p id="participant-roster-sort-status">このページ内の並び順：@(SortByType ? "参加種類" : "表示名") ／ @(SortDescending ? "降順 ▼" : "昇順 ▲")。別ページの人を含めた全体ソートではありません。</p>
     <div class="participant-roster-table" role="region" aria-label="参加者と演奏パート" tabindex="0">
-        <table><thead><tr><th scope="col">表示名</th><th scope="col">参加種類</th><th scope="col">曲とパート</th></tr></thead><tbody>
-        @foreach (var person in View.People)
+        <table><thead><tr><SortHeading Label="表示名" Active="@(!SortByType)" Descending="SortDescending" Changed="() => SortPeople(false)" /><SortHeading Label="参加種類" Active="SortByType" Descending="SortDescending" Changed="() => SortPeople(true)" /><th scope="col">曲とパート</th></tr></thead><tbody>
+        @foreach (var person in DisplayOrdering.Names(View.People, x => SortByType ? PersonType(x) : x.DisplayName, x => x.UserId, SortDescending))
         {
-            <tr data-participant-roster-user="@person.UserId"><td><a href="@($"/profiles/{Uri.EscapeDataString(person.UserId)}")">@person.DisplayName</a></td><td>@(person.Parts.Length > 0 ? person.Spectator ? "演奏・観覧" : "演奏" : "観覧")</td><td>
+            <tr data-participant-roster-user="@person.UserId"><td><a href="@($"/profiles/{Uri.EscapeDataString(person.UserId)}")">@person.DisplayName</a></td><td>@PersonType(person)</td><td>
                 @if (person.Parts.Length == 0) { <span>演奏登録なし</span> }
                 else { <ul>@foreach (var part in person.Parts) { <li>@part.SongTitle ／ @part.PartName（@(part.Category == "Sing" ? "声" : "楽器")）</li> }</ul> }
             </td></tr>
@@ -37,6 +38,9 @@
 </section>
 @code {
     [Parameter] public string EventId { get; set; } = "";
+    bool SortByType, SortDescending;
+    void SortPeople(bool byType) { if (SortByType == byType) SortDescending = !SortDescending; else { SortByType = byType; SortDescending = false; } }
+    static string PersonType(ParticipantRosterPerson person) => person.Parts.Length > 0 ? person.Spectator ? "演奏・観覧" : "演奏" : "観覧";
     ParticipantRosterView? View;
     string Error = "", LoadedId = "";
     string? Cursor;

@@ -8,10 +8,12 @@
 @inject IJSRuntime JS
 @implements IAsyncDisposable
 <PageTitle>@Title — 業務基盤</PageTitle>
-<h1 id="core-title">@Title</h1>
+<h1 id="core-title" data-workspace-interactive="@InteractiveReady.ToString().ToLowerInvariant()">@Title</h1>
 @if (View is not null) { <p>@(Editing == "service" ? ServiceDescription : View.Service.Description)</p> }
 <p class="workspace-lead">開催予定・現在のフェーズ・お知らせを確認し、各イベントの参加・運営画面へ移動できます。</p>
 <p class="workspace-login-link"><a id="workspace-auth-link" data-enhance-nav="false" href="/auth?returnUrl=%2Fworkspace">ログイン画面へ</a></p>
+
+<OperationFeedback Revision="FeedbackRevision" Busy="Busy" Success="@Message" Error="@Error" Unknown="FeedbackUnknown" />
 <p id="core-error" role="alert">@Error</p><p id="core-message" role="status">@Message</p>
 @if (View is null)
 {
@@ -26,7 +28,7 @@ else
         <div class="workspace-events-heading">
             <div>
                 <h2 id="core-events-heading">イベント一覧</h2>
-                <p>開催日時の降順に表示しています。行の「関連画面」から参加・運営機能を開けます。</p>
+                <p id="event-sort-status">並び順：@(EventSortByName ? "イベント名" : "開催日時") ／ @(EventSortDescending ? "降順 ▼" : "昇順 ▲")。列見出しで変更できます。行の「関連画面」から参加・運営機能を開けます。</p>
             </div>
             @if (View.IsAdmin) { <button id="event-new" disabled="@(Busy || Editing is not null)" @onclick="NewEvent">イベントを新規作成</button> }
         </div>
@@ -40,15 +42,15 @@ else
                 <table class="workspace-event-table">
                     <thead>
                         <tr>
-                            <th scope="col">イベント</th>
-                            <th scope="col">開催日時</th>
+                            <SortHeading Label="イベント" Active="EventSortByName" Descending="EventSortDescending" Changed="() => SortEvents(true)" />
+                            <SortHeading Label="開催日時" Active="@(!EventSortByName)" Descending="EventSortDescending" Changed="() => SortEvents(false)" />
                             <th scope="col">現在のフェーズ</th>
                             <th scope="col">お知らせ</th>
                             <th scope="col">操作</th>
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var item in View.Events.OrderByDescending(eventItem => DateTimeOffset.Parse(eventItem.ScheduledDate, CultureInfo.InvariantCulture)))
+                        @foreach (var item in EventSortByName ? DisplayOrdering.Names(View.Events, x => x.Title, x => x.Id, EventSortDescending) : DisplayOrdering.Dates(View.Events, x => x.ScheduledDate, x => x.Id, EventSortDescending))
                         {
                             <tr @key="item.Id" data-core-event="@item.Id">
                                 <td class="workspace-event-name">
@@ -266,6 +268,10 @@ else
     <p class="workspace-secondary-link"><a href="/">外部テスト画面（補助）</a></p>
 }
 @code {
+ long FeedbackRevision; bool FeedbackUnknown;
+
+    bool EventSortByName, EventSortDescending = true;
+    void SortEvents(bool byName) { if (EventSortByName == byName) EventSortDescending = !EventSortDescending; else { EventSortByName = byName; EventSortDescending = false; } }
     WorkspaceView? View;
     GlobalAdminAccountsView? AdminAccounts;
     ProfileView? Preview;
@@ -295,6 +301,8 @@ else
             throw new System.ComponentModel.DataAnnotations.ValidationException("日時を入力してください。");
         return new(DateTime.SpecifyKind(result, DateTimeKind.Unspecified), JapanZone.GetUtcOffset(result));
     }
+    bool InteractiveReady;
+    protected override Task OnAfterRenderAsync(bool firstRender) { if (firstRender) { InteractiveReady = true; StateHasChanged(); } return Task.CompletedTask; }
     protected override Task OnInitializedAsync() => Load();
     async Task Load()
     {
@@ -384,7 +392,7 @@ else
         if (changes.Length == 0) return;
         var actorId = AdminAccounts.ActorId;
         var actorWillBeDemoted = changes.Any(change => change.userId == actorId && !change.isAdmin);
-        Busy = true; Error = ""; Message = "";
+        FeedbackRevision++; FeedbackUnknown=false; Busy = true; Error = ""; Message = "";
         try
         {
             await AdminAccountsModule.InvokeVoidAsync("save", actorId, changes);
@@ -396,7 +404,7 @@ else
             }
             else await LoadAdminAccounts();
         }
-        catch (JSException e) { Error = string.IsNullOrWhiteSpace(e.Message) ? "権限を保存できません。最新一覧を確認してください。" : e.Message; }
+        catch (JSException e) { FeedbackUnknown=true; Error = string.IsNullOrWhiteSpace(e.Message) ? "権限を保存できません。最新一覧を確認してください。" : e.Message; }
         finally { Busy = false; }
     }
     void ClearAdminAccountDraft()
@@ -421,11 +429,11 @@ else
     async Task SaveEvent() => await Save(async p => { await Core.SaveEventAsync(p, EventId, new(EventTitle, EventDescription, EventLocation, ParseLocal(Starts), string.IsNullOrWhiteSpace(Opens) ? null : ParseLocal(Opens), Announcement, Phase, Managers.ToArray(), Version)); });
     async Task Save(Func<System.Security.Claims.ClaimsPrincipal, Task> action)
     {
-        Busy = true; Error = ""; Message = "";
+        FeedbackRevision++; FeedbackUnknown=false; Busy = true; Error = ""; Message = "";
         try { await action((await Authentication.GetAuthenticationStateAsync()).User); Editing = null; ClearAdminAccountDraft(); Message = "保存しました。"; await Load(); }
         catch (UnauthorizedAccessException) { View = null; Preview = null; Editing = null; Error = "ログイン状態と権限を確認し、再ログインしてください。"; }
         catch (Exception e) when (e is System.ComponentModel.DataAnnotations.ValidationException or CoreConflictException) { Error = e.Message; }
-        catch { Error = "保存できませんでした。下書きを確認し、最新状態を取得してください。"; }
+        catch { FeedbackUnknown=true; Error = "保存結果を確認できませんでした。下書きを確認し、再送前に最新状態を取得してください。"; }
         finally { Busy = false; }
     }
     async Task PreviewProfile(string id)

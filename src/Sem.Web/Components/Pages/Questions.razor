@@ -6,10 +6,13 @@
 <PageTitle>イベント設問管理</PageTitle>
 <h1>イベント設問管理：@Plan?.Title</h1><p><a href="/workspace">業務基盤へ戻る</a></p>
 <p>設問の定義と回答の公開範囲を管理します。申込み・回答入力はイベント画面、集計は公開回答画面から確認できます。この画面の保存では回答は送信されません。</p>
+
+<OperationFeedback Revision="FeedbackRevision" Busy="Busy" Success="@Message" Error="@Error" Unknown="FeedbackUnknown" />
 <p id="question-error" role="alert">@Error</p><p id="question-message" role="status">@Message</p>
 @if(Plan is not null){
  @if(!Editing){<button id="question-edit" @onclick="()=>{Editing=true;Message=string.Empty;}">編集</button><button id="question-refresh" @onclick="Load">最新状態を取得</button>}
  else{<p>変更は下書きです。最後の保存まで共有されません。</p><button id="question-add" disabled="@(Busy||Modal)" @onclick="New">設問を追加</button>}
+ <p class="manual-order-note">並び順：手動。列見出しでは変更しません。編集時の順序操作で保存順を変更します。</p>
  <table><thead><tr><th>質問文</th><th>形式</th><th>必須／状態</th><th>公開設定</th><th>回答レコード数</th><th>順序</th></tr></thead><tbody>
  @foreach(var row in Rows){<tr data-question="@row.Id"><td>@if(Editing){<button data-question-text="@row.Id" disabled="@(Busy||Modal)" @onclick="()=>Open(row)">@row.Text</button>}else{@row.Text}</td><td>@(row.Type=="YesNo"?"YES / NO":"自由記述")</td><td>@(row.Required?"必須":"任意") ／ @(row.Disabled?"停止中":"使用中")</td><td>集計：@(row.Public?"公開":"非公開") ／ 本文：@(row.PublicText?"公開":"非公開")</td><td>@row.AnswerCount</td><td>@if(Editing){<button data-question-up="@row.Id" disabled="@(Busy||Modal||Rows.IndexOf(row)==0)" @onclick="()=>Move(row,-1)">↑</button><button data-question-down="@row.Id" disabled="@(Busy||Modal||Rows.IndexOf(row)==Rows.Count-1)" @onclick="()=>Move(row,1)">↓</button>}</td></tr>}
  </tbody></table>
@@ -25,6 +28,8 @@
  </section>}
 }
 @code{
+ long FeedbackRevision; bool FeedbackUnknown;
+
  [Parameter]public string EventId{get;set;}="";
  EventQuestionPlan?Plan;List<EventQuestionView>Rows=[];EventQuestionView?Selected;bool Editing,Busy,Modal,Required,Disabled,PublicText;string QuestionText="",Error="",Message="";
  string _kind="YesNo";bool _public;
@@ -38,5 +43,5 @@
  void Move(EventQuestionView row,int change){if(Busy||Modal)return;var index=Rows.FindIndex(x=>x.Id==row.Id);if(index<0)return;var next=index+change;if(next>=0&&next<Rows.Count)(Rows[index],Rows[next])=(Rows[next],Rows[index]);}
  void Apply(){var text=QuestionText.Trim();if(text.Length is <1 or >200){Error="質問文を1〜200文字で指定してください。";return;}var row=new EventQuestionView(Selected?.Id??Guid.NewGuid().ToString(),text,Kind,Required,Disabled,Public,PublicText,Selected?.AnswerCount??0);if(Selected is not null)Rows[Rows.IndexOf(Selected)]=row;else Rows.Add(row);Modal=false;Error="";}
  void Delete(){if(Selected is not null&&Selected.AnswerCount==0){Rows.Remove(Selected);Modal=false;}}
- async Task Save(){if(Busy)return;Busy=true;Error="";try{await Core.SaveQuestionsAsync((await Authentication.GetAuthenticationStateAsync()).User,EventId,new(Plan!.RowVersion,Rows.Select(x=>new EventQuestionEdit(x.Id,x.Text,x.Type,x.Required,x.Disabled,x.Public,x.PublicText)).ToArray()));Editing=Modal=false;Message="保存しました。";await Load();}catch(UnauthorizedAccessException){Plan=null;Rows=[];Editing=Modal=false;Error="再ログインと管理権限を確認してください。";}catch(Exception e)when(e is CoreConflictException or System.ComponentModel.DataAnnotations.ValidationException){Error=e.Message;}catch{Error="保存できませんでした。下書きを保持しています。最新状態を確認してください。";}finally{Busy=false;}}
+ async Task Save(){if(Busy)return;FeedbackRevision++;FeedbackUnknown=false;Busy=true;Error="";try{await Core.SaveQuestionsAsync((await Authentication.GetAuthenticationStateAsync()).User,EventId,new(Plan!.RowVersion,Rows.Select(x=>new EventQuestionEdit(x.Id,x.Text,x.Type,x.Required,x.Disabled,x.Public,x.PublicText)).ToArray()));Editing=Modal=false;Message="保存しました。";await Load();}catch(UnauthorizedAccessException){Plan=null;Rows=[];Editing=Modal=false;Error="再ログインと管理権限を確認してください。";}catch(Exception e)when(e is CoreConflictException or System.ComponentModel.DataAnnotations.ValidationException){Error=e.Message;}catch{FeedbackUnknown=true;Error="保存結果を確認できませんでした。下書きを保持しています。再送前に最新状態を確認してください。";}finally{Busy=false;}}
 }

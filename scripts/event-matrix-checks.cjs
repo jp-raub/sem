@@ -205,6 +205,10 @@ module.exports = async ({ p, g, ok }) => {
             && afterConflict.slots.find(slot => slot.id === memberVoiceSlot.id)?.assignedUserId == null,
         'Stale participation RowVersion conflicts without registering the selected slot');
 
+        await memberPage.locator('.operation-result-dialog').waitFor();
+        ok((await memberPage.locator('.operation-result-dialog').innerText()).includes(conflictText),
+            'Conflict dialog retains exact error and does not silently refresh the draft');
+        await memberPage.locator('.operation-result-dialog button').click();
         await memberPage.locator('#participation-refresh').click();
         await memberPage.waitForFunction(() => document.getElementById('participation-error').textContent.trim() === '');
         ok(await memberPage.locator('.participation-selection-chip').count() === 0

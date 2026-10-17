@@ -1,0 +1,55 @@
+const { chromium } = require('playwright');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const http = require('node:http');
+const path = require('node:path');
+const root = path.resolve(__dirname, '../src/Sem.Web/wwwroot');
+let checks=0;
+function ok(value,name){assert.ok(value,name);checks++;console.log('PASS '+name);}
+const html=`<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><link rel="stylesheet" href="/theme-appearance.css"><link rel="stylesheet" href="/operation-feedback.css"></head><body><input id="draft" value="preserved"><button id="action">操作</button><span id="owner" hidden></span><span id="second" hidden></span><p id="inline" role="status">永続的な項目別結果</p><script type="module">import {notify,release} from '/operation-feedback.js';window.present=(kind,text)=>notify(document.getElementById('owner'),kind,text);window.releaseOwner=()=>release(document.getElementById('owner'));window.ready=true;</script></body></html>`;
+const server=http.createServer((req,res)=>{if(req.url==='/'){res.setHeader('Content-Type','text/html; charset=utf-8');res.end(html);return;}if(!['/operation-feedback.js','/operation-feedback.css','/theme-appearance.css'].includes(req.url)){res.statusCode=404;res.end();return;}res.setHeader('Content-Type',req.url.endsWith('.js')?'text/javascript':'text/css');res.end(fs.readFileSync(path.join(root,req.url)));});
+(async()=>{
+ await new Promise(r=>server.listen(0,'127.0.0.1',r));
+ const browser=await chromium.launch({headless:true,...(process.env.SEM_CHROMIUM_PATH?{executablePath:process.env.SEM_CHROMIUM_PATH}:{})});
+ try{
+ const page=await browser.newPage();const errors=[];let writes=0;
+ page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(r.method()!=='GET')writes++;});
+ await page.goto(`http://127.0.0.1:${server.address().port}/`);await page.waitForFunction(()=>window.ready);
+ await page.locator('#action').focus();
+ await page.evaluate(()=>present('success','保存しました。'));
+ ok(await page.locator('.operation-toast').isVisible(),'Successful mutation gets nonmodal toast');
+ ok(await page.locator('#action').evaluate(e=>e===document.activeElement),'Success toast does not steal keyboard focus');
+ await page.locator('.operation-toast button').click();ok(await page.locator('.operation-toast').count()===0,'Toast can be dismissed immediately');
+ await page.evaluate(()=>present('success','自動閉鎖'));
+ await page.waitForFunction(()=>!document.querySelector('.operation-toast'),null,{timeout:4500});
+ ok(await page.locator('#inline').innerText()==='永続的な項目別結果','Three-second toast leaves durable inline status intact');
+ await page.locator('#action').focus();await page.evaluate(()=>present('error','入力を確認してください。'));
+ ok(await page.locator('.operation-result-dialog').evaluate(e=>e.open),'Failure opens native modal');
+ ok(await page.locator('.operation-result-dialog h2').innerText()==='操作を完了できませんでした','Definite failure is distinct from unknown result');
+ await page.keyboard.press('Escape');ok(await page.locator('.operation-result-dialog').count()===0,'Escape closes only result dialog');
+ ok(await page.locator('#action').evaluate(e=>e===document.activeElement),'Dialog closure restores initiating control focus');
+ await page.evaluate(()=>present('partial','2件成功・1件未登録。'));
+ ok(await page.locator('.operation-result-dialog h2').innerText()==='一部の操作が完了しませんでした','Partial success never claims complete success');
+ ok((await page.locator('.operation-result-dialog').innerText()).includes('成功した操作は取り消されません'),'Partial result preserves successful items');
+ ok(await page.locator('.operation-toast').count()===0,'Partial success does not show success toast');
+ await page.locator('.operation-result-dialog button').click();
+ await page.evaluate(()=>present('unknown','応答が失われました。'));
+ ok(await page.locator('.operation-result-dialog h2').innerText()==='結果が未確認です','Lost response is not treated as failed transaction');
+ ok((await page.locator('.operation-result-dialog').innerText()).includes('同じ操作ID'),'Unknown outcome directs existing same-operation reconciliation');
+ ok(await page.locator('.operation-result-dialog button').count()===1,'Unknown dialog offers close only, not new save/retry');
+ await page.locator('.operation-result-dialog button').click();
+ ok(await page.locator('#draft').inputValue()==='preserved','Every notification retains input draft');
+ await page.evaluate(()=>present('error','<img src=x onerror=alert(1)>'));
+ ok(await page.locator('.operation-result-dialog img').count()===0,'Server error is displayed as safe text');
+ await page.evaluate(()=>releaseOwner());ok(await page.locator('.operation-result-dialog').count()===0,'Disposed owner releases modal');
+ await page.evaluate(()=>present('success','Saved'));await page.locator('#owner').evaluate(e=>e.remove());
+ await page.waitForFunction(()=>!document.querySelector('.operation-toast'));ok(true,'Navigation/unmount removes stale toast');
+ await page.reload();await page.waitForFunction(()=>window.ready);await page.evaluate(()=>present('unknown','Result pending'));
+ await page.locator('#owner').evaluate(e=>e.remove());await page.waitForFunction(()=>!document.querySelector('.operation-result-dialog'));ok(true,'Unmount removes unknown-result overlay without retry');
+ await page.reload();await page.waitForFunction(()=>window.ready);await page.setViewportSize({width:390,height:844});await page.evaluate(()=>{document.documentElement.dataset.appearanceMode='dark';present('error','狭い画面の検査');});
+ const box=await page.locator('.operation-result-dialog').boundingBox();ok(box.x>=0&&box.x+box.width<=390,'Result dialog fits mobile viewport');
+ ok(await page.locator('.operation-result-dialog').evaluate(e=>getComputedStyle(e).color!==getComputedStyle(e).backgroundColor),'Result surface follows dark theme');
+ ok(writes===0,'Feedback never submits, refreshes, or retries');ok(errors.length===0,'No browser errors');
+ console.log(`Operation feedback browser checks passed: ${checks}`);
+ }finally{await browser.close();server.close();}
+})().catch(e=>{console.error(e);server.close();process.exitCode=1;});
