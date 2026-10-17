@@ -7,11 +7,14 @@
 <h1>曲・演奏パート枠管理：@Plan?.Title</h1><p><a href="/workspace">業務基盤へ戻る</a></p>
 <p>曲と各パート1枠を管理します。参加登録・タイムテーブルはイベント画面、当日進行は進行画面から利用できます。この画面から担当者の割当／解除はできません。</p>
 <NavigationLock ConfirmExternalNavigation="@Editing" />
+
+<OperationFeedback Revision="FeedbackRevision" Busy="Busy" Success="@Message" Error="@Error" Unknown="FeedbackUnknown" />
 <p id="song-error" role="alert">@Error</p><p id="song-message" role="status">@Message</p>
 @if(Plan is not null){
  @if(!Editing){<button id="song-edit" @onclick="()=>{Editing=true;Message=string.Empty;}">編集</button><button id="song-refresh" @onclick="Load">最新状態を取得</button><p>イベント既定準備時間：@SongDuration.Format(Plan.DefaultPrepSeconds)</p>}
  else{<p>変更は下書きです。最後の保存まで共有されません。</p><label>イベント既定準備時間（m:ss / h:mm:ss）<FieldHelp HelpKey="event.defaultPrep" Label="既定準備時間" /><input id="song-default-prep" @bind="DefaultPrep" disabled="@(Busy||Modal)" /></label><button id="song-add" disabled="@(Busy||Modal||Plan.Definitions.Length==0)" @onclick="New">曲を追加</button>}
  @if(Plan.Definitions.Length==0){<p>先に演奏パート定義を作成してください。</p>}
+ <p class="manual-order-note">並び順：手動。列見出しでは変更しません。編集時の順序操作で保存順を変更します。</p>
  <table><thead><tr><th>曲名</th><th>アーティスト</th><th>演奏時間</th><th>準備時間</th><th>枠</th><th>順序</th></tr></thead><tbody>
  @foreach(var row in Rows){<tr data-song="@row.Id"><td>@if(Editing){<button data-song-title="@row.Id" disabled="@(Busy||Modal)" @onclick="()=>Open(row)">@row.Title</button>}else{@row.Title}</td><td>@row.Artist</td><td>@SongDuration.Format(row.PerformanceSeconds)</td><td>@(row.PrepSeconds is null?"イベント既定を継承":SongDuration.Format(row.PrepSeconds.Value))</td><td>@string.Join(" ／ ",row.Parts.Select(p=>p.Name+(p.Assigned?"（担当あり）":"")))</td><td>@if(Editing){<button data-song-up="@row.Id" disabled="@(Busy||Modal||Rows.IndexOf(row)==0)" @onclick="()=>Move(row,-1)">↑</button><button data-song-down="@row.Id" disabled="@(Busy||Modal||Rows.IndexOf(row)==Rows.Count-1)" @onclick="()=>Move(row,1)">↓</button>}</td></tr>}
  </tbody></table>
@@ -27,6 +30,8 @@
  </section>}
 }
 @code{
+ long FeedbackRevision; bool FeedbackUnknown;
+
  [Parameter]public string EventId{get;set;}="";
  SongPlan?Plan;List<SongView>Rows=[];SongView?Selected;HashSet<string>Chosen=[];bool Editing,Busy,Modal,Inherit;string DefaultPrep="10:00",Title="",Artist="",Performance="4:30",Prep="0:00",Error="",Message="";
  protected override async Task OnParametersSetAsync(){Editing=Modal=false;await Load();}
@@ -41,5 +46,5 @@
  var parts=Plan!.Definitions.Where(d=>Chosen.Contains(d.Id)).Select(d=>Selected?.Parts.FirstOrDefault(p=>p.DefinitionId==d.Id&&p.Assigned)??Selected?.Parts.FirstOrDefault(p=>p.DefinitionId==d.Id)??new SongPartView("",d.Id,d.Name,d.Category,false)).ToArray();
  var row=new SongView(Selected?.Id??Guid.NewGuid().ToString(),Title.Trim(),Artist.Trim(),performance,Inherit?null:prep,parts);if(Selected is not null)Rows[Rows.FindIndex(x=>x.Id==Selected.Id)]=row;else Rows.Add(row);Modal=false;Error="";}
  void Delete(){if(Selected is not null&&!Selected.Parts.Any(p=>p.Assigned)){Rows.Remove(Selected);Modal=false;}}
- async Task Save(){if(Busy||Modal)return;if(!SongDuration.TryParse(DefaultPrep,out var prep)){Error="イベント既定準備時間をm:ss / h:mm:ssで指定してください。";return;}Busy=true;Error="";try{await Core.SaveSongsAsync((await Authentication.GetAuthenticationStateAsync()).User,EventId,new(Plan!.RowVersion,prep,Rows.Select(x=>new SongEdit(x.Id,x.Title,x.Artist,x.PerformanceSeconds,x.PrepSeconds,x.Parts.Select(p=>p.DefinitionId).Distinct().ToArray())).ToArray()));Editing=Modal=false;Message="保存しました。";await Load();}catch(UnauthorizedAccessException){Plan=null;Rows=[];Editing=Modal=false;Error="再ログインと管理権限を確認してください。";}catch(Exception e)when(e is CoreConflictException or System.ComponentModel.DataAnnotations.ValidationException){Error=e.Message;}catch{Error="保存できませんでした。下書きを保持しています。最新状態を確認してください。";}finally{Busy=false;}}
+ async Task Save(){FeedbackRevision++;FeedbackUnknown=false;if(Busy||Modal)return;if(!SongDuration.TryParse(DefaultPrep,out var prep)){Error="イベント既定準備時間をm:ss / h:mm:ssで指定してください。";return;}Busy=true;Error="";try{await Core.SaveSongsAsync((await Authentication.GetAuthenticationStateAsync()).User,EventId,new(Plan!.RowVersion,prep,Rows.Select(x=>new SongEdit(x.Id,x.Title,x.Artist,x.PerformanceSeconds,x.PrepSeconds,x.Parts.Select(p=>p.DefinitionId).Distinct().ToArray())).ToArray()));Editing=Modal=false;Message="保存しました。";await Load();}catch(UnauthorizedAccessException){Plan=null;Rows=[];Editing=Modal=false;Error="再ログインと管理権限を確認してください。";}catch(Exception e)when(e is CoreConflictException or System.ComponentModel.DataAnnotations.ValidationException){Error=e.Message;}catch{FeedbackUnknown=true;Error="保存結果を確認できませんでした。下書きを保持しています。再送前に最新状態を確認してください。";}finally{Busy=false;}}
 }

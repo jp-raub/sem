@@ -8,6 +8,8 @@
 <h1>フェーズ管理：@Plan?.Title</h1>
 <p><a href="/workspace">業務基盤へ戻る</a></p>
 <p>登録曲数上限と受付期間を設定します。参加登録はイベント画面から行い、この画面の保存では登録は発生しません。</p>
+
+<OperationFeedback Revision="FeedbackRevision" Busy="Busy" Success="@Message" Error="@Error" Unknown="FeedbackUnknown" />
 <p id="phase-error" role="alert">@Error</p><p id="phase-message" role="status">@Message</p>
 @if(Plan is not null)
 {
@@ -17,6 +19,7 @@
   <label><input id="phase-manual" type="checkbox" @bind="Manual" />手動優先<FieldHelp HelpKey="phase.manual" Label="手動優先" /></label>
   <button type="button" id="phase-add" @onclick="New">カスタムフェーズを追加</button>
  }
+ <p class="manual-order-note">並び順：手動。列見出しでは変更しません。編集時の順序操作で保存順を変更します。</p>
  <table><thead><tr><th>有効</th><th>フェーズ</th><th>登録曲数上限</th><th>自動有効期間（日本時間）</th></tr></thead><tbody>
  @foreach(var p in Rows)
  {
@@ -41,6 +44,8 @@
  }
 }
 @code {
+ long FeedbackRevision; bool FeedbackUnknown;
+
  [Parameter] public string EventId {get;set;}="";
  PhasePlanView? Plan; List<PhaseView> Rows=[]; PhaseView? Selected;
  bool Editing,Busy,Modal,Manual;string Active="",Name="",Starts="",Ends="",Error="",Message="";int Maximum=2;
@@ -56,5 +61,5 @@
  void Open(PhaseView p){Selected=p;Name=p.Name;Maximum=p.MaxPicks;Starts=Local(p.ActivateAt);Ends=Local(p.DeactivateAt);Modal=true;}
  void Apply(){try{var start=Parse(Starts);var end=Parse(Ends);if(string.IsNullOrWhiteSpace(Name)||Name.Length>100||Maximum< -1||start is not null&&end is not null&&end<=start)throw new System.ComponentModel.DataAnnotations.ValidationException("名前／曲数／有効期間を確認してください。");var p=new PhaseView(Selected?.Id??Guid.NewGuid().ToString(),"Custom",Name.Trim(),Maximum,start?.ToUniversalTime().ToString("O"),end?.ToUniversalTime().ToString("O"),false);if(Selected is not null)Rows[Rows.IndexOf(Selected)]=p;else Rows.Add(p);Modal=false;Error="";}catch(Exception e){Error=e.Message;}}
  void Delete(){if(Selected is not null&&Selected.Id!=Active){Rows.Remove(Selected);Modal=false;}}
- async Task Save(){Busy=true;Error="";try{var edit=new PhasePlanEdit(Plan!.RowVersion,Manual,Active,Rows.Where(p=>p.Kind=="Custom").Select(p=>new CustomPhaseEdit(p.Id,p.Name,p.MaxPicks,p.ActivateAt is null?null:DateTimeOffset.Parse(p.ActivateAt),p.DeactivateAt is null?null:DateTimeOffset.Parse(p.DeactivateAt))).ToArray());await Core.SavePhasePlanAsync((await Authentication.GetAuthenticationStateAsync()).User,EventId,edit);Editing=Modal=false;Message="保存しました。";await Load();}catch(UnauthorizedAccessException){Plan=null;Rows=[];Editing=Modal=false;Error="再ログインと管理権限を確認してください。";}catch(Exception e)when(e is CoreConflictException or System.ComponentModel.DataAnnotations.ValidationException){Error=e.Message;}catch{Error="保存できませんでした。下書きを保存せず、最新状態を確認してください。";}finally{Busy=false;}}
+ async Task Save(){FeedbackRevision++;FeedbackUnknown=false;Busy=true;Error="";try{var edit=new PhasePlanEdit(Plan!.RowVersion,Manual,Active,Rows.Where(p=>p.Kind=="Custom").Select(p=>new CustomPhaseEdit(p.Id,p.Name,p.MaxPicks,p.ActivateAt is null?null:DateTimeOffset.Parse(p.ActivateAt),p.DeactivateAt is null?null:DateTimeOffset.Parse(p.DeactivateAt))).ToArray());await Core.SavePhasePlanAsync((await Authentication.GetAuthenticationStateAsync()).User,EventId,edit);Editing=Modal=false;Message="保存しました。";await Load();}catch(UnauthorizedAccessException){Plan=null;Rows=[];Editing=Modal=false;Error="再ログインと管理権限を確認してください。";}catch(Exception e)when(e is CoreConflictException or System.ComponentModel.DataAnnotations.ValidationException){Error=e.Message;}catch{FeedbackUnknown=true;Error="保存結果を確認できませんでした。再送前に最新状態を確認してください。";}finally{Busy=false;}}
 }

@@ -15,6 +15,8 @@
  <p><a href="/workspace">イベント一覧へ</a> ／ <a href="@($"/events/{EventId}")">イベントへ</a> ／ <a href="@($"/events/{EventId}/public-answers")">公開回答集計へ</a></p>
 }else{<h3 id="event-comments-heading">コメント</h3>}
 <NavigationLock ConfirmExternalNavigation="@(Pending is not null||PendingDelete is not null||ComposerOpen&&Body.Length>0)" OnBeforeInternalNavigation="PreventPendingNavigation" />
+
+<OperationFeedback Revision="FeedbackRevision" Busy="Busy" Success="@Message" Error="@Error" Unknown="@(Pending is not null || PendingDelete is not null)" />
 <p id="comments-error" role="alert">@Error</p><p id="comments-message" role="status">@Message</p>
 <button id="comments-refresh" disabled="@(Busy||Pending is not null||PendingDelete is not null)" @onclick="Load">最新状態を取得</button>
 @if(Plan is not null){
@@ -42,6 +44,8 @@
  </section>
 }
 @code{
+ long FeedbackRevision;
+
  [Parameter]public string EventId{get;set;}="";
  [Parameter]public bool Embedded{get;set;}
  string? BoundContext;bool ComposerOpen,Disposed;ElementReference ComposerDialog;IJSObjectReference? DialogModule;
@@ -62,7 +66,7 @@
  async Task Load(){await Read(false);}
  async Task More(){await Read(true);}
  async Task Read(bool more){if(Busy)return;var epoch=Epoch;var id=EventId;var cursor=more?Plan?.Next:null;Busy=true;Error="";if(!more){Plan=null;Rows=[];}try{var p=await Core.ReadCommentsAsync((await Authentication.GetAuthenticationStateAsync()).User,id,before:cursor);if(epoch!=Epoch)return;Plan=p;if(more)Rows.AddRange(p.Comments.Where(c=>!Rows.Any(old=>old.Id==c.Id)));else Rows=p.Comments.ToList();}catch{if(epoch==Epoch){Plan=null;Rows=[];Error="ログイン状態とイベントの公開・権限を確認してください。";}}finally{if(epoch==Epoch)Busy=false;}}
- async Task Post(){if(Busy||Plan is null)return;Pending??=new(Guid.NewGuid().ToString(),Plan.EventVersion,Body);var epoch=Epoch;var id=EventId;var edit=Pending;Busy=true;Error="";try{var r=await Core.PostCommentAsync((await Authentication.GetAuthenticationStateAsync()).User,id,edit);if(epoch!=Epoch)return;Pending=null;Body="";ComposerOpen=false;Message=r.Replayed?"同じ投稿の結果を確認しました。":"コメントを投稿しました。";}catch(UnauthorizedAccessException){if(epoch!=Epoch)return;Pending=null;Plan=null;Rows=[];Error="再ログインと現在の閲覧権を確認してください。";}catch(Exception e)when(e is CoreConflictException or System.ComponentModel.DataAnnotations.ValidationException){if(epoch!=Epoch)return;Pending=null;Error=e.Message;}catch{if(epoch!=Epoch)return;Error="送信結果を確認できません。同じ操作IDで再試行してください。";}finally{if(epoch==Epoch)Busy=false;}if(epoch==Epoch&&Pending is null&&Plan is not null){var error=Error;await Load();if(Error=="")Error=error;}}
- async Task Delete(){if(Busy||Confirm is null)return;PendingDelete??=new(Guid.NewGuid().ToString(),Confirm);var epoch=Epoch;var id=EventId;var edit=PendingDelete;Busy=true;Error="";try{await Core.DeleteCommentAsync((await Authentication.GetAuthenticationStateAsync()).User,id,edit);if(epoch!=Epoch)return;PendingDelete=null;Confirm=null;Message="コメントを削除しました。";}catch(UnauthorizedAccessException){if(epoch!=Epoch)return;PendingDelete=null;Confirm=null;Plan=null;Rows=[];Error="現在の管理権限を確認してください。";}catch(Exception e)when(e is CoreConflictException or System.ComponentModel.DataAnnotations.ValidationException){if(epoch!=Epoch)return;PendingDelete=null;Confirm=null;Error=e.Message;}catch{if(epoch!=Epoch)return;Error="削除結果を確認できません。同じ操作IDで再試行してください。";}finally{if(epoch==Epoch)Busy=false;}if(epoch==Epoch&&PendingDelete is null&&Plan is not null){var error=Error;await Load();if(Error=="")Error=error;}}
+ async Task Post(){if(Busy||Plan is null)return;FeedbackRevision++;Pending??=new(Guid.NewGuid().ToString(),Plan.EventVersion,Body);var epoch=Epoch;var id=EventId;var edit=Pending;Busy=true;Error="";try{var r=await Core.PostCommentAsync((await Authentication.GetAuthenticationStateAsync()).User,id,edit);if(epoch!=Epoch)return;Pending=null;Body="";ComposerOpen=false;Message=r.Replayed?"同じ投稿の結果を確認しました。":"コメントを投稿しました。";}catch(UnauthorizedAccessException){if(epoch!=Epoch)return;Pending=null;Plan=null;Rows=[];Error="再ログインと現在の閲覧権を確認してください。";}catch(Exception e)when(e is CoreConflictException or System.ComponentModel.DataAnnotations.ValidationException){if(epoch!=Epoch)return;Pending=null;Error=e.Message;}catch{if(epoch!=Epoch)return;Error="送信結果を確認できません。同じ操作IDで再試行してください。";}finally{if(epoch==Epoch)Busy=false;}if(epoch==Epoch&&Pending is null&&Plan is not null){var error=Error;await Load();if(Error=="")Error=error;}}
+ async Task Delete(){if(Busy||Confirm is null)return;FeedbackRevision++;PendingDelete??=new(Guid.NewGuid().ToString(),Confirm);var epoch=Epoch;var id=EventId;var edit=PendingDelete;Busy=true;Error="";try{await Core.DeleteCommentAsync((await Authentication.GetAuthenticationStateAsync()).User,id,edit);if(epoch!=Epoch)return;PendingDelete=null;Confirm=null;Message="コメントを削除しました。";}catch(UnauthorizedAccessException){if(epoch!=Epoch)return;PendingDelete=null;Confirm=null;Plan=null;Rows=[];Error="現在の管理権限を確認してください。";}catch(Exception e)when(e is CoreConflictException or System.ComponentModel.DataAnnotations.ValidationException){if(epoch!=Epoch)return;PendingDelete=null;Confirm=null;Error=e.Message;}catch{if(epoch!=Epoch)return;Error="削除結果を確認できません。同じ操作IDで再試行してください。";}finally{if(epoch==Epoch)Busy=false;}if(epoch==Epoch&&PendingDelete is null&&Plan is not null){var error=Error;await Load();if(Error=="")Error=error;}}
  static string JapaneseTime(string value)=>DateTimeOffset.Parse(value).ToOffset(TimeSpan.FromHours(9)).ToString("yyyy-MM-dd HH:mm:ss")+"（日本時間）";
 }

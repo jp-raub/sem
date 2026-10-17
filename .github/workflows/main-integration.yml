@@ -74,7 +74,9 @@ jobs:
       - name: Verify keyboard and touch field help above dialogs
         env:
           NODE_PATH: ${{ runner.temp }}/sem-browser/node_modules
-        run: node scripts/field-help-browser-checks.cjs
+        run: |
+          node scripts/field-help-browser-checks.cjs
+          node scripts/operation-feedback-browser-checks.cjs
       - name: Verify populated local acceptance and whole-directory restore
         env:
           NODE_PATH: ${{ runner.temp }}/sem-browser/node_modules
