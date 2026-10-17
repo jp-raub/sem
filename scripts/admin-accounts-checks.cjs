@@ -18,6 +18,14 @@ module.exports=async({p,g,ok})=>{
   await openMember();await page.getByRole('dialog').getByRole('checkbox').check();await close();
   ok((await row().innerText()).includes('未保存')&&(await read(p)).body.accounts.find(a=>a.userId===member.userId).isAdmin===false,'Native role toggle remains an unsaved local draft');
   ok(await page.locator('#service-save').isDisabled(),'Native service settings save is blocked while a role draft exists');
+  let reconcileWrites=0;
+  const observe=request=>{if(request.method()==='POST'&&request.url().includes('/api/core/admin-accounts'))reconcileWrites++;};
+  page.on('request',observe);
+  await page.locator('#admin-roles-reconcile').click();
+  await page.waitForFunction(()=>document.getElementById('core-message')?.textContent.includes('最新の保存結果')||document.body.textContent.includes('最新の保存結果を取得しました'));
+  page.off('request',observe);
+  ok(reconcileWrites===0&&!(await row().innerText()).includes('未保存')&&(await read(g)).status===403,'Explicit role reconciliation discards draft and reads persisted state without replaying POST');
+  await openMember();await page.getByRole('dialog').getByRole('checkbox').check();await close();
   await page.locator('#admin-roles-cancel').click();
   await page.waitForFunction(()=>document.querySelector('#admin-roles-refresh')?.disabled===false);
   ok(!(await row().innerText()).includes('未保存')&&(await read(g)).status===403,'Native role cancel discards the draft without granting access');

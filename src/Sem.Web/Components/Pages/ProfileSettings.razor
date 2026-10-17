@@ -6,11 +6,12 @@
 
 <PageTitle>プロフィール管理</PageTitle>
 <h1>プロフィール管理</h1>
-<p><a href="/workspace">業務基盤へ戻る</a></p>
+<p><a href="/workspace">イベント一覧へ戻る</a></p>
 <p id="profile-settings-error" role="alert"></p>
 <p id="profile-settings-status" role="status" aria-live="polite">読み込み中です。</p>
 <button type="button" id="profile-image-refresh" hidden>プロフィールを再取得</button>
-<main id="profile-settings" hidden>
+<div id="profile-settings" hidden>
+    <nav class="profile-settings-sections" aria-label="プロフィール・アカウントの設定"><a href="#profile-edit-heading">プロフィール</a><a href="#account-passkeys">パスキー</a><a href="#profile-email-change">メール変更</a><a href="#profile-qr-heading">プロフィールQR</a></nav>
     <section class="panel" aria-labelledby="profile-edit-heading">
         <h2 id="profile-edit-heading">本人のプロフィール</h2>
         <form id="profile-editor-form">
@@ -102,7 +103,7 @@
         </form>
         <ol id="profile-question-list"></ol>
     </section>
-</main>
+</div>
 
 @code {
     private IJSObjectReference? _module;

@@ -104,3 +104,9 @@ export function restoreDialogFocus() {
   dialogReturnFocus = null;
   if (target?.isConnected && typeof target.focus === 'function') target.focus();
 }
+
+export function releaseDialog() {
+  const dialog = document.querySelector('.admin-account-dialog');
+  if (dialog) dialog.removeEventListener('keydown', trapDialogTab);
+  dialogReturnFocus = null;
+}

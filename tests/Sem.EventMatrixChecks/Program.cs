@@ -22,7 +22,7 @@ TimedPart Row(string id, string kind, string? songId, string title) =>
 ParticipationSlot Slot(string id, string songId, string part, string? owner = null, string? name = null) =>
     new(id, songId, "曲 " + songId, part, "Instrument", owner, name, null, 1);
 async Task<string> Render(IReadOnlyList<TimedPart> rows, ParticipationSlot[] slots,
-    IReadOnlySet<string>? selected = null, bool release = false, bool disabled = false, bool decode = true)
+    IReadOnlySet<string>? selected = null, bool release = false, bool disabled = false, bool decode = true, bool profiles = false)
 {
     return await renderer.Dispatcher.InvokeAsync(async () =>
     {
@@ -30,6 +30,7 @@ async Task<string> Render(IReadOnlyList<TimedPart> rows, ParticipationSlot[] slo
             new Dictionary<string, object?>
             {
                 ["Rows"] = rows,
+                ["OnViewProfile"] = profiles ? EventCallback.Factory.Create<string>(new object(), (string _) => {}) : default(EventCallback<string>),
                 ["Slots"] = slots,
                 ["SelectedIds"] = selected ?? new HashSet<string>(),
                 ["OwnUserId"] = "me",
@@ -96,4 +97,42 @@ html = await renderer.Dispatcher.InvokeAsync(async () =>
     return output.ToHtmlString();
 });
 Check(!html.Contains("<Alice>") && !html.Contains("<song>"), "Assigned names and song names are HTML encoded");
+Check(TimetableDisplay.Clock(start,"seconds",start)=="10:00:00", "Same-day display omits repeated date but retains seconds");
+Check(TimetableDisplay.Clock(start,"minutes",start)=="10:00", "Configured minute display retains minute precision");
+Check(TimetableDisplay.Clock(start.AddDays(1),"seconds",start)=="2026/10/18 10:00:00", "Day crossing keeps explicit full date");
+Check(TimetableDisplay.Clock(start.AddDays(-1),"seconds",start)=="2026/10/16 10:00:00", "Prior-day opening keeps explicit date");
+Check(start.Second==0 && TimetableCalculator.Clock(start,"seconds")=="2026/10/17 10:00:00", "Existing calculation/editor date format is unchanged");
+var profileHtml = await Render([song], slots, disabled:true, profiles:true);
+Check(profileHtml.Contains("data-event-profile=\"me\"") && profileHtml.Contains("data-event-profile=\"other-user\""), "Assigned matrix slots expose profile actions for self and others");
+Check(Regex.Matches(profileHtml, "disabled").Count == 1, "Profile actions remain available when registration is disabled, while the empty slot stays disabled");
+var releaseHtml = await Render([song], slots, release:true, disabled:true, profiles:true);
+Check(!releaseHtml.Contains("data-event-profile"), "Release mode preserves registration controls instead of opening profiles");
+// Inspect the compiled dialog frames, not only its Razor source. Browsers that
+// validate setAttribute names reject an accidentally literal Razor directive.
+#pragma warning disable BL0006 // Test-only inspection of compiled RenderTree frames.
+string[] CompiledAttributes(ComponentBase component)
+{
+    using var tree = new Microsoft.AspNetCore.Components.Rendering.RenderTreeBuilder();
+    component.GetType().GetMethod("BuildRenderTree", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+        .Invoke(component, [tree]);
+    var frames = tree.GetFrames();
+    return frames.Array.Take(frames.Count)
+        .Where(frame => frame.FrameType == Microsoft.AspNetCore.Components.RenderTree.RenderTreeFrameType.Attribute)
+        .Select(frame => frame.AttributeName).ToArray();
+}
+var cardAttributes = CompiledAttributes(new ProfileCard());
+Check(!cardAttributes.Any(name => name.StartsWith("@", StringComparison.Ordinal)),
+    "Compiled profile dialog emits no literal Razor directives as HTML attributes");
+Check(cardAttributes.Contains("data-dialog-close"), "Profile dialog exposes its guarded close action to native cancel");
+Check(cardAttributes.Contains("onclick"), "Profile dialog close remains a real Blazor click handler");
+var comments = new Sem.Web.Components.Pages.Comments();
+typeof(Sem.Web.Components.Pages.Comments).GetProperty("Embedded")!.SetValue(comments, true);
+typeof(Sem.Web.Components.Pages.Comments).GetField("Plan", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+    .SetValue(comments, new CommentPlan("event", "Event", 1, false, true, null, [], null));
+var commentAttributes = CompiledAttributes(comments);
+Check(!commentAttributes.Any(name => name.StartsWith("@", StringComparison.Ordinal)),
+    "Compiled embedded comment dialog emits no literal Razor directives as HTML attributes");
+Check(commentAttributes.Contains("data-dialog-close"), "Comment dialog exposes its guarded close action to native cancel");
+Check(commentAttributes.Contains("onclick"), "Comment dialog close remains a real Blazor click handler");
+#pragma warning restore BL0006
 Console.WriteLine($"PASS {checks} matrix rendering checks (not interactive browser acceptance)");

@@ -10,7 +10,7 @@
 {
     <PageTitle>イベント参加登録</PageTitle>
 }
-<div class="participation-view @(Embedded ? "participation-view-embedded" : "")">
+<div data-participation-interactive="@(InteractiveReady?"true":"false")" class="participation-view @(Embedded ? "participation-view-embedded" : "")">
 <NavigationLock ConfirmExternalNavigation="@Uncertain" OnBeforeInternalNavigation="PreventUncertainNavigation" />
 @if (Embedded)
 {
@@ -26,12 +26,10 @@ else
 @if(Plan is not null){
  <p id="participation-phase">@Plan.PhaseName（@Plan.PhaseKind）／このフェーズの登録 @Plan.OwnPhaseSongCount 曲・上限 @(Plan.MaxPicks<0?"制限なし":Plan.MaxPicks.ToString())</p>
  <p id="participation-count">参加人数 @Plan.ParticipantCount ／ @(Plan.Capacity?.ToString()??"制限なし") 人（観覧を含むユニーク人数）</p>
- <button id="participation-refresh" disabled="@Busy" @onclick="Load">最新状態を取得</button>
+ <button id="participation-refresh" disabled="@(Busy||!InteractiveReady)" @onclick="Load">最新状態を取得</button>
  @if(Embedded){<p class="participation-refresh-note">他の画面でイベントが更新されて競合した場合は、最新状態を取得してから再操作してください。最新状態の取得では未保存の枠選択・設問回答が再読込されます。</p>}
- <fieldset disabled="@Uncertain">
- @if(Plan.CanManage){<section class="panel"><h2>管理者操作</h2><label>対象者<select id="participation-subject" value="@(Subject??CurrentId)" @onchange="ChangeSubject" disabled="@Busy">@foreach(var u in Members){<option value="@u.UserId">@u.DisplayName</option>}</select></label>
- <label><input id="participation-exception" type="checkbox" @bind="Exception" disabled="@Busy" />声／楽器の兼務制約の例外登録</label><label><input id="participation-release-mode" type="checkbox" @bind="ReleaseMode" disabled="@Busy" />登録解除モード</label><label>例外／解除理由<input id="participation-reason" @bind="Reason" maxlength="500" /></label><p>例外は兼務制約のみ。現在の受付フェーズ・曲数・人数上限を回避しません。他人の保存済み回答は表示しません。</p>
- <label>参加人数上限（空欄は制限なし）<input id="participation-capacity" @bind="Capacity" /></label><button id="participation-capacity-save" disabled="@Busy" @onclick="SaveCapacity">人数上限を保存</button></section>}
+ <fieldset disabled="@(!InteractiveReady||Uncertain)">
+
  <div class="participation-entry-layout @(Embedded ? "participation-entry-layout-embedded" : "participation-entry-layout-standalone")">
   <div class="participation-slot-area">
    @if(ShowMatrix)
@@ -41,8 +39,10 @@ else
                                                 SelectedIds="@Selected"
                                                 IsDisabled="SlotDisabled"
                                                 OnToggle="OnMatrixToggle"
+                                                OnViewProfile="OpenProfile"
                                                 OwnUserId="@Plan.OwnUserId"
                                                 ReleaseMode="@ReleaseMode"
+                                                EventDate="@EventDate"
                                                 ClockFormat="@TimetableClockFormat"
                                                 DurationFormat="@TimetableDurationFormat" />
    }
@@ -57,9 +57,13 @@ else
    @if(ShowFallbackTable)
    {
     <div class="participation-table-scroll"><table><thead><tr><th>選択</th><th>曲</th><th>パート</th><th>担当</th></tr></thead><tbody>
-    @foreach(var p in FallbackSlots){<tr data-participation-slot="@p.Id"><td><input data-participation-select="@p.Id" type="checkbox" checked="@Selected.Contains(p.Id)" disabled="@SlotDisabled(p)" @onchange="a=>Toggle(p.Id,a.Value is true)" /></td><td>@p.Title</td><td>@p.PartName（@(p.Category=="Sing"?"声":"楽器")）</td><td>@(p.AssignedName??"空き枠")</td></tr>}
+    @foreach(var p in FallbackSlots){<tr data-participation-slot="@p.Id"><td><input data-participation-select="@p.Id" type="checkbox" checked="@Selected.Contains(p.Id)" disabled="@SlotDisabled(p)" @onchange="a=>Toggle(p.Id,a.Value is true)" /></td><td>@p.Title</td><td>@p.PartName（@(p.Category=="Sing"?"声":"楽器")）</td><td>@if(p.AssignedUserId is not null){<button type="button" data-participation-profile="@p.Id" @onclick="()=>OpenProfile(p.AssignedUserId)">@p.AssignedName</button>}else{<span>空き枠</span>}</td></tr>}
     </tbody></table></div>
    }
+   @if(Embedded){<section class="participation-comments" aria-labelledby="event-comments-heading"><Comments EventId="@EventId" Embedded="true" /></section>}
+ @if(Plan.CanManage){<details class="participation-admin-tools"><summary>管理者操作（対象者・登録解除・人数上限）</summary><section class="panel"><h3>管理者操作</h3><label>対象者<select id="participation-subject" value="@(Subject??CurrentId)" @onchange="ChangeSubject" disabled="@Busy">@foreach(var u in Members){<option value="@u.UserId">@u.DisplayName</option>}</select></label>
+ <label><input id="participation-exception" type="checkbox" @bind="Exception" disabled="@Busy" />声／楽器の兼務制約の例外登録</label><label><input id="participation-release-mode" type="checkbox" @bind="ReleaseMode" disabled="@Busy" />登録解除モード</label><label>例外／解除理由<input id="participation-reason" @bind="Reason" maxlength="500" /></label><p>例外は兼務制約のみ。現在の受付フェーズ・曲数・人数上限を回避しません。他人の保存済み回答は表示しません。</p>
+ <label>参加人数上限（空欄は制限なし）<input id="participation-capacity" @bind="Capacity" /></label><button id="participation-capacity-save" disabled="@Busy" @onclick="SaveCapacity">人数上限を保存</button></section></details>}
   </div>
   <aside class="participation-entry-panel">
    @if(Embedded)
@@ -90,14 +94,16 @@ else
   </aside>
  </div>
  <section><h2>観覧のみの申込み</h2>@foreach(var s in Plan.Spectators){<p>@s.Name @if(Plan.CanManage){<button data-participation-remove-spectator="@s.UserId" disabled="@Busy" @onclick="()=>RemoveSpectator(s.UserId)">管理者による削除</button>}</p>}</section>
- <p><a href="@($"/events/{EventId}/public-answers")">公開回答集計を見る</a>。<a href="@($"/events/{EventId}/comments")">コメントのみ投稿・一覧へ</a>。通知・進行はそれぞれの専用画面で確認してください。</p>
+ <p><a href="@($"/events/{EventId}/public-answers")">公開回答集計を見る</a>。<a href="@(Embedded?"#event-comments-heading":$"/events/{EventId}/comments")">コメントのみ投稿・一覧へ</a>。通知・進行はそれぞれの専用画面で確認してください。</p>
  </fieldset>
  @if(Uncertain){<p role="alert">送信結果が未確認です。同じ操作IDで結果を確認します。入力は変更しないでください。</p><button id="participation-retry" disabled="@Busy" @onclick="Submit">同じ操作IDで結果を確認／再試行</button>}
 }
+@if(ProfileUserId is not null){<Sem.Web.Components.Shared.ProfileCard UserId="@ProfileUserId" OnClose="()=>ProfileUserId=null" />}
 </div>
 @code{
  [Parameter]public string EventId{get;set;}="";
  [Parameter]public bool Embedded{get;set;}
+ [Parameter]public string? EventDate{get;set;}
  [Parameter]public long ContextGeneration{get;set;}
  [Parameter]public string? TimedRowsEventId{get;set;}
  [Parameter]public long TimedRowsContextGeneration{get;set;}=-1;
@@ -106,6 +112,10 @@ else
  [Parameter]public string TimetableDurationFormat{get;set;}="units";
  sealed record IdentityBinding(string ActorId,string SecurityStampHash,string SessionHash);
  IdentityBinding?BoundIdentity;string?BoundEventId;bool HasBoundContext;long LoadGeneration;
+ bool InteractiveReady;
+ protected override void OnAfterRender(bool first){if(first){InteractiveReady=true;StateHasChanged();}}
+ string? ProfileUserId;
+ void OpenProfile(string id){if(Plan is not null&&!Uncertain&&!Busy)ProfileUserId=id;}
  ParticipationPlan?Plan;ParticipationResult?Last;MemberView[]Members=[];HashSet<string>Selected=[];Dictionary<string,string?>Values=[];string?Subject;string CurrentId="",Error="",Message="",Reason="",Capacity="";bool Busy,Exception,Uncertain;ParticipationEdit?Pending;string Comment="";bool _release;
  bool ReleaseMode{get=>_release;set{_release=value;Selected.Clear();}}
  bool HasParticipation=>Plan is not null&&(Plan.OwnSpectator||Plan.Slots.Any(x=>x.AssignedUserId==Plan.OwnUserId));
@@ -129,10 +139,10 @@ else
  protected override async Task OnParametersSetAsync(){var principal=(await Authentication.GetAuthenticationStateAsync()).User;if(BindContext(principal))await Load(principal,++LoadGeneration);}
  IdentityBinding? BindingFor(ClaimsPrincipal principal){var claims=IdentityOptions.Value.ClaimsIdentity;var actor=principal.FindFirst(claims.UserIdClaimType)?.Value;var stamp=principal.FindFirst(claims.SecurityStampClaimType)?.Value;var session=principal.FindFirst(PasskeyAdditionService.SessionClaim)?.Value;if(principal.Identity?.IsAuthenticated!=true||string.IsNullOrWhiteSpace(actor)||string.IsNullOrWhiteSpace(stamp)||string.IsNullOrWhiteSpace(session))return null;return new(actor,SemEndpoints.Hash(stamp),SemEndpoints.Hash(session));}
  bool BindContext(ClaimsPrincipal principal){var identity=BindingFor(principal);if(HasBoundContext&&BoundEventId==EventId&&BoundIdentity==identity)return false;HasBoundContext=true;BoundEventId=EventId;BoundIdentity=identity;LoadGeneration++;ClearContext();return true;}
- void ClearContext(){Plan=null;Last=null;Members=[];Selected=[];Values=[];Subject=null;CurrentId="";Error=Message=Reason=Capacity="";Busy=Exception=Uncertain=false;Pending=null;Comment="";_release=false;}
+ void ClearContext(){ProfileUserId=null;Plan=null;Last=null;Members=[];Selected=[];Values=[];Subject=null;CurrentId="";Error=Message=Reason=Capacity="";Busy=Exception=Uncertain=false;Pending=null;Comment="";_release=false;}
  async Task Load(){var principal=(await Authentication.GetAuthenticationStateAsync()).User;BindContext(principal);await Load(principal,++LoadGeneration);}
  async Task Load(ClaimsPrincipal principal,long generation){try{var currentId=principal.FindFirstValue(ClaimTypes.NameIdentifier)??"";var plan=await Core.ReadParticipationAsync(principal,EventId,subjectId:Subject);if(generation!=LoadGeneration||BoundEventId!=EventId)return;MemberView[] members=plan.CanManage?(await Core.ReadAsync(principal)).Members:[];if(generation!=LoadGeneration||BoundEventId!=EventId)return;CurrentId=currentId;Plan=plan;Members=members;Selected.Clear();Values=Plan.Questions.ToDictionary(x=>x.Id,x=>x.OwnValue);Capacity=Plan.Capacity?.ToString()??"";Error="";}catch{if(generation!=LoadGeneration||BoundEventId!=EventId)return;Clear();Error="ログイン状態とイベントの公開・権限を確認してください。";}}
- void Clear(){Plan=null;Members=[];Values=[];Selected=[];Last=null;}
+ void Clear(){ProfileUserId=null;Plan=null;Members=[];Values=[];Selected=[];Last=null;}
  void Toggle(string id,bool on){if(on)Selected.Add(id);else Selected.Remove(id);}
  async Task ChangeSubject(ChangeEventArgs e){Subject=e.Value?.ToString();if(Subject==CurrentId)Subject=null;Last=null;await Load();}
  ParticipationEdit Edit(ParticipationPlan p,string kind,SlotChoice[]slots,string?subject=null)=>new(Guid.NewGuid().ToString(),p.RowVersion,p.PhaseId,kind,slots,kind is "Release" or "RemoveSpectator"?[]:p.Questions.Where(q=>subject is null||subject==CurrentId||!string.IsNullOrWhiteSpace(Values.GetValueOrDefault(q.Id))).Select(q=>new AnswerEdit(q.Id,Values.GetValueOrDefault(q.Id))).ToArray(),subject,kind=="Register"&&Exception,Reason,p.ParticipantVersion,kind is "Register" or "Spectate" or "Answers"&&!string.IsNullOrWhiteSpace(Comment)?Comment:null);

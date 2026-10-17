@@ -33,7 +33,7 @@
         <nav class="event-overview-actions" aria-label="このイベントの操作">
             <a href="#event-timetable-section">タイムテーブル</a>
             <a href="#event-participation-section">参加登録・観覧</a>
-            <a href="@Link("comments")">コメント</a>
+            <a href="#event-comments-heading">コメント</a>
             <a href="@Link("part-start-preferences")">自分のパート開始通知</a>
             <a href="@Link("public-answers")">公開設問回答</a>
             <a href="@Link("qr")">自分の受付QR</a>
@@ -49,6 +49,7 @@
 
         <section id="event-participation-section" class="event-journey-section" aria-labelledby="event-participation-heading">
             <Participation EventId="@EventId"
+                           EventDate="@View.ScheduledDate"
                            Embedded="true"
                            ContextGeneration="@ContextGeneration"
                            TimedRowsEventId="@TimedRowsEventId"

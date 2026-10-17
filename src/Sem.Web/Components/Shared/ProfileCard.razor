@@ -1,0 +1,20 @@
+@using Microsoft.JSInterop
+@using Microsoft.AspNetCore.Components.Authorization
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+@inject AuthenticationStateProvider Authentication
+<dialog @ref="Dialog" class="profile-card" aria-labelledby="profile-card-heading">
+ <h2 id="profile-card-heading">メンバープロフィール</h2>
+ <button id="profile-card-close" type="button" data-dialog-close autofocus @onclick="Close">閉じる</button>
+ <Sem.Web.Components.Pages.MemberProfile UserId="@UserId" Compact="true" @key="UserId" />
+</dialog>
+@code{
+ [Parameter,EditorRequired]public string UserId{get;set;}="";
+ [Parameter]public EventCallback OnClose{get;set;}
+ ElementReference Dialog;IJSObjectReference? Module;bool Disposed;
+ protected override void OnInitialized()=>Authentication.AuthenticationStateChanged+=AuthenticationChanged;
+ void AuthenticationChanged(Task<AuthenticationState> state){_ = InvokeAsync(async()=>{if(!Disposed)await Close();});}
+ protected override async Task OnAfterRenderAsync(bool first){if(!Disposed){Module??=await JS.InvokeAsync<IJSObjectReference>("import","./comment-dialog.js");if(!Disposed)await Module.InvokeVoidAsync("sync",Dialog,true);}}
+ async Task Close(){if(Disposed)return;if(Module is not null)await Module.InvokeVoidAsync("sync",Dialog,false);await OnClose.InvokeAsync();}
+ public async ValueTask DisposeAsync(){Disposed=true;Authentication.AuthenticationStateChanged-=AuthenticationChanged;if(Module is not null){try{await Module.InvokeVoidAsync("release",Dialog);await Module.DisposeAsync();}catch(JSDisconnectedException){}}}
+}

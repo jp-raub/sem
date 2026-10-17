@@ -257,6 +257,14 @@ async function load(mine=ownerGeneration) {
     renderSavedImage();
     renderSocial(); renderAnswers(); renderQuestionAdmin();
     $('profile-settings').hidden = false;
+    const sectionId = new Map([
+        ['#profile-edit-heading', 'profile-edit-heading'],
+        ['#account-passkeys', 'account-passkeys'],
+        ['#profile-email-change', 'profile-email-change'],
+        ['#profile-qr-heading', 'profile-qr-heading']
+    ]).get(globalThis.location?.hash);
+    if (sectionId) requestAnimationFrame(() => document.getElementById(sectionId)?.scrollIntoView({block:'start'}));
+
     imageWriteNeedsRefresh = false;
     clearSelectedImage();
     setImageControls();
