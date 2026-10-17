@@ -41,6 +41,7 @@ if(process.env.SEM_SHORTENING_CHECKS)await require('./shortening-checks.cjs')({p
 }
 if(process.env.SEM_ADMIN_SEARCH_AUDIT_CHECKS)await require('./admin-search-audit-checks.cjs')({p,g,ok});
 if(process.env.SEM_ACCEPTANCE_WORKFLOW_CHECKS){await require('./admin-accounts-checks.cjs')({p,g,ok});await require('./acceptance-navigation-checks.cjs')({p,g,ok});await require('./participant-profile-checks.cjs')({p,g,ok});}
+if(process.env.SEM_EVENT_LOCATION_CHECKS)await require('./event-location-checks.cjs')({p,g,ok});
 if(process.env.SEM_ACCEPTANCE_RETENTION_COMMAND)await require('./acceptance-retention-checks.cjs')({p,g,ok});
 if(process.env.SEM_MANUAL_NOTIFICATION_UI_CHECKS)await require('./manual-notification-ui-checks.cjs')({p,g,ok});
 if(process.env.SEM_MANUAL_PUSH_CONTROL_CHECKS)await require('./manual-push-control-checks.cjs')({p,g,ok});

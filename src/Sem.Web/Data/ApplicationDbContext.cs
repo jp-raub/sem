@@ -362,6 +362,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             t.HasCheckConstraint("CK_ProfileQrCredentials_Expiry", "\"ExpiresAt\">\"IssuedAt\" AND \"RowVersion\">0");
         });
         b.Entity<SessionEvent>().Property(x => x.RowVersion).IsConcurrencyToken();
+        b.Entity<SessionEvent>().Property(x => x.LocationUrl).HasMaxLength(2048).HasDefaultValue("");
         b.Entity<SessionEvent>().Property(x=>x.DefaultPrepSeconds).HasDefaultValue(600).HasSentinel(-1);
         b.Entity<SessionEvent>().ToTable("SessionEvents", t => t.HasCheckConstraint("CK_SessionEvents_PhaseKind", "\"PhaseKind\" IN ('Hidden','View')"));
         b.Entity<EventPhase>().ToTable("Phases", t => {

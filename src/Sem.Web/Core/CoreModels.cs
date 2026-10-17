@@ -46,6 +46,7 @@ public sealed class SessionEvent
     public string Title { get; set; } = "";
     public string Description { get; set; } = "";
     public string Location { get; set; } = "";
+    public string LocationUrl { get; set; } = "";
     public string ScheduledDate { get; set; } = "";
     public string? OpensAt { get; set; }
     public string AnnouncementMessage { get; set; } = "";

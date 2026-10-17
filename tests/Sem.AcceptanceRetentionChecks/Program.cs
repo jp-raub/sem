@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.DependencyInjection;
 using Sem.Web.Core;
 using Sem.Web.Data;
@@ -19,12 +21,25 @@ void CopyDirectory(string source,string target){Directory.CreateDirectory(target
 Dictionary<string,string> FileHashes(string dir)=>Directory.GetFiles(dir,"*",SearchOption.AllDirectories).Order().ToDictionary(f=>Path.GetRelativePath(dir,f),f=>Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(f))));
 async Task<string> Dump(string directory){await using var c=new SqliteConnection("Data Source="+Path.Combine(directory,"sem.db"));await c.OpenAsync();var names=new List<string>();using(var cmd=c.CreateCommand()){cmd.CommandText="SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name";using var reader=await cmd.ExecuteReaderAsync();while(await reader.ReadAsync())names.Add(reader.GetString(0));}var result=new List<object>();foreach(var name in names){using var cmd=c.CreateCommand();cmd.CommandText="SELECT * FROM \""+name.Replace("\"","\"\"")+"\"";using var reader=await cmd.ExecuteReaderAsync();var rows=new List<string>();while(await reader.ReadAsync()){var row=new object[reader.FieldCount];reader.GetValues(row);rows.Add(JsonSerializer.Serialize(row.Select(x=>x is DBNull?null:x)));}result.Add(new{table=name,rows=rows.Order(StringComparer.Ordinal).ToArray()});}return JsonSerializer.Serialize(result);}
 try{
+ var upgrade=Path.Combine(root,"venue-upgrade");Directory.CreateDirectory(upgrade);
+ using(var provider=Provider(upgrade)){
+  var db=provider.GetRequiredService<ApplicationDbContext>();await db.Database.MigrateAsync();
+  db.SessionEvents.Add(new SessionEvent{Id="pre-url-event",Title="Existing event",Location="Legacy venue https://old.example/ unparsed",Description="Existing description",ScheduledDate="2099-01-02T03:00:00Z",CreatedAt="2026-10-17T00:00:00Z",RowVersion=7});await db.SaveChangesAsync();
+  var migrations=db.Database.GetMigrations().ToArray();var venueIndex=Array.FindIndex(migrations,x=>x.EndsWith("AddEventLocationUrl"));
+  Check(venueIndex>0,"Venue migration follows an existing schema");var previous=migrations[venueIndex-1];
+  var migrator=db.GetService<IMigrator>();await migrator.MigrateAsync(previous);
+  db.ChangeTracker.Clear();
+  await migrator.MigrateAsync();
+  var row=await db.SessionEvents.SingleAsync();
+  Check(row.Location=="Legacy venue https://old.example/ unparsed"&&row.LocationUrl==""&&row.RowVersion==7&&row.Description=="Existing description"&&row.Title=="Existing event","Venue migration preserves existing event values and defaults new URL to empty without parsing legacy text");
+  Check(!db.Database.HasPendingModelChanges(),"Venue migration snapshot matches current Identity V3 model");
+ }
  string protectedText;
  using(var provider=Provider(original)){
   var db=provider.GetRequiredService<ApplicationDbContext>();await SqliteStorageInitializer.InitializeAsync(db);
   db.Users.Add(new ApplicationUser{Id="member",UserName="fixture@example.test",Email="fixture@example.test",EmailConfirmed=true,Enabled=true,DisplayName="Synthetic member",SecurityStamp="synthetic-stamp"});
   db.SiteStates.Add(new SiteState{Initialized=true,Name="Acceptance synthetic"});
-  var e=new SessionEvent{Id="event",Title="Persistent event",ScheduledDate="2099-01-02T03:00:00Z",CreatedAt="2026-10-17T00:00:00Z",RowVersion=3,ManualPhaseOverride=true};
+  var e=new SessionEvent{Id="event",Title="Persistent event",ScheduledDate="2099-01-02T03:00:00Z",CreatedAt="2026-10-17T00:00:00Z",RowVersion=3,Location="Retained venue text",LocationUrl="https://venue.example/access?map=1#entry",ManualPhaseOverride=true};
   e.Phases.Add(new(){Id="phase",EventId="event",Kind="Custom",Name="Open",MaxPicks=-1,IsActive=true});db.SessionEvents.Add(e);
   db.EventPartDefinitions.Add(new(){Id="part",EventId="event",Name="Voice",NormalizedName="VOICE",Category="Sing"});
   db.Songs.Add(new Song{Id="song",EventId="event",Title="Synthetic song",PerformanceSeconds=91});
@@ -48,6 +63,8 @@ try{
  Check(JsonSerializer.Serialize(FileHashes(original))==JsonSerializer.Serialize(FileHashes(restored)),"Stopped full-directory backup/restore preserves every byte including keys and private files");
  using(var provider=Provider(restored)){
   var db=provider.GetRequiredService<ApplicationDbContext>();await SqliteStorageInitializer.InitializeAsync(db);
+  var retainedEvent=await db.SessionEvents.SingleAsync();
+  Check(retainedEvent.Location=="Retained venue text"&&retainedEvent.LocationUrl=="https://venue.example/access?map=1#entry","Separate venue text and URL survive restart and full-directory restore");
   Check(before==await Dump(restored),"Restored application storage preserves all table values and passkey bytes");
   var protector=provider.GetRequiredService<IDataProtectionProvider>().CreateProtector("synthetic-retention");
   Check(protector.Unprotect(protectedText)=="synthetic proof, not a real credential","Persisted Data Protection keys decrypt pre-restart material after restore");

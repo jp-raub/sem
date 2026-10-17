@@ -1,6 +1,6 @@
 using System.Security.Claims;
 namespace Sem.Web.Core;
-public sealed record EventTabsView(string UserId, string EventId, string Title, string Description, string Location, string ScheduledDate, string PhaseName, string[] Available);
+public sealed record EventTabsView(string UserId, string EventId, string Title, string Description, string Location, string ScheduledDate, string PhaseName, string[] Available, string LocationUrl = "");
 public sealed partial class CoreFoundationService
 {
     public async Task<EventTabsView> ReadEventTabsAsync(ClaimsPrincipal principal, string id, CancellationToken ct = default)
@@ -13,6 +13,6 @@ public sealed partial class CoreFoundationService
         if (ProgressCalculator.IsEventDay(e.ScheduledDate, clock.GetUtcNow())) tabs.Add("progress");
         if (manager) tabs.Add("notifications");
         await tx.CommitAsync(ct);
-        return new(actor.Id, id, e.Title, e.Description, e.Location, e.ScheduledDate, phase.Name, tabs.ToArray());
+        return new(actor.Id, id, e.Title, e.Description, e.Location, e.ScheduledDate, phase.Name, tabs.ToArray(), e.LocationUrl);
     }
 }

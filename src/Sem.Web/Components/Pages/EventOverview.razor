@@ -24,6 +24,10 @@
                 @DateTimeOffset.Parse(View.ScheduledDate).ToOffset(TimeSpan.FromHours(9)).ToString("yyyy/MM/dd HH:mm")（日本時間）
                 <span aria-hidden="true"> · </span>@View.Location
             </p>
+            @if (EventLocationLink.IsSafe(View.LocationUrl))
+            {
+                <p><a id="event-location-link" href="@View.LocationUrl" target="_blank" rel="noopener noreferrer">↗ 場所・アクセスを開く</a></p>
+            }
             @if (!string.IsNullOrWhiteSpace(View.Description))
             {
                 <p class="event-overview-description">@View.Description</p>
