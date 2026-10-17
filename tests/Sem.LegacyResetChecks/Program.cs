@@ -189,7 +189,6 @@ async Task SeedAsync(string path, string version)
     db.Users.Add(new ApplicationUser { Id = "user", UserName = "fixture@example.test",
         Email = "fixture@example.test", EmailConfirmed = true, Enabled = true, IsAdmin = true, SecurityStamp = "retained-stamp" });
     db.SiteStates.Add(new SiteState { Initialized = true, Name = "Retained service" });
-    db.InvitationRequests.Add(new InvitationRequest { UserId = "user", Reason = "retained", Status = "Approved" });
     db.EmailTickets.Add(new EmailTicket { UserId = "user", Hash = "ticket-hash", Used = true });
     db.Messages.Add(new Message { UserId = "user", Body = "Old event reference must not cause unrelated deletion." });
     db.Deliveries.Add(new Delivery { UserId = "user", ProtectedBody = "encrypted-body", Due = 9999999999 });
@@ -203,6 +202,14 @@ async Task SeedAsync(string path, string version)
         db.PasskeyAdditions.Add(new PasskeyAddition { UserId = "user", SessionHash = "retained-session",
             Email = "fixture@example.test", SecurityStamp = "retained-stamp", Cancelled = true });
     await db.SaveChangesAsync();
+    string? requestDecidedBy = null;
+    long? requestDecidedAt = null;
+    await db.Database.ExecuteSqlInterpolatedAsync($"""
+        INSERT INTO "InvitationRequests"
+            ("Id","UserId","Reason","Count","Days","Status","DecidedBy","Created","DecidedAt")
+        VALUES ({"retained-request"},{"user"},{"retained"}, {1}, {1}, {"Approved"},
+            {requestDecidedBy}, {0L}, {requestDecidedAt});
+        """);
     string? requestId = null;
     string? revokedBy = null;
     string? revocationReason = null;

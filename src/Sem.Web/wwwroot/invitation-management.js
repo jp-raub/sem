@@ -149,12 +149,14 @@ function normalizeInvitation(row) {
 }
 function normalizeRequest(row) {
   if (!isRecord(row) || !isIdentifier(row.id)) throw new TypeError('invalid request');
+  const decisionComment = optionalText(row.decisionComment, 500);
+  if (decisionComment !== null && /[\u0000-\u001f\u007f-\u009f]/.test(decisionComment)) throw new TypeError('invalid decision comment');
   return {
     id: row.id, userId: optionalText(row.userId, 128), userName: optionalText(row.userName, 512),
     reason: optionalText(row.reason, 500), count: integer(row.count), days: integer(row.days),
     status: requiredText(row.status, 128), created: timestamp(row.created),
     decidedAt: timestamp(row.decidedAt, true), decidedBy: optionalText(row.decidedBy, 128),
-    deciderName: optionalText(row.deciderName, 512)
+    deciderName: optionalText(row.deciderName, 512), decisionComment
   };
 }
 function validatePage(value, requestedPage) {
@@ -178,6 +180,17 @@ function formatTimestamp(seconds) {
   const date = new Date(milliseconds);
   return Number.isNaN(date.getTime()) ? '日時不明' : date.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
 }
+function invitationStatus(invitation) {
+  if (invitation.disabled) return invitation.revokedAt === null ? '無効' : '失効済み';
+  if (invitation.expires !== null && invitation.expires <= Math.floor(Date.now() / 1000)) return '期限切れ';
+  if (invitation.limit !== null && invitation.uses >= invitation.limit) return '人数上限到達';
+  return '有効';
+}
+function requestStatus(status) {
+  return status === 'Pending' ? '確認待ち'
+    : status === 'Approved' ? '許可'
+      : status === 'Rejected' ? '拒否' : status;
+}
 function displayOrDash(value) { return value === null || value === '' ? '—' : value; }
 function personText(name, id) {
   const first = typeof name === 'string' && name.trim() ? name : '不明';
@@ -200,7 +213,7 @@ function renderInvitations(state) {
   const head = element(state, 'invitationHead');
   const body = element(state, 'invitationBody');
   const headers = ['招待ID', '対象ユーザー', '発行者', '関連依頼ID', '目的', '発行元', '上限', '使用数', '作成日時', '有効期限', '状態', '失効情報'];
-  if (state.isAdmin) headers.push('管理者操作');
+  headers.push('本人の操作');
   const headerRow = create(state, 'tr');
   for (const value of headers) cell(state, headerRow, value, true);
   replaceChildren(head, headerRow);
@@ -214,29 +227,37 @@ function renderInvitations(state) {
     cell(state, row, displayOrDash(invitation.requestId));
     cell(state, row, invitation.purpose === null || invitation.purpose === '' ? '未記録' : invitation.purpose);
     cell(state, row, invitation.issuanceSource === null || invitation.issuanceSource === '' ? '未記録'
-      : invitation.issuanceSource === 'Direct' ? '直接発行' : invitation.issuanceSource);
+      : invitation.issuanceSource === 'Direct' ? '直接発行'
+        : invitation.issuanceSource === 'Request' ? '依頼承認' : invitation.issuanceSource);
     cell(state, row, invitation.limit === null ? '—' : String(invitation.limit));
     cell(state, row, String(invitation.uses));
     cell(state, row, formatTimestamp(invitation.created));
     cell(state, row, formatTimestamp(invitation.expires));
-    cell(state, row, invitation.disabled ? (invitation.revokedAt === null ? '無効' : '失効済み') : '有効');
+    cell(state, row, invitationStatus(invitation));
     const revokeInfo = [];
     if (invitation.revokedAt !== null) revokeInfo.push(`失効日時：${formatTimestamp(invitation.revokedAt)}`);
     if (invitation.revokerName || invitation.revokedBy) revokeInfo.push(`失効者：${personText(invitation.revokerName, invitation.revokedBy)}`);
     if (invitation.revocationReason) revokeInfo.push(`理由：${invitation.revocationReason}`);
     cell(state, row, revokeInfo.join(' ／ ') || '—');
-    if (state.isAdmin) {
-      const actionCell = create(state, 'td');
-      if (!invitation.disabled) {
-        const button = create(state, 'button', '失効対象に選ぶ');
-        button.type = 'button';
-        button.disabled = state.busy || !!state.unknown || state.readErrorLock;
-        button.setAttribute('aria-label', `招待 ${invitation.id} を失効対象に選ぶ`);
-        button.addEventListener('click', () => selectTarget(state, invitation));
-        actionCell.append(button);
-      } else actionCell.textContent = '操作なし';
-      row.append(actionCell);
+    const actionCell = create(state, 'td');
+    if (invitation.ownerId === state.actorId && invitationStatus(invitation) === '有効') {
+      const linkButton = create(state, 'button', '本人リンクを取得');
+      linkButton.type = 'button';
+      linkButton.disabled = state.busy || !!state.unknown || state.readErrorLock;
+      linkButton.setAttribute('aria-label', `招待 ${invitation.id} の本人リンクを取得`);
+      linkButton.addEventListener('click', () => void retrieveOwnerLink(state, invitation));
+      actionCell.append(linkButton);
     }
+    if (state.isAdmin && !invitation.disabled) {
+      const button = create(state, 'button', '失効対象に選ぶ');
+      button.type = 'button';
+      button.disabled = state.busy || !!state.unknown || state.readErrorLock;
+      button.setAttribute('aria-label', `招待 ${invitation.id} を失効対象に選ぶ`);
+      button.addEventListener('click', () => selectTarget(state, invitation));
+      actionCell.append(button);
+    }
+    if (!actionCell.childNodes.length) actionCell.textContent = '—';
+    row.append(actionCell);
     body.append(row);
   }
 }
@@ -244,7 +265,7 @@ function renderInvitations(state) {
 function renderRequests(state) {
   const head = element(state, 'requestHead');
   const body = element(state, 'requestBody');
-  const headers = ['依頼ID', '依頼者', '依頼理由', '希望数', '日数', '状態', '作成日時', '決定日時', '決定者'];
+  const headers = ['依頼ID', '依頼者', '依頼理由', '希望数', '日数', '状態', '作成日時', '決定日時', '決定者', '判断コメント', '操作'];
   const headerRow = create(state, 'tr');
   for (const value of headers) cell(state, headerRow, value, true);
   replaceChildren(head, headerRow);
@@ -257,10 +278,21 @@ function renderRequests(state) {
     cell(state, row, displayOrDash(request.reason));
     cell(state, row, String(request.count));
     cell(state, row, String(request.days));
-    cell(state, row, request.status);
+    cell(state, row, requestStatus(request.status));
     cell(state, row, formatTimestamp(request.created));
     cell(state, row, formatTimestamp(request.decidedAt));
     cell(state, row, personText(request.deciderName, request.decidedBy));
+    cell(state, row, request.decisionComment ?? '—');
+    const actionCell = create(state, 'td');
+    if (state.isAdmin && request.status === 'Pending') {
+      const button = create(state, 'button', '確認・判断');
+      button.type = 'button';
+      button.disabled = state.busy || !!state.unknown || state.readErrorLock;
+      button.setAttribute('aria-label', `依頼 ${request.id} を確認・判断`);
+      button.addEventListener('click', () => selectRequest(state, request));
+      actionCell.append(button);
+    } else actionCell.textContent = '—';
+    row.append(actionCell);
     body.append(row);
   }
 }
@@ -282,6 +314,23 @@ function issueValues(state) {
   if (purpose === null || !/^[1-5]$/.test(String(countText)) || !/^[1-7]$/.test(String(daysText))) return null;
   return Object.freeze({ purpose, count: Number(countText), days: Number(daysText) });
 }
+function requestValues(state) {
+  const reason = normalizedReason(element(state, 'requestReason').value);
+  const countText = element(state, 'requestCount').value;
+  const daysText = element(state, 'requestDays').value;
+  if (reason === null || !/^[1-5]$/.test(String(countText)) || !/^[1-7]$/.test(String(daysText))) return null;
+  return Object.freeze({ reason, count: Number(countText), days: Number(daysText) });
+}
+// INV-003-A approved contract; source-only until parent review/test freeze:
+// decision comments are visible to requester/admins; legacy NULL remains NULL.
+function normalizedDecisionComment(raw) {
+  if (typeof raw !== 'string' || /[\u0000-\u001f\u007f-\u009f]/.test(raw)) return null;
+  const comment = raw.trim();
+  return comment.length <= 500 ? comment : null;
+}
+function validOptionalDecisionComment(raw) {
+  return typeof raw === 'string' && !/[\u0000-\u001f\u007f-\u009f]/.test(raw) && raw.trim().length <= 500;
+}
 function clearIssueOutput(state) {
   state.issuedLink = null;
   element(state, 'issueLink').value = '';
@@ -289,6 +338,17 @@ function clearIssueOutput(state) {
   element(state, 'issueCopy').disabled = true;
   element(state, 'issueResult').hidden = true;
   writeText(state, 'issueCopyStatus', '');
+}
+function clearOwnerLink(state) {
+  state.ownerLink = null;
+  const input = element(state, 'ownerLinkValue');
+  if (input) { input.value = ''; input.disabled = true; }
+  const button = element(state, 'ownerLinkCopy');
+  if (button) button.disabled = true;
+  const section = element(state, 'ownerLinkResult');
+  if (section) section.hidden = true;
+  writeText(state, 'ownerLinkSummary', '');
+  writeText(state, 'ownerLinkCopyStatus', '');
 }
 function resetIssueConfirmation(state, clearOutput = false) {
   state.issueSnapshot = null;
@@ -303,6 +363,31 @@ function updateIssue(state) {
   element(state, 'issueSubmit').disabled = locked || values === null || !element(state, 'issueConfirm').checked;
   element(state, 'issueLink').disabled = !state.issuedLink;
   element(state, 'issueCopy').disabled = !state.issuedLink;
+}
+function updateRequestControls(state) {
+  const visible = !!state.actorId && !state.isAdmin;
+  element(state, 'requestCreate').hidden = !visible;
+  const locked = !isCurrent(state) || !visible || state.busy || !!state.unknown || state.readErrorLock;
+  element(state, 'requestFields').disabled = locked;
+  element(state, 'requestSubmit').disabled = locked || requestValues(state) === null;
+}
+function updateReviewControls(state) {
+  const selected = state.selectedRequest;
+  const visible = !!state.isAdmin && !!selected;
+  element(state, 'requestReview').hidden = !visible;
+  const locked = !isCurrent(state) || !visible || state.busy || !!state.unknown || state.readErrorLock
+    || !state.requests.some(row => row.id === selected?.id && row.status === 'Pending');
+  const commentValid = validOptionalDecisionComment(element(state, 'reviewComment').value);
+  for (const name of ['reviewChoice', 'reviewComment', 'reviewConfirm', 'reviewSubmit']) {
+    element(state, name).disabled = locked || (name === 'reviewSubmit' &&
+      (!element(state, 'reviewConfirm').checked || !commentValid));
+  }
+  element(state, 'reviewCancel').disabled = state.busy;
+  if (selected) {
+    writeText(state, 'reviewSummary',
+      `依頼者：${personText(selected.userName, selected.userId)} ／ 依頼日時：${formatTimestamp(selected.created)}\n` +
+      `希望人数：${selected.count}名 ／ 有効期間：${selected.days}日（発行から）\n理由：${selected.reason}`);
+  }
 }
 function clearConfirmation(state) {
   state.selectedTarget = null;
@@ -322,18 +407,25 @@ function updateConfirmation(state) {
   unknownElement.hidden = !state.unknown;
   unknownElement.textContent = state.unknown?.message ?? '';
   updateIssue(state);
+  updateRequestControls(state);
+  updateReviewControls(state);
 }
 function render(state) {
   if (!isCurrent(state)) return;
   const pagination = paginationState(state.page, state.hasMoreInvitations, state.hasMoreRequests);
   element(state, 'admin').hidden = !state.isAdmin;
   writeText(state, 'scope', state.isAdmin
-    ? '管理者として、この一覧ページに表示された全体の招待・依頼を確認できます。'
-    : '本人に許可された範囲の招待・依頼を表示しています。');
+    ? '全体管理者として、招待・依頼の一覧と操作を利用できます。招待リンクを取得できるのは所有者本人だけです。'
+    : '本人の依頼と招待を表示しています。招待リンクは所有者本人だけが取得できます。');
   writeText(state, 'status', state.statusMessage);
   writeText(state, 'error', state.errorMessage);
   writeText(state, 'issueStatus', state.issueStatusMessage);
   writeText(state, 'issueError', state.issueErrorMessage);
+  writeText(state, 'requestCreateStatus', state.requestStatusMessage);
+  writeText(state, 'requestCreateError', state.requestErrorMessage);
+  writeText(state, 'reviewStatus', state.reviewStatusMessage);
+  writeText(state, 'reviewError', state.reviewErrorMessage);
+  writeText(state, 'ownerLinkCopyStatus', state.ownerLink?.copyStatus ?? '');
   element(state, 'refresh').disabled = state.busy || (!state.actorId && !state.readErrorLock);
   element(state, 'previous').disabled = !state.actorId || state.busy || state.readErrorLock || state.page <= 1;
   element(state, 'next').disabled = !state.actorId || state.busy || state.readErrorLock || !pagination.canAdvance;
@@ -346,6 +438,9 @@ function render(state) {
 function elements(root) {
   const byId = id => root.querySelector(`#invitation-management-${id}`);
   const byIssueId = id => root.querySelector(`#invitation-issue-${id}`);
+  const byRequestId = id => root.querySelector(`#invitation-request-create-${id}`);
+  const byReviewId = id => root.querySelector(`#invitation-request-review-${id}`);
+  const byOwnerLinkId = id => root.querySelector(`#invitation-owner-link-${id}`);
   return {
     scope: byId('scope'), status: byId('status'), error: byId('error'), moduleError: byId('module-error'),
     refresh: byId('refresh'), admin: byId('admin'), selected: byId('selected'), selectedSummary: byId('selected-summary'),
@@ -355,6 +450,20 @@ function elements(root) {
     issueConfirm: byIssueId('confirm'), issueSubmit: byIssueId('submit'), issueResult: byIssueId('result'),
     issueStatus: byIssueId('status'), issueError: byIssueId('error'),
     issueLink: byIssueId('link'), issueCopy: byIssueId('copy'), issueCopyStatus: byIssueId('copy-status'),
+    requestCreate: root.querySelector('#invitation-request-create'),
+    requestForm: byRequestId('form'), requestFields: byRequestId('fields'),
+    requestReason: byRequestId('reason'), requestCount: byRequestId('count'),
+    requestDays: byRequestId('days'), requestSubmit: byRequestId('submit'),
+    requestCreateStatus: byRequestId('status'), requestCreateError: byRequestId('error'),
+    requestReview: root.querySelector('#invitation-request-review'),
+    reviewForm: byReviewId('form'), reviewSummary: byReviewId('summary'),
+    reviewStatus: byReviewId('status'), reviewError: byReviewId('error'),
+    reviewChoice: byReviewId('choice'), reviewComment: byReviewId('comment'),
+    reviewConfirm: byReviewId('confirm'), reviewSubmit: byReviewId('submit'),
+    reviewCancel: byReviewId('cancel'),
+    ownerLinkResult: root.querySelector('#invitation-owner-link-result'),
+    ownerLinkSummary: byOwnerLinkId('summary'), ownerLinkValue: byOwnerLinkId('value'),
+    ownerLinkCopy: byOwnerLinkId('copy'), ownerLinkCopyStatus: byOwnerLinkId('copy-status'),
     invitationHead: byId('invitations-head'), invitationBody: byId('invitations-body'),
     requestHead: byId('requests-head'), requestBody: byId('requests-body'),
     previous: byId('previous'), next: byId('next'), pageLabel: byId('page')
@@ -369,6 +478,18 @@ function selectTarget(state, invitation) {
   element(state, 'confirm').checked = false;
   state.errorMessage = '';
   state.statusMessage = `招待ID ${invitation.id} を失効対象として選択しました。対象を確認し、理由を入力して明示確認してください。`;
+  render(state);
+}
+
+function selectRequest(state, request) {
+  if (!isCurrent(state) || !state.isAdmin || state.busy || state.unknown || state.readErrorLock || request.status !== 'Pending') return;
+  state.operationGeneration++;
+  state.selectedRequest = Object.freeze({ ...request });
+  element(state, 'reviewChoice').value = 'approve';
+  element(state, 'reviewComment').value = '';
+  element(state, 'reviewConfirm').checked = false;
+  state.reviewStatusMessage = '依頼内容を確認し、判断と必要なコメントを入力してください。';
+  state.reviewErrorMessage = '';
   render(state);
 }
 
@@ -390,13 +511,29 @@ function applyPage(state, data) {
     state.statusMessage = '発行結果未確認のため、一覧は更新しましたが発行操作はロック中です。';
     state.issueStatusMessage = state.statusMessage;
     state.issueErrorMessage = state.unknown.message;
+  } else if (state.unknown?.kind === 'request') {
+    state.unknown.message = '依頼の結果はまだ特定できません。自動再送しません。依頼一覧を確認し、同じ内容を再送しないでください。結果が不明な場合は管理者へ確認してください。';
+    state.statusMessage = '依頼結果未確認のため、新しい依頼をロックしています。';
+    state.requestErrorMessage = state.unknown.message;
+  } else if (state.unknown?.kind === 'decision') {
+    const current = state.requests.find(row => row.id === state.unknown.id);
+    if (current && current.status !== 'Pending') {
+      state.unknown = null;
+      state.selectedRequest = null;
+      state.reviewStatusMessage = `手動確認で依頼 ${current.id} の判断済み状態を確認しました。`;
+      state.reviewErrorMessage = '';
+      state.statusMessage = state.reviewStatusMessage;
+    } else {
+      state.unknown.message = `依頼 ${state.unknown.id} の判断結果は未確認です。自動再送せず、依頼の状態を管理者間で確認してください。`;
+      state.statusMessage = '判断結果未確認のため、管理者操作をロックしています。';
+      state.reviewErrorMessage = state.unknown.message;
+    }
   } else if (state.unknown) {
     const current = state.invitations.find(row => row.id === state.unknown.id);
     if (current) {
       const previousUnknown = state.unknown;
       state.unknown = null;
       clearConfirmation(state);
-      state.operationGeneration++;
       state.statusMessage = current.disabled
         ? `手動確認で招待ID ${previousUnknown.id} が失効済みと確認できました。`
         : `手動確認で招待ID ${previousUnknown.id} はまだ有効と確認できました。再度操作する場合は招待を選び直し、新しく確認してください。`;
@@ -429,6 +566,10 @@ async function loadPage(state, page) {
   state.errorMessage = '';
   state.statusMessage = `ページ ${page} を読み込んでいます。`;
   clearConfirmation(state);
+  state.selectedRequest = null;
+  element(state, 'reviewComment').value = '';
+  element(state, 'reviewConfirm').checked = false;
+  clearOwnerLink(state);
   resetIssueConfirmation(state, false);
   render(state);
   try {
@@ -578,6 +719,230 @@ async function copyIssueLink(state) {
   }
 }
 
+function validateJoinLink(link) {
+  if (typeof link !== 'string' || link.length < 1 || link.length > 8192 || /[\u0000-\u0020\u007f-\u009f]/.test(link)) throw new TypeError('invalid invitation link');
+  const url = new URL(link);
+  const inviteEntries = [...new URLSearchParams(url.hash.slice(1)).entries()];
+  if (url.origin !== globalThis.location.origin || url.username || url.password || url.pathname !== '/join'
+      || url.search !== '' || inviteEntries.length !== 1 || inviteEntries[0][0] !== 'invite'
+      || inviteEntries[0][1].length < 1) throw new TypeError('invalid invitation link');
+  return link;
+}
+
+function validateOwnerLinkResponse(value, actorId, invitation) {
+  const expectedKeys = ['actorId', 'id', 'limit', 'uses', 'created', 'expires', 'link'];
+  const keys = isRecord(value) ? Object.keys(value).sort() : [];
+  const expected = [...expectedKeys].sort();
+  if (!isRecord(value) || keys.length !== expected.length || keys.some((key, i) => key !== expected[i])
+      || value.actorId !== actorId || value.id !== invitation.id
+      || value.limit !== invitation.limit || value.uses !== invitation.uses) throw new TypeError('invalid owner link response');
+  const created = timestamp(value.created);
+  const expires = timestamp(value.expires);
+  if (expires <= created) throw new TypeError('invalid invitation expiry');
+  return { id: value.id, limit: value.limit, uses: value.uses, created, expires, link: validateJoinLink(value.link), copyStatus: '' };
+}
+
+async function retrieveOwnerLink(state, invitation) {
+  if (!isCurrent(state) || !state.actorId || invitation.ownerId !== state.actorId || state.busy
+      || state.unknown || state.readErrorLock || invitation.disabled) return;
+  const actorId = state.actorId;
+  const operation = ++state.operationGeneration;
+  clearOwnerLink(state);
+  state.busy = true;
+  state.errorMessage = '';
+  state.statusMessage = `招待ID ${invitation.id} の本人リンクを確認しています。`;
+  render(state);
+  try {
+    const path = `/api/core/invitations/link/${encodeURIComponent(invitation.id)}`;
+    const value = await requestJson(state, path, { actorId });
+    if (!isOperationCurrent(state, operation) || state.actorId !== actorId) return;
+    const result = validateOwnerLinkResponse(value, actorId, invitation);
+    state.ownerLink = result;
+    element(state, 'ownerLinkValue').value = result.link;
+    element(state, 'ownerLinkValue').disabled = false;
+    element(state, 'ownerLinkCopy').disabled = false;
+    element(state, 'ownerLinkResult').hidden = false;
+    writeText(state, 'ownerLinkSummary',
+      `招待ID：${result.id} ／ 登録済み：${result.uses} / ${result.limit}名 ／ 有効期限：${formatTimestamp(result.expires)}`);
+    state.statusMessage = '本人の招待リンクを一時表示しました。共有後はページを離れて消去してください。';
+    state.errorMessage = '';
+  } catch (error) {
+    if (!isOperationCurrent(state, operation)) return;
+    if (error instanceof AuthenticationStateError) clearActorState(state);
+    else {
+      clearOwnerLink(state);
+      state.errorMessage = error instanceof HttpStatusError && error.status === 410
+        ? 'この招待リンクは期限切れ・上限到達・失効済みです。'
+        : '本人リンクを取得できませんでした。招待状態を再読込してください。';
+      state.statusMessage = '招待リンクを表示していません。';
+    }
+  } finally {
+    if (isOperationCurrent(state, operation)) { state.busy = false; render(state); }
+  }
+}
+
+async function copyOwnerLink(state) {
+  if (!isCurrent(state) || !state.ownerLink || element(state, 'ownerLinkValue').disabled) return;
+  const link = state.ownerLink.link;
+  const actorId = state.actorId;
+  const operation = state.operationGeneration;
+  const clipboard = globalThis.navigator?.clipboard;
+  if (!clipboard || typeof clipboard.writeText !== 'function') {
+    try { element(state, 'ownerLinkValue').focus?.(); element(state, 'ownerLinkValue').select?.(); } catch { }
+    state.ownerLink.copyStatus = 'リンクを選択しました。クリップボードが使えない場合は手動でコピーしてください。';
+    render(state);
+    return;
+  }
+  try {
+    await clipboard.writeText(link);
+    if (!isOperationCurrent(state, operation) || state.actorId !== actorId || state.ownerLink?.link !== link) return;
+    state.ownerLink.copyStatus = 'リンクをクリップボードへコピーしました。安全に取り扱ってください。';
+  } catch {
+    if (!isOperationCurrent(state, operation) || state.actorId !== actorId || state.ownerLink?.link !== link) return;
+    try { element(state, 'ownerLinkValue').focus?.(); element(state, 'ownerLinkValue').select?.(); } catch { }
+    state.ownerLink.copyStatus = 'リンクを選択しました。手動でコピーしてください。';
+  }
+  render(state);
+}
+
+function requestActionCurrent(state, operation, actorId, snapshot) {
+  if (!isOperationCurrent(state, operation) || state.actorId !== actorId || state.isAdmin) return false;
+  const current = requestValues(state);
+  return current !== null && current.reason === snapshot.reason && current.count === snapshot.count
+    && current.days === snapshot.days;
+}
+
+async function createInvitationRequest(state, event) {
+  event.preventDefault();
+  if (!isCurrent(state) || !state.actorId || state.isAdmin || state.busy || state.unknown || state.readErrorLock) return;
+  const snapshot = requestValues(state);
+  if (snapshot === null) {
+    state.requestErrorMessage = '依頼理由（1〜500文字・制御文字不可）、人数、期間を確認してください。';
+    render(state); return;
+  }
+  const actorId = state.actorId;
+  const operation = ++state.operationGeneration;
+  state.busy = true;
+  state.requestErrorMessage = '';
+  state.requestStatusMessage = '招待リンク発行の依頼を送信しています。';
+  render(state);
+  try {
+    const csrfToken = await readCsrf(state);
+    if (!requestActionCurrent(state, operation, actorId, snapshot)) return;
+    state.unknown = { kind: 'request', message: '依頼の送信結果は未確認です。自動再送しません。依頼一覧を再読込し、同じ依頼を繰り返し送信しないでください。' };
+    render(state);
+    const value = await requestJson(state, '/api/core/invitations/request', {
+      method: 'POST', actorId, csrfToken, body: snapshot
+    });
+    if (!requestActionCurrent(state, operation, actorId, snapshot)) return;
+    const keys = isRecord(value) ? Object.keys(value).sort() : [];
+    if (keys.join(',') !== 'actorId,id,status' || value.actorId !== actorId
+        || !isIdentifier(value.id) || value.status !== 'Pending') throw new TypeError('invalid request response');
+    state.unknown = null;
+    element(state, 'requestReason').value = '';
+    element(state, 'requestCount').value = '1';
+    element(state, 'requestDays').value = '1';
+    state.busy = false;
+    state.operationGeneration++;
+    state.requestStatusMessage = `依頼 ${value.id} を受け付けました。管理者の判断は依頼一覧で確認できます。`;
+    state.requestErrorMessage = '';
+    render(state);
+    void loadPage(state, 1);
+  } catch (error) {
+    if (!isOperationCurrent(state, operation)) return;
+    if (error instanceof AuthenticationStateError) clearActorState(state);
+    else if (state.unknown?.kind === 'request') {
+      state.unknown.message = '依頼の結果は未確認です。自動再送しません。依頼一覧を再読込して確認してください。結果確認まで新しい依頼をロックしています。';
+      state.busy = false;
+      state.operationGeneration++;
+      state.requestStatusMessage = '依頼結果は未確認です。';
+      state.requestErrorMessage = state.unknown.message;
+      render(state);
+    } else {
+      state.requestErrorMessage = '依頼を開始できませんでした。依頼内容を確認してください。';
+      state.requestStatusMessage = '依頼は送信されていません。';
+      render(state);
+    }
+  } finally {
+    if (isOperationCurrent(state, operation)) { state.busy = false; render(state); }
+  }
+}
+
+function decisionActionCurrent(state, operation, actorId, request) {
+  return isOperationCurrent(state, operation) && state.actorId === actorId && state.isAdmin
+    && state.selectedRequest === request
+    && state.requests.some(row => row.id === request.id && row.status === 'Pending');
+}
+
+async function decideInvitationRequest(state, event) {
+  event.preventDefault();
+  const request = state.selectedRequest;
+  if (!isCurrent(state) || !state.isAdmin || !request || state.busy || state.unknown || state.readErrorLock) return;
+  const rawComment = element(state, 'reviewComment').value;
+  const comment = normalizedDecisionComment(rawComment);
+  if (!validOptionalDecisionComment(rawComment)) {
+    state.reviewErrorMessage = '判断コメントは500文字以内、制御文字不可で入力してください。';
+    render(state); return;
+  }
+  if (!element(state, 'reviewConfirm').checked) return;
+  const actorId = state.actorId;
+  const approve = element(state, 'reviewChoice').value === 'approve';
+  const operation = ++state.operationGeneration;
+  state.busy = true;
+  state.reviewErrorMessage = '';
+  state.reviewStatusMessage = `依頼 ${request.id} の判断を送信しています。`;
+  render(state);
+  try {
+    const csrfToken = await readCsrf(state);
+    if (!decisionActionCurrent(state, operation, actorId, request)) return;
+    state.unknown = { kind: 'decision', id: request.id, message: `依頼 ${request.id} の判断結果は未確認です。自動再送しません。依頼一覧を再読込して状態を確認してください。` };
+    render(state);
+    const value = await requestJson(state, '/api/core/invitations/decide', {
+      method: 'POST', actorId, csrfToken,
+      body: { id: request.id, approve, comment: comment ?? '' }
+    });
+    if (!decisionActionCurrent(state, operation, actorId, request)) return;
+    const keys = isRecord(value) ? Object.keys(value).sort() : [];
+    if (keys.join(',') !== 'actorId,decisionComment,id,invitationId,status'
+        || value.actorId !== actorId || value.id !== request.id
+        || value.status !== (approve ? 'Approved' : 'Rejected')
+        || value.decisionComment !== comment
+        || (approve ? !isIdentifier(value.invitationId) : value.invitationId !== null)) throw new TypeError('invalid decision response');
+    state.unknown = null;
+    state.requests = state.requests.map(row => row.id === request.id
+      ? { ...row, status: value.status, decidedAt: Math.floor(Date.now() / 1000), decidedBy: actorId, deciderName: '本人', decisionComment: comment }
+      : row);
+    state.selectedRequest = null;
+    element(state, 'reviewComment').value = '';
+    element(state, 'reviewConfirm').checked = false;
+    state.busy = false;
+    state.operationGeneration++;
+    state.reviewStatusMessage = approve
+      ? '依頼を許可し、招待リンクを発行しました。リンクは依頼者本人だけが取得できます。'
+      : '依頼を拒否しました。依頼者へ通知しました。';
+    state.reviewErrorMessage = '';
+    render(state);
+    void loadPage(state, state.page || 1);
+  } catch (error) {
+    if (!isOperationCurrent(state, operation)) return;
+    if (error instanceof AuthenticationStateError) clearActorState(state);
+    else if (state.unknown?.kind === 'decision') {
+      state.unknown.message = `依頼 ${request.id} の結果は未確認です。自動再送せず、一覧を再読込して判断状態を確認してください。`;
+      state.busy = false;
+      state.operationGeneration++;
+      state.reviewStatusMessage = '判断結果は未確認です。';
+      state.reviewErrorMessage = state.unknown.message;
+      render(state);
+    } else {
+      state.reviewErrorMessage = '判断を開始できませんでした。依頼を再読込して状態を確認してください。';
+      state.reviewStatusMessage = '判断は送信されていません。';
+      render(state);
+    }
+  } finally {
+    if (isOperationCurrent(state, operation)) { state.busy = false; render(state); }
+  }
+}
+
 async function revokeSelected(state, event) {
   event.preventDefault();
   if (!isCurrent(state) || !state.isAdmin || state.busy || state.unknown || state.readErrorLock || !state.selectedTarget) return;
@@ -647,6 +1012,7 @@ function onPageHide(state) {
   state.hasMoreRequests = false;
   state.invitations = [];
   state.requests = [];
+  state.selectedRequest = null;
   state.busy = false;
   state.readErrorLock = true;
   state.selectedTarget = null;
@@ -655,6 +1021,10 @@ function onPageHide(state) {
   state.errorMessage = '';
   state.issueErrorMessage = '';
   clearConfirmation(state);
+  element(state, 'requestReason').value = '';
+  element(state, 'reviewComment').value = '';
+  element(state, 'reviewConfirm').checked = false;
+  clearOwnerLink(state);
   resetIssueConfirmation(state, true);
   render(state);
   state.pageHidden = true;
@@ -672,6 +1042,7 @@ function onPageShow(state) {
   state.hasMoreRequests = false;
   state.invitations = [];
   state.requests = [];
+  state.selectedRequest = null;
   state.busy = false;
   state.readErrorLock = true;
   state.selectedTarget = null;
@@ -680,6 +1051,10 @@ function onPageShow(state) {
   state.errorMessage = '';
   state.issueErrorMessage = '';
   clearConfirmation(state);
+  element(state, 'requestReason').value = '';
+  element(state, 'reviewComment').value = '';
+  element(state, 'reviewConfirm').checked = false;
+  clearOwnerLink(state);
   resetIssueConfirmation(state, true);
   render(state);
   void loadPage(state, 1);
@@ -691,6 +1066,7 @@ function clearActorState(state) {
   state.isAdmin = false;
   state.invitations = [];
   state.requests = [];
+  state.selectedRequest = null;
   state.unknown = null;
   state.readErrorLock = false;
   state.busy = false;
@@ -699,6 +1075,10 @@ function clearActorState(state) {
   state.issueStatusMessage = 'ログイン状態またはアカウントが変わりました。発行操作を停止し、一時リンクを消去しました。';
   state.issueErrorMessage = '';
   clearConfirmation(state);
+  element(state, 'requestReason').value = '';
+  element(state, 'reviewComment').value = '';
+  element(state, 'reviewConfirm').checked = false;
+  clearOwnerLink(state);
   resetIssueConfirmation(state, true);
   render(state);
 }
@@ -713,12 +1093,17 @@ function disposeState(state) {
     element(state, 'confirm')?.removeEventListener('change', state.listeners.confirmChange);
     for (const name of ['issuePurpose', 'issueCount', 'issueDays']) element(state, name)?.removeEventListener('input', state.listeners.issueInput);
     element(state, 'issueConfirm')?.removeEventListener('change', state.listeners.issueConfirmChange);
+    for (const name of ['requestReason', 'requestCount', 'requestDays']) element(state, name)?.removeEventListener('input', state.listeners.requestInput);
+    element(state, 'reviewChoice')?.removeEventListener('change', state.listeners.reviewInput);
+    element(state, 'reviewComment')?.removeEventListener('input', state.listeners.reviewInput);
+    element(state, 'reviewConfirm')?.removeEventListener('change', state.listeners.reviewConfirmChange);
   }
   globalThis.removeEventListener?.('pagehide', state.listeners?.pageHide);
   globalThis.removeEventListener?.('pageshow', state.listeners?.pageShow);
   abortRequests(state);
   state.controllers.clear();
   resetIssueConfirmation(state, true);
+  clearOwnerLink(state);
   state.actorId = null;
   state.isAdmin = false;
   state.invitations = [];
@@ -736,9 +1121,12 @@ export async function init(root, owner) {
   const state = {
     root, owner, generation: ++nextGeneration, operationGeneration: 0, disposed: false, pageHidden: false, controllers: new Set(),
     elements: elements(root), listeners: null, actorId: null, isAdmin: false, page: 1, pageSize: PAGE_SIZE,
-    hasMoreInvitations: false, hasMoreRequests: false, invitations: [], requests: [], selectedTarget: null,
+    hasMoreInvitations: false, hasMoreRequests: false, invitations: [], requests: [], selectedTarget: null, selectedRequest: null,
     unknown: null, readErrorLock: false, busy: false, errorMessage: '', statusMessage: '一覧を準備しています。',
-    issueSnapshot: null, issuedLink: null, issueStatusMessage: '発行機能を準備しています。', issueErrorMessage: ''
+    issueSnapshot: null, issuedLink: null, ownerLink: null,
+    issueStatusMessage: '発行機能を準備しています。', issueErrorMessage: '',
+    requestStatusMessage: '依頼機能を準備しています。', requestErrorMessage: '',
+    reviewStatusMessage: '', reviewErrorMessage: ''
   };
   if (Object.values(state.elements).some(node => !node)) throw new TypeError('invitation UI elements missing');
   liveState = state;
@@ -749,10 +1137,20 @@ export async function init(root, owner) {
       else if (target === element(state, 'previous')) void loadPage(state, state.page - 1);
       else if (target === element(state, 'next')) void loadPage(state, state.page + 1);
       else if (target === element(state, 'issueCopy')) void copyIssueLink(state);
+      else if (target === element(state, 'ownerLinkCopy')) void copyOwnerLink(state);
+      else if (target === element(state, 'reviewCancel')) {
+        state.selectedRequest = null;
+        element(state, 'reviewComment').value = '';
+        element(state, 'reviewConfirm').checked = false;
+        state.reviewErrorMessage = '';
+        render(state);
+      }
     },
     submit: event => {
       if (event.target === element(state, 'form')) void revokeSelected(state, event);
       else if (event.target === element(state, 'issueForm')) void issueInvitation(state, event);
+      else if (event.target === element(state, 'requestForm')) void createInvitationRequest(state, event);
+      else if (event.target === element(state, 'reviewForm')) void decideInvitationRequest(state, event);
     },
     reasonInput: () => {
       if (!isCurrent(state)) return;
@@ -772,6 +1170,20 @@ export async function init(root, owner) {
       render(state);
     },
     issueConfirmChange: () => { if (isCurrent(state)) updateConfirmation(state); },
+    requestInput: () => {
+      if (!isCurrent(state)) return;
+      state.operationGeneration++;
+      state.requestErrorMessage = '';
+      updateConfirmation(state);
+    },
+    reviewInput: () => {
+      if (!isCurrent(state)) return;
+      state.operationGeneration++;
+      element(state, 'reviewConfirm').checked = false;
+      state.reviewErrorMessage = '';
+      updateConfirmation(state);
+    },
+    reviewConfirmChange: () => { if (isCurrent(state)) updateConfirmation(state); },
     pageHide: () => onPageHide(state),
     pageShow: () => onPageShow(state)
   };
@@ -781,6 +1193,10 @@ export async function init(root, owner) {
   element(state, 'confirm').addEventListener('change', state.listeners.confirmChange);
   for (const name of ['issuePurpose', 'issueCount', 'issueDays']) element(state, name).addEventListener('input', state.listeners.issueInput);
   element(state, 'issueConfirm').addEventListener('change', state.listeners.issueConfirmChange);
+  for (const name of ['requestReason', 'requestCount', 'requestDays']) element(state, name).addEventListener('input', state.listeners.requestInput);
+  element(state, 'reviewChoice').addEventListener('change', state.listeners.reviewInput);
+  element(state, 'reviewComment').addEventListener('input', state.listeners.reviewInput);
+  element(state, 'reviewConfirm').addEventListener('change', state.listeners.reviewConfirmChange);
   globalThis.addEventListener?.('pagehide', state.listeners.pageHide);
   globalThis.addEventListener?.('pageshow', state.listeners.pageShow);
   render(state);

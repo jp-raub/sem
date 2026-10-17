@@ -50,8 +50,6 @@ try
             SecurityStamp = "synthetic-security-stamp"
         });
         fixture.Db.SiteStates.Add(new SiteState { Initialized = true, Name = "Synthetic site" });
-        fixture.Db.InvitationRequests.Add(new InvitationRequest { Id = "fixture-request",
-            UserId = "fixture-user", Status = "Rejected", DecidedBy = "fixture-user", DecidedAt = 100 });
         fixture.Db.EmailTickets.Add(new EmailTicket { UserId = "fixture-user", Hash = "fixture-ticket", Used = true });
         fixture.Db.Messages.Add(new Message { UserId = "fixture-user", Title = "synthetic", Body = "retained" });
         fixture.Db.Deliveries.Add(new Delivery { UserId = "fixture-user", Due = 9999999999,
@@ -59,6 +57,15 @@ try
 
         fixture.Db.Audits.Add(new Audit { ActorId = "fixture-user", Action = "Synthetic" });
         await fixture.Db.SaveChangesAsync();
+        string requestReason = "";
+        string? requestDecidedBy = "fixture-user";
+        long? requestDecidedAt = 100;
+        await fixture.Db.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO "InvitationRequests"
+                ("Id","UserId","Reason","Count","Days","Status","DecidedBy","Created","DecidedAt")
+            VALUES ({"fixture-request"},{"fixture-user"},{requestReason}, {1}, {1}, {"Rejected"},
+                {requestDecidedBy}, {0L}, {requestDecidedAt});
+            """);
         string? inviteRequestId = null;
         string? revokedBy = null;
         string? revocationReason = "synthetic reason";
@@ -87,6 +94,9 @@ try
         Check(await fixture.Db.Invitations.AsNoTracking().Where(i => i.Id == "fixture-invite")
                 .Select(i => i.IssuanceSource).SingleAsync() is null,
             "Legacy invitation issuance source remains null after adoption");
+        Check(await fixture.Db.InvitationRequests.AsNoTracking().Where(r => r.Id == "fixture-request")
+                .Select(r => r.DecisionComment).SingleAsync() is null,
+            "Legacy request decision comment remains null after adoption");
         Check(await fixture.Db.PartPresets.CountAsync()==6 && (await fixture.Db.PartPresetStates.SingleAsync()).RowVersion==0, "Legacy adoption preserves the six explicit preset seed rows");
         var themeSeeds = await fixture.Db.ThemeCatalogEntries.AsNoTracking().OrderBy(x => x.Id).ToArrayAsync();
         Check(themeSeeds.Length == 10 && Sem.Web.Core.ThemeCatalog.Default.Themes.All(t => themeSeeds.Any(row =>
@@ -232,6 +242,12 @@ static async Task<string> DumpAsync(string path)
                 SELECT "Id","TokenHash","OwnerId","IssuerId","RequestId","Limit","Uses","Expires","Created","Disabled",
                        "RevokedBy","RevocationReason","RevokedAt","ProtectedToken"
                 FROM "Invitations" ORDER BY rowid
+                """;
+        // Compare all original request columns, then verify the additive nullable column separately.
+        if (table == "InvitationRequests")
+            command.CommandText = """
+                SELECT "Id","UserId","Reason","Count","Days","Status","DecidedBy","Created","DecidedAt"
+                FROM "InvitationRequests" ORDER BY rowid
                 """;
         using var reader = await command.ExecuteReaderAsync();
         while (await reader.ReadAsync())

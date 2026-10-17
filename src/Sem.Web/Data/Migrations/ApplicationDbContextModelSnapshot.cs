@@ -2402,6 +2402,10 @@ namespace Sem.Web.Data.Migrations
                     b.HasIndex("TokenHash")
                         .IsUnique();
 
+                    b.HasIndex("RequestId")
+                        .IsUnique()
+                        .HasFilter("\"RequestId\" IS NOT NULL");
+
                     b.ToTable("Invitations");
                 });
 
@@ -2421,6 +2425,10 @@ namespace Sem.Web.Data.Migrations
 
                     b.Property<long?>("DecidedAt")
                         .HasColumnType("INTEGER");
+
+                    b.Property<string>("DecisionComment")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("DecidedBy")
                         .HasColumnType("TEXT");
@@ -2676,6 +2684,61 @@ namespace Sem.Web.Data.Migrations
                         .HasFilter("\"Cancelled\" = 0 AND \"CompletedAt\" IS NULL");
 
                     b.ToTable("PasskeyAdditions");
+                });
+
+            modelBuilder.Entity("Sem.Web.Runtime.PasskeyDeletionProof", b =>
+                {
+                    b.Property<string>("Id")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CredentialHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SessionHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SecurityStamp")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ChallengeHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CreatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("ExpiresAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("VerifiedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("ConsumedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "SessionHash")
+                        .HasFilter("\"ConsumedAt\" IS NULL");
+
+                    b.ToTable("PasskeyDeletionProofs", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_PasskeyDeletionProof_Hashes", "length(\"CredentialHash\")=64 AND length(\"SessionHash\")=64 AND length(\"SecurityStamp\")>0 AND (\"ChallengeHash\" IS NULL OR length(\"ChallengeHash\")=64)");
+                            t.HasCheckConstraint("CK_PasskeyDeletionProof_Time", "\"CreatedAt\">=0 AND \"ExpiresAt\">\"CreatedAt\" AND (\"VerifiedAt\" IS NULL OR (\"VerifiedAt\">=\"CreatedAt\" AND \"VerifiedAt\"<\"ExpiresAt\")) AND (\"ConsumedAt\" IS NULL OR \"ConsumedAt\">=\"CreatedAt\")");
+                            t.HasCheckConstraint("CK_PasskeyDeletionProof_State", "\"ConsumedAt\" IS NOT NULL OR (\"VerifiedAt\" IS NULL AND \"ChallengeHash\" IS NOT NULL) OR (\"VerifiedAt\" IS NOT NULL AND \"ChallengeHash\" IS NULL)");
+                        });
                 });
 
             modelBuilder.Entity("Sem.Web.Runtime.PushDevice", b =>
@@ -3700,6 +3763,15 @@ namespace Sem.Web.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
+            modelBuilder.Entity("Sem.Web.Runtime.PasskeyDeletionProof", b =>
+                {
+                    b.HasOne("Sem.Web.Data.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Sem.Web.Runtime.PasskeyRecoveryAdminChallenge", b =>
                 {
                     b.HasOne("Sem.Web.Data.ApplicationUser", null).WithMany().HasForeignKey("AdminId").OnDelete(DeleteBehavior.Restrict).IsRequired();

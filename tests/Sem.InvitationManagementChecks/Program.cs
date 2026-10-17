@@ -48,6 +48,7 @@ builder.Services.AddIdentityCore<ApplicationUser>(options =>
     .AddSignInManager();
 builder.Services.AddDataProtection();
 builder.Services.AddSingleton(new DeploymentSettings { PublicUrl = Origin + "/" });
+builder.Services.AddSingleton<NotificationService>();
 builder.Services.AddScoped<InvitationManagementService>();
 builder.Services.AddAntiforgery(options =>
 {
@@ -170,6 +171,10 @@ try
     };
 
     var csrf = await GetCsrfAsync(client);
+    var csrfByActor = new Dictionary<(string Actor, string Stamp, string Session), (string Token, string Cookie)>
+    {
+        [("admin", stamps["admin"], "synthetic-session-admin")] = csrf
+    };
     var adminCookie = await GetApplicationCookieAsync(client, "admin");
     var staleAdminCookie = await GetApplicationCookieAsync(client, "admin", "old-admin-stamp", "stale-cookie-session");
     var revokedAdminCookie = await GetApplicationCookieAsync(client, "admin", session: "revoked-cookie-session");
@@ -179,25 +184,37 @@ try
         bool includeCsrfHeader = true, string? origin = Origin, HttpContent? suppliedContent = null,
         bool duplicateCsrfHeader = false, bool includeCsrfCookie = true)
     {
+        var effectiveStamp = actor is null ? null : stamp ?? stamps.GetValueOrDefault(actor, "unknown-stamp");
+        var effectiveSession = actor is null ? null : session ?? "synthetic-session-" + actor;
+        var requestCsrf = csrf;
+        if (actor is not null && applicationCookie is null)
+        {
+            var key = (actor, effectiveStamp!, effectiveSession!);
+            if (!csrfByActor.TryGetValue(key, out requestCsrf))
+            {
+                requestCsrf = await GetCsrfAsync(client, actor, effectiveStamp, effectiveSession);
+                csrfByActor[key] = requestCsrf;
+            }
+        }
         var request = new HttpRequestMessage(method, path);
         if (suppliedContent is not null) request.Content = suppliedContent;
         else if (body is not null) request.Content = new StringContent(body, Encoding.UTF8, "application/json");
         var cookies = new List<string>();
-        if (includeCsrfCookie) cookies.Add(csrf.Cookie);
+        if (includeCsrfCookie) cookies.Add(requestCsrf.Cookie);
         if (applicationCookie is not null) cookies.Add(applicationCookie);
         if (cookies.Count > 0) request.Headers.TryAddWithoutValidation("Cookie", string.Join("; ", cookies));
         if (actor is not null)
         {
             request.Headers.TryAddWithoutValidation("X-Test-Actor", actor);
-            request.Headers.TryAddWithoutValidation("X-Test-Stamp", stamp ?? stamps.GetValueOrDefault(actor, "unknown-stamp"));
-            request.Headers.TryAddWithoutValidation("X-Test-Session", session ?? "synthetic-session-" + actor);
+            request.Headers.TryAddWithoutValidation("X-Test-Stamp", effectiveStamp);
+            request.Headers.TryAddWithoutValidation("X-Test-Session", effectiveSession);
         }
         if (origin is not null) request.Headers.TryAddWithoutValidation("Origin", origin);
         if (includeCsrfHeader)
         {
             if (duplicateCsrfHeader)
-                request.Headers.TryAddWithoutValidation("X-CSRF-TOKEN", new[] { csrf.Token, csrf.Token });
-            else request.Headers.TryAddWithoutValidation("X-CSRF-TOKEN", csrf.Token);
+                request.Headers.TryAddWithoutValidation("X-CSRF-TOKEN", new[] { requestCsrf.Token, requestCsrf.Token });
+            else request.Headers.TryAddWithoutValidation("X-CSRF-TOKEN", requestCsrf.Token);
         }
         return await client.SendAsync(request);
     }
@@ -250,9 +267,11 @@ try
             "historical invitation retains null issuance metadata");
         var unknownDecider = requests.EnumerateArray().Single(x => x.GetProperty("id").GetString() == "request-a-00");
         Check(unknownDecider.GetProperty("deciderName").GetString() == "不明", "missing decider display name uses fallback");
+        Check(unknownDecider.GetProperty("decisionComment").ValueKind == JsonValueKind.Null,
+            "historical request comments remain null");
         CheckExactKeys(page, ["actorId", "isAdmin", "page", "pageSize", "hasMoreInvitations", "hasMoreRequests", "invitations", "requests"]);
         CheckExactKeys(invitations[0], ["id", "ownerId", "ownerName", "issuerId", "issuerName", "requestId", "limit", "uses", "created", "expires", "disabled", "purpose", "issuanceSource", "revokedAt", "revokedBy", "revokerName", "revocationReason"]);
-        CheckExactKeys(requests[0], ["id", "userId", "userName", "reason", "count", "days", "status", "created", "decidedAt", "decidedBy", "deciderName"]);
+        CheckExactKeys(requests[0], ["id", "userId", "userName", "reason", "count", "days", "status", "created", "decidedAt", "decidedBy", "deciderName", "decisionComment"]);
         var wire = page.GetRawText();
         Check(!wire.Contains("TOKEN_HASH_SECRET", StringComparison.Ordinal) &&
               !wire.Contains("PROTECTED_TOKEN_SECRET", StringComparison.Ordinal) &&
@@ -307,6 +326,14 @@ try
         Check(response.StatusCode == HttpStatusCode.MethodNotAllowed && response.Content.Headers.Allow.Contains("POST"),
             "revoke endpoint rejects wrong method with Allow");
 
+    using (var response = await SendAsync(HttpMethod.Post, "/api/core/invitations/revoke",
+        body: "{", actor: "admin", includeCsrfHeader: false))
+    {
+        Check(response.StatusCode == HttpStatusCode.BadRequest,
+            "new invitation API requires expectedActor");
+        Check(response.Headers.TryGetValues("X-Test-Body-Read", out var read) && read.Single() == "0",
+            "missing expectedActor leaves request body unread");
+    }
     using (var response = await SendAsync(HttpMethod.Post, "/api/core/invitations/revoke?expectedActor=owner-a",
         body: "{", actor: "admin", includeCsrfHeader: false))
     {
@@ -449,6 +476,387 @@ try
             "rejected form fallback has no revocation effect");
     }
 
+    foreach (var (reason, count, days, label) in new[]
+    {
+        ("", 1, 1, "empty reason"), (new string('r', 501), 1, 1, "long reason"),
+        ("bad\nreason", 1, 1, "control in reason"), ("valid", 0, 1, "count below range"),
+        ("valid", 6, 1, "count above range"), ("valid", 1, 0, "days below range"),
+        ("valid", 1, 8, "days above range")
+    })
+    {
+        using var invalidRequest = await SendAsync(HttpMethod.Post,
+            "/api/core/invitations/request?expectedActor=requester-a",
+            body: JsonSerializer.Serialize(new { reason, count, days }), actor: "requester-a");
+        Check(invalidRequest.StatusCode == HttpStatusCode.BadRequest, "request input validation: " + label);
+    }
+    using (var response = await SendAsync(HttpMethod.Post,
+        "/api/core/invitations/request?expectedActor=requester-a",
+        body: "{\"reason\":\"valid\",\"count\":1,\"days\":1}", actor: "requester-a", includeCsrfHeader: false))
+        Check(response.StatusCode == HttpStatusCode.BadRequest, "request mutation requires the CSRF header");
+    using (var invalidUtf8 = new ByteArrayContent(new byte[] { 0xC3 }))
+    {
+        invalidUtf8.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+        using var response = await SendAsync(HttpMethod.Post,
+            "/api/core/invitations/request?expectedActor=requester-a",
+            actor: "requester-a", suppliedContent: invalidUtf8);
+        Check(response.StatusCode == HttpStatusCode.BadRequest, "request API rejects malformed UTF-8");
+    }
+
+    using (var response = await SendAsync(HttpMethod.Post,
+        "/api/core/invitations/request?expectedActor=requester-a",
+        body: "{\"reason\":\"  family invitation  \",\"count\":3,\"days\":4}", actor: "requester-a"))
+    {
+        Check(response.StatusCode == HttpStatusCode.OK && response.Headers.CacheControl?.NoStore == true,
+            "member can create invitation request with no-store response");
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var result = json.RootElement;
+        CheckExactKeys(result, ["actorId", "id", "status"]);
+        Check(result.GetProperty("actorId").GetString() == "requester-a" &&
+              result.GetProperty("status").GetString() == "Pending", "request response returns only safe request identity");
+        var requestId = result.GetProperty("id").GetString()!;
+
+        using (var response2 = await SendAsync(HttpMethod.Post,
+            "/api/core/invitations/decide?expectedActor=admin",
+            body: JsonSerializer.Serialize(new { id = requestId, approve = true, comment = "  承認済みの判断メモ  " }),
+            actor: "admin"))
+        {
+            Check(response2.StatusCode == HttpStatusCode.OK && response2.Headers.CacheControl?.NoStore == true,
+                "global administrator can conditionally approve request with no-store response");
+            using var decisionJson = JsonDocument.Parse(await response2.Content.ReadAsStringAsync());
+            var decision = decisionJson.RootElement;
+            Check(decision.GetProperty("status").GetString() == "Approved" &&
+                  decision.GetProperty("decisionComment").GetString() == "承認済みの判断メモ" &&
+                  decision.GetProperty("invitationId").ValueKind == JsonValueKind.String,
+                "approval returns decision metadata without the bearer link");
+            Check(!decisionJson.RootElement.GetRawText().Contains("invite=", StringComparison.Ordinal),
+                "approval response never exposes the invitation bearer link");
+        }
+        using (var duplicateDecision = await SendAsync(HttpMethod.Post,
+            "/api/core/invitations/decide?expectedActor=admin",
+            body: JsonSerializer.Serialize(new { id = requestId, approve = true, comment = "duplicate" }),
+            actor: "admin"))
+            Check(duplicateDecision.StatusCode == HttpStatusCode.Conflict,
+                "conditional Pending claim rejects a second decision without issuing again");
+
+        using (var response3 = await SendAsync(HttpMethod.Get,
+            "/api/core/invitations/link/" + Uri.EscapeDataString(
+                await GetInvitationIdAsync(app.Services, requestId)) + "?expectedActor=requester-a",
+            actor: "requester-a"))
+        {
+            Check(response3.StatusCode == HttpStatusCode.OK && response3.Headers.CacheControl?.NoStore == true,
+                "request owner can fetch their active link with no-store");
+            using var linkJson = JsonDocument.Parse(await response3.Content.ReadAsStringAsync());
+            Check(linkJson.RootElement.GetProperty("link").GetString()!.Contains("#invite=", StringComparison.Ordinal) &&
+                  linkJson.RootElement.GetProperty("limit").GetInt32() == 3 &&
+                  linkJson.RootElement.GetProperty("uses").GetInt32() == 0,
+                "owner link response includes only the owner's count, uses, expiry, and link");
+        }
+
+        var invitationId = await GetInvitationIdAsync(app.Services, requestId);
+        using (var response4 = await SendAsync(HttpMethod.Get,
+            "/api/core/invitations/link/" + Uri.EscapeDataString(invitationId) + "?expectedActor=admin",
+            actor: "admin"))
+            Check(response4.StatusCode == HttpStatusCode.NotFound, "administrator cannot retrieve another user's link");
+        using (var response5 = await SendAsync(HttpMethod.Get,
+            "/api/core/invitations/link/" + Uri.EscapeDataString(invitationId) + "?expectedActor=owner-b",
+            actor: "owner-b"))
+            Check(response5.StatusCode == HttpStatusCode.NotFound, "different owner cannot retrieve the private link");
+
+        await using var verifyScope = app.Services.CreateAsyncScope();
+        var verifyDb = verifyScope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var createdRequest = await verifyDb.InvitationRequests.SingleAsync(x => x.Id == requestId);
+        var createdInvitation = await verifyDb.Invitations.SingleAsync(x => x.RequestId == requestId);
+        Check(createdRequest.Count == 3 && createdRequest.Days == 4 &&
+              createdRequest.DecisionComment == "承認済みの判断メモ",
+            "request values and optional comment are persisted without backfilling old rows");
+        Check(createdInvitation.Limit == 3 && createdInvitation.Expires == createdInvitation.Created + 4 * 86400L &&
+              createdInvitation.Purpose is null && createdInvitation.IssuanceSource == "Request",
+            "request issuance uses saved count/days, null purpose, and Request source");
+        Check(await verifyDb.Messages.CountAsync(x => x.UserId == "admin" && x.Title == "招待リンク発行リクエスト") == 1 &&
+              await verifyDb.Messages.CountAsync(x => x.UserId == "requester-a" && x.Title == "招待リクエストが許可されました") == 1,
+            "request and decision messages are persisted for the intended recipients");
+        Check(await verifyDb.Audits.AnyAsync(x => x.Action == "InvitationRequested" && x.EntityId == requestId) &&
+              await verifyDb.Audits.AnyAsync(x => x.Action == "InvitationApproved" && x.EntityId == requestId) &&
+              await verifyDb.Audits.AnyAsync(x => x.Action == "InvitationIssued" && x.EntityId == createdInvitation.Id),
+            "request, approval, issuance audits persist with the transaction");
+
+        var uniqueBlocked = false;
+        verifyDb.Invitations.Add(new Invitation
+        {
+            Id = "duplicate-request-invitation",
+            TokenHash = SemEndpoints.Hash("duplicate-request-token"),
+            ProtectedToken = "protected",
+            OwnerId = "requester-a",
+            IssuerId = "admin",
+            RequestId = requestId,
+            Limit = 3,
+            Created = createdInvitation.Created,
+            Expires = createdInvitation.Expires
+        });
+        try { await verifyDb.SaveChangesAsync(); }
+        catch (DbUpdateException) { uniqueBlocked = true; }
+        Check(uniqueBlocked, "filtered unique index rejects a second invitation for the same request");
+    }
+
+    using (var response = await SendAsync(HttpMethod.Post,
+        "/api/core/invitations/request?expectedActor=admin",
+        body: "{\"reason\":\"admin cannot request\",\"count\":1,\"days\":1}", actor: "admin"))
+        Check(response.StatusCode == HttpStatusCode.BadRequest, "global administrators use direct issuance instead of requests");
+    using (var response = await SendAsync(HttpMethod.Post,
+        "/api/core/invitations/request?expectedActor=requester-a",
+        body: "{\"reason\":\"x\",\"reason\":\"y\",\"count\":1,\"days\":1}", actor: "requester-a"))
+        Check(response.StatusCode == HttpStatusCode.BadRequest, "request JSON rejects duplicate keys");
+
+    using (var response = await SendAsync(HttpMethod.Post,
+        "/api/core/invitations/decide?expectedActor=admin",
+        body: JsonSerializer.Serialize(new { id = "request-b-only", approve = false, comment = new string('c', 501) }),
+        actor: "admin"))
+        Check(response.StatusCode == HttpStatusCode.BadRequest, "decision comment limit validated before claim");
+    using (var response = await SendAsync(HttpMethod.Post,
+        "/api/core/invitations/decide?expectedActor=owner-a",
+        body: "{\"id\":\"request-b-only\",\"approve\":false,\"comment\":\"\"}", actor: "owner-a"))
+        Check(response.StatusCode == HttpStatusCode.Forbidden, "non-admin cannot decide invitation requests");
+    using (var response = await SendAsync(HttpMethod.Post,
+        "/api/core/invitations/decide?expectedActor=admin",
+        body: "{\"id\":\"request-b-only\",\"approve\":false,\"comment\":\"\"}", actor: "admin"))
+        Check(response.StatusCode == HttpStatusCode.OK, "global administrator can reject pending request");
+    await using (var scope = app.Services.CreateAsyncScope())
+    {
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var rejected = await db.InvitationRequests.SingleAsync(x => x.Id == "request-b-only");
+        Check(rejected.Status == "Rejected" && rejected.DecisionComment is null &&
+              !await db.Invitations.AnyAsync(x => x.RequestId == "request-b-only"),
+            "rejection stores no comment or invitation when the optional comment is blank");
+    }
+
+    var legacyCases = new[]
+    {
+        (Route: "/api/request-invitation", Actor: "requester-b",
+            Unknown: "{\"reason\":\"legacy request\",\"extra\":true}",
+            Duplicate: "{\"reason\":\"legacy request\",\"reason\":\"duplicate\"}"),
+        (Route: "/api/decide-invitation", Actor: "admin",
+            Unknown: "{\"id\":\"request-b-only\",\"approve\":false,\"extra\":true}",
+            Duplicate: "{\"id\":\"request-b-only\",\"approve\":false,\"approve\":true}"),
+        (Route: "/api/revoke-invitation", Actor: "admin",
+            Unknown: "{\"id\":\"form-target\",\"reason\":\"test\",\"confirmed\":true,\"extra\":true}",
+            Duplicate: "{\"id\":\"form-target\",\"id\":\"form-target\",\"reason\":\"test\",\"confirmed\":true}")
+    };
+    foreach (var legacy in legacyCases)
+    {
+        var target = legacy.Route + "?expectedActor=" + Uri.EscapeDataString(legacy.Actor);
+        using (var unknown = await SendAsync(HttpMethod.Post, target, body: legacy.Unknown, actor: legacy.Actor))
+            Check(unknown.StatusCode == HttpStatusCode.BadRequest && unknown.Headers.CacheControl?.NoStore == true,
+                "legacy strict JSON rejects unknown property: " + legacy.Route);
+        using (var duplicate = await SendAsync(HttpMethod.Post, target, body: legacy.Duplicate, actor: legacy.Actor))
+            Check(duplicate.StatusCode == HttpStatusCode.BadRequest && duplicate.Headers.CacheControl?.NoStore == true,
+                "legacy strict JSON rejects duplicate property: " + legacy.Route);
+        using (var oversized = await SendAsync(HttpMethod.Post, target,
+            body: new string(' ', 4097), actor: legacy.Actor))
+            Check((int)oversized.StatusCode == 413 && oversized.Headers.CacheControl?.NoStore == true,
+                "legacy endpoint enforces the 4 KiB body limit: " + legacy.Route);
+        using (var anonymous = await SendAsync(HttpMethod.Post, target, body: legacy.Unknown, actor: null))
+            Check(anonymous.StatusCode == HttpStatusCode.Forbidden && anonymous.Headers.CacheControl?.NoStore == true,
+                "legacy endpoint rejects anonymous actor: " + legacy.Route);
+    }
+    using (var response = await SendAsync(HttpMethod.Post,
+        "/api/request-invitation?expectedActor=requester-b",
+        body: "{\"reason\":\"actor mismatch\"}", actor: "requester-a"))
+        Check(response.StatusCode == HttpStatusCode.Forbidden,
+            "legacy request rejects a live actor that differs from expectedActor");
+    using (var response = await SendAsync(HttpMethod.Post,
+        "/api/request-invitation?expectedActor=requester-b&expectedActor=requester-b",
+        body: "{\"reason\":\"invalid expected actor\"}", actor: "requester-b"))
+        Check(response.StatusCode == HttpStatusCode.BadRequest,
+            "legacy request rejects duplicate expectedActor before mutation");
+    using (var response = await SendAsync(HttpMethod.Post,
+        "/api/request-invitation?unexpected=value",
+        body: "{\"reason\":\"unknown query\"}", actor: "requester-b"))
+        Check(response.StatusCode == HttpStatusCode.BadRequest,
+            "legacy request rejects unknown query parameters");
+    using (var response = await SendAsync(HttpMethod.Post,
+        "/api/request-invitation?expectedActor=requester-b",
+        body: "{\"reason\":\"foreign origin\"}", actor: "requester-b", origin: "https://foreign.invalid"))
+        Check(response.StatusCode == HttpStatusCode.Forbidden,
+            "legacy request rejects a foreign Origin");
+    using (var request = new HttpRequestMessage(HttpMethod.Post,
+        "/api/revoke-invitation?expectedActor=admin")
+    {
+        Content = new StringContent("{", Encoding.UTF8, "application/json")
+    })
+    {
+        request.Headers.TryAddWithoutValidation("Cookie", csrf.Cookie);
+        request.Headers.TryAddWithoutValidation("X-Test-Actor", "admin");
+        request.Headers.TryAddWithoutValidation("X-Test-Stamp", stamps["admin"]);
+        request.Headers.TryAddWithoutValidation("X-Test-Session", "synthetic-session-admin");
+        request.Headers.TryAddWithoutValidation("Origin", new[] { Origin, Origin });
+        using var response = await client.SendAsync(request);
+        Check(response.StatusCode == HttpStatusCode.Forbidden && response.Headers.CacheControl?.NoStore == true,
+            "legacy revoke rejects multiple Origin values");
+    }
+    using (var response = await SendAsync(HttpMethod.Post,
+        "/api/decide-invitation?expectedActor=admin",
+        body: "{\"id\":\"request-b-only\",\"approve\":false}", actor: "admin", origin: null))
+        Check(response.StatusCode == HttpStatusCode.Forbidden,
+            "legacy decision rejects missing Origin");
+    using (var response = await SendAsync(HttpMethod.Post,
+        "/api/request-invitation?expectedActor=requester-b",
+        body: "{\"reason\":\"missing csrf\"}", actor: "requester-b", includeCsrfHeader: false))
+        Check(response.StatusCode == HttpStatusCode.BadRequest,
+            "legacy request requires the CSRF header");
+    using (var response = await SendAsync(HttpMethod.Post,
+        "/api/decide-invitation?expectedActor=admin",
+        body: "{\"id\":\"request-b-only\",\"approve\":false}", actor: "admin", duplicateCsrfHeader: true))
+        Check(response.StatusCode == HttpStatusCode.BadRequest,
+            "legacy decision rejects multiple CSRF header values");
+    using (var response = await SendAsync(HttpMethod.Post,
+        "/api/revoke-invitation?expectedActor=admin",
+        body: "{\"id\":\"form-target\",\"reason\":\"test\",\"confirmed\":true}",
+        actor: "admin", includeCsrfHeader: false))
+        Check(response.StatusCode == HttpStatusCode.BadRequest,
+            "legacy revoke requires the explicit CSRF header");
+    using (var malformedUtf8 = new ByteArrayContent(new byte[] { 0xC3 }))
+    {
+        malformedUtf8.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+        using var response = await SendAsync(HttpMethod.Post,
+            "/api/request-invitation?expectedActor=requester-b",
+            actor: "requester-b", suppliedContent: malformedUtf8);
+        Check(response.StatusCode == HttpStatusCode.BadRequest,
+            "legacy request rejects malformed UTF-8");
+    }
+
+    string legacyRequestId;
+    using (var response = await SendAsync(HttpMethod.Post,
+        "/api/request-invitation",
+        body: "{\"reason\":\"legacy workflow\"}", actor: "requester-b"))
+    {
+        Check(response.StatusCode == HttpStatusCode.OK && response.Headers.CacheControl?.NoStore == true,
+            "legacy request success is no-store");
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Check(json.RootElement.GetProperty("message").GetString() == "発行をリクエストしました。",
+            "legacy request preserves its success message");
+        legacyRequestId = json.RootElement.GetProperty("id").GetString()
+            ?? throw new Exception("Legacy request response omitted the request id.");
+    }
+    using (var response = await SendAsync(HttpMethod.Post,
+        "/api/decide-invitation",
+        body: JsonSerializer.Serialize(new { id = legacyRequestId, approve = true, comment = "legacy approval note" }),
+        actor: "admin"))
+    {
+        Check(response.StatusCode == HttpStatusCode.OK && response.Headers.CacheControl?.NoStore == true,
+            "legacy approval delegates successfully with no-store");
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Check(json.RootElement.GetProperty("message").GetString() == "許可して招待リンクを発行しました。",
+            "legacy decision preserves its approval success message");
+        Check(!json.RootElement.GetRawText().Contains("invite=", StringComparison.Ordinal),
+            "legacy approval response does not disclose the bearer link");
+    }
+    await using (var scope = app.Services.CreateAsyncScope())
+    {
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var request = await db.InvitationRequests.SingleAsync(x => x.Id == legacyRequestId);
+        var invitation = await db.Invitations.SingleAsync(x => x.RequestId == legacyRequestId);
+        Check(request.Count == 1 && request.Days == 1 && request.Status == "Approved" &&
+              request.DecisionComment == "legacy approval note",
+            "legacy request uses old count/day defaults and shared approval persistence");
+        Check(invitation.Limit == 1 && invitation.Expires == invitation.Created + 86400L &&
+              invitation.Purpose is null && invitation.IssuanceSource == "Request",
+            "legacy approval issues from saved request values with null purpose and Request source");
+    }
+    string legacyRejectedRequestId;
+    using (var response = await SendAsync(HttpMethod.Post,
+        "/api/request-invitation",
+        body: "{\"reason\":\"legacy rejection workflow\"}", actor: "requester-b"))
+    {
+        Check(response.StatusCode == HttpStatusCode.OK,
+            "legacy request can create another independently reviewable request");
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        legacyRejectedRequestId = json.RootElement.GetProperty("id").GetString()
+            ?? throw new Exception("Legacy rejection request omitted the request id.");
+    }
+    using (var response = await SendAsync(HttpMethod.Post,
+        "/api/decide-invitation",
+        body: JsonSerializer.Serialize(new
+        {
+            id = legacyRejectedRequestId, approve = false, comment = "legacy rejection note"
+        }), actor: "admin"))
+    {
+        Check(response.StatusCode == HttpStatusCode.OK && response.Headers.CacheControl?.NoStore == true,
+            "legacy rejection delegates successfully with no-store");
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Check(json.RootElement.GetProperty("message").GetString() == "拒否しました。",
+            "legacy decision preserves its rejection success message");
+    }
+    await using (var scope = app.Services.CreateAsyncScope())
+    {
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var request = await db.InvitationRequests.SingleAsync(x => x.Id == legacyRejectedRequestId);
+        Check(request.Status == "Rejected" && request.DecisionComment == "legacy rejection note" &&
+              !await db.Invitations.AnyAsync(x => x.RequestId == legacyRejectedRequestId),
+            "legacy rejection uses the shared conditional decision service without issuing an invitation");
+    }
+
+    using (var response = await SendAsync(HttpMethod.Post,
+        "/api/revoke-invitation?expectedActor=admin",
+        body: "{\"id\":\"form-target\",\"reason\":\"unconfirmed\",\"confirmed\":false}", actor: "admin"))
+        Check(response.StatusCode == HttpStatusCode.BadRequest,
+            "legacy revoke requires explicit confirmation");
+    using (var response = await SendAsync(HttpMethod.Post,
+        "/api/revoke-invitation",
+        body: "{\"id\":\"form-target\",\"reason\":\"  first legacy reason  \",\"confirmed\":true}", actor: "admin"))
+    {
+        Check(response.StatusCode == HttpStatusCode.OK && response.Headers.CacheControl?.NoStore == true,
+            "legacy revoke succeeds with no-store");
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Check(json.RootElement.GetProperty("message").GetString() == "即時失効しました。",
+            "legacy revoke preserves its success message");
+    }
+    using (var response = await SendAsync(HttpMethod.Post,
+        "/api/revoke-invitation?expectedActor=admin",
+        body: "{\"id\":\"form-target\",\"reason\":\"legacy retry reason\",\"confirmed\":true}",
+        actor: "admin"))
+        Check(response.StatusCode == HttpStatusCode.OK && response.Headers.CacheControl?.NoStore == true,
+            "legacy revoke retry is idempotent and no-store");
+    using (var response = await SendAsync(HttpMethod.Post,
+        "/api/core/invitations/revoke?expectedActor=admin",
+        body: "{\"id\":\"form-target\",\"reason\":\"new route retry reason\",\"explicitlyConfirmed\":true}",
+        actor: "admin"))
+        Check(response.StatusCode == HttpStatusCode.OK,
+            "new route can safely replay a legacy revocation");
+    await using (var scope = app.Services.CreateAsyncScope())
+    {
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var invitation = await db.Invitations.SingleAsync(x => x.Id == "form-target");
+        Check(invitation.Disabled && invitation.RevocationReason == "first legacy reason" &&
+              invitation.RevokedBy == "admin" && invitation.RevokedAt is not null,
+            "cross-route revoke replay preserves the first reason and actor");
+        Check(await db.Audits.CountAsync(x => x.Action == "InvitationRevoked" && x.EntityId == "form-target") == 1,
+            "cross-route revoke replay writes exactly one audit");
+    }
+
+    var sourceRoot = FindSourceRoot();
+    var legacySource = await File.ReadAllTextAsync(Path.Combine(sourceRoot, "src", "Sem.Web", "Runtime", "SemEndpoints.cs"));
+    var invitationEndpoints = await File.ReadAllTextAsync(Path.Combine(sourceRoot, "src", "Sem.Web", "Runtime", "InvitationManagementEndpoints.cs"));
+    var uiSource = await File.ReadAllTextAsync(Path.Combine(sourceRoot, "src", "Sem.Web", "wwwroot", "sem.js"));
+    Check(invitationEndpoints.Contains("app.MapMethods(\"/api/request-invitation\"", StringComparison.Ordinal) &&
+          invitationEndpoints.Contains("app.MapMethods(\"/api/decide-invitation\"", StringComparison.Ordinal) &&
+          invitationEndpoints.Contains("app.MapMethods(\"/api/revoke-invitation\"", StringComparison.Ordinal) &&
+          invitationEndpoints.Contains("LegacyActionAsync", StringComparison.Ordinal) &&
+          invitationEndpoints.Contains("service.RequestAsync", StringComparison.Ordinal) &&
+          invitationEndpoints.Contains("service.DecideAsync", StringComparison.Ordinal) &&
+          invitationEndpoints.Contains("service.RevokeAsync", StringComparison.Ordinal),
+        "legacy invitation routes use strict adapters and the shared atomic service");
+    Check(!legacySource.Contains("action == \"request-invitation\"", StringComparison.Ordinal) &&
+          !legacySource.Contains("action == \"decide-invitation\"", StringComparison.Ordinal) &&
+          !legacySource.Contains("action == \"revoke-invitation\"", StringComparison.Ordinal) &&
+          legacySource.Contains("AccountPasskeyEndpoints.TryHandleLegacyAsync", StringComparison.Ordinal),
+        "legacy invitation branches are removed while the passkey legacy adapter remains");
+    Check(legacySource.Contains("link = i.OwnerId == user.Id && !i.Disabled", StringComparison.Ordinal),
+        "legacy snapshot emits bearer links only for the current owner");
+    Check(uiSource.Contains("state?.user?.id", StringComparison.Ordinal) &&
+          uiSource.Contains("expectedActor=", StringComparison.Ordinal) &&
+          uiSource.Contains("data.confirmed=true", StringComparison.Ordinal),
+        "legacy invitation UI sends its live expectedActor and explicit revoke confirmation");
+
     Console.WriteLine("Invitation management HTTP checks passed: " + checks.ToString(CultureInfo.InvariantCulture));
 }
 finally
@@ -528,12 +936,46 @@ static void CheckExactKeys(JsonElement element, string[] expected)
         throw new Exception("Unexpected JSON fields: " + string.Join(",", actual.Order(StringComparer.Ordinal)));
 }
 
-static async Task<(string Token, string Cookie)> GetCsrfAsync(HttpClient client)
+static async Task<string> GetInvitationIdAsync(IServiceProvider services, string requestId)
+{
+    await using var scope = services.CreateAsyncScope();
+    var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    return await db.Invitations.Where(x => x.RequestId == requestId)
+        .Select(x => x.Id).SingleAsync();
+}
+
+static string FindSourceRoot()
+{
+    foreach (var start in new[] { Directory.GetCurrentDirectory(), AppContext.BaseDirectory })
+    {
+        for (var directory = new DirectoryInfo(start); directory is not null; directory = directory.Parent)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "src", "Sem.Web", "Runtime", "SemEndpoints.cs")))
+                return directory.FullName;
+        }
+    }
+    throw new DirectoryNotFoundException("Repository source tree was not found for source assertions.");
+}
+
+static async Task<(string Token, string Cookie)> GetCsrfAsync(HttpClient client, string actor = "admin",
+    string? stamp = null, string? session = null)
 {
     using var request = new HttpRequestMessage(HttpMethod.Get, "/fixture/csrf");
-    request.Headers.TryAddWithoutValidation("X-Test-Actor", "admin");
-    request.Headers.TryAddWithoutValidation("X-Test-Stamp", "stamp-admin-current");
-    request.Headers.TryAddWithoutValidation("X-Test-Session", "synthetic-session-admin");
+    request.Headers.TryAddWithoutValidation("X-Test-Actor", actor);
+    request.Headers.TryAddWithoutValidation("X-Test-Stamp", stamp ?? actor switch
+    {
+        "admin" => "stamp-admin-current",
+        "owner-a" => "stamp-owner-a-current",
+        "owner-b" => "stamp-owner-b-current",
+        "issuer" => "stamp-issuer-current",
+        "requester-a" => "stamp-requester-a-current",
+        "requester-b" => "stamp-requester-b-current",
+        "registered-user" => "stamp-registered-current",
+        "disabled-user" => "stamp-disabled-current",
+        "unconfirmed-user" => "stamp-unconfirmed-current",
+        _ => "unknown-stamp"
+    });
+    request.Headers.TryAddWithoutValidation("X-Test-Session", session ?? "synthetic-session-" + actor);
     using var response = await client.SendAsync(request);
     response.EnsureSuccessStatusCode();
     using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());

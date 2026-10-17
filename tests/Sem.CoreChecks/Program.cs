@@ -31,7 +31,18 @@ try
         db.Users.AddRange(new ApplicationUser { Id = "admin", DisplayName = "Admin", UserName = "admin@test.example", Email = "admin@test.example", SecurityStamp = "admin-stamp", Enabled = true, EmailConfirmed = true, IsAdmin = true },
             new ApplicationUser { Id = "manager", DisplayName = "Manager", UserName = "manager@test.example", Email = "manager@test.example", SecurityStamp = "manager-stamp", Enabled = true, EmailConfirmed = true },
             new ApplicationUser { Id = "member", DisplayName = "Member", UserName = "member@test.example", Email = "member@test.example", SecurityStamp = "member-stamp", Enabled = true, EmailConfirmed = true },
-            new ApplicationUser { Id = "disabled", DisplayName = "Disabled", UserName = "disabled@test.example", Email = "disabled@test.example", SecurityStamp = "disabled-stamp", Enabled = false, EmailConfirmed = true });
+            new ApplicationUser { Id = "disabled", DisplayName = "Disabled", UserName = "disabled@test.example", Email = "disabled@test.example", SecurityStamp = "disabled-stamp", Enabled = false, EmailConfirmed = true },
+            new ApplicationUser { Id = "unconfirmed", DisplayName = "Unconfirmed", UserName = "unconfirmed@test.example", Email = "unconfirmed@test.example", SecurityStamp = "unconfirmed-stamp", Enabled = true, EmailConfirmed = false },
+            new ApplicationUser { Id = "recovering", DisplayName = "Recovering", UserName = "recovering@test.example", Email = "recovering@test.example", SecurityStamp = "recovering-stamp", Enabled = true, EmailConfirmed = true });
+        await db.SaveChangesAsync();
+        var recoveryNow = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        db.PasskeyRecoveryOperations.Add(new PasskeyRecoveryOperation
+        {
+            UserId = "recovering", AdminId = "admin", ActorId = "admin", ActorType = "Administrator",
+            RecoveryMode = "Administrator", Reason = "test recovery", Status = "Pending",
+            EmailHash = new string('a', 64), SecurityStamp = "recovering-stamp",
+            CreatedAt = recoveryNow, ExpiresAt = recoveryNow + 900, DisabledForRecovery = true
+        });
         db.SiteStates.Add(new SiteState { Initialized = true, Name = "Retained bootstrap site", PendingAdminId = "not-public" }); await db.SaveChangesAsync();
     }
     var admin = Principal("admin"); var manager = Principal("manager"); var member = Principal("member");
@@ -78,6 +89,154 @@ try
     await using (var db = await factory.CreateDbContextAsync())
         Check((await db.SiteStates.SingleAsync()).Name == "SEM Core" && (await db.SiteStates.SingleAsync()).PendingAdminId == "not-public", "Display-name synchronization does not overwrite bootstrap-only fields");
     Check(!JsonSerializer.Serialize(savedService).Contains("not-public"), "Service DTO does not leak bootstrap details");
+    var memberWorkspaceJson = JsonDocument.Parse(JsonSerializer.Serialize(
+        await core.ReadAsync(member), new JsonSerializerOptions(JsonSerializerDefaults.Web))).RootElement;
+    var memberFields = memberWorkspaceJson.GetProperty("members")[0].EnumerateObject().Select(x => x.Name).ToArray();
+    Check(memberFields.Order().SequenceEqual(new[] { "displayName", "userId" }.Order()) &&
+        !JsonSerializer.Serialize(memberWorkspaceJson.GetProperty("members")).Contains("@"),
+        "General WorkspaceView member rows expose names/IDs only, not email or global-admin state");
+    await Deny<UnauthorizedAccessException>(() => core.ReadGlobalAdminAccountsAsync(member),
+        "Non-admin cannot read the separate administrator-only account DTO");
+    var accountSnapshot = await core.ReadGlobalAdminAccountsAsync(admin);
+    var managerAccount = accountSnapshot.Accounts.Single(x => x.UserId == "manager");
+    Check(managerAccount.Email == "manager@test.example" && managerAccount.LastLoginDisplay == "記録なし",
+        "Admin-only account DTO includes authentication email but reports unrecorded login honestly");
+    Check(!JsonSerializer.Serialize(await core.ReadAsync(member)).Contains("manager@test.example"),
+        "General workspace response does not disclose another member's email");
+    var managerSecurityStamp = "manager-stamp";
+    await core.SaveGlobalAdminRolesAsync(admin, new([new("manager", managerAccount.ConcurrencyStamp, true)]));
+    await using (var db = await factory.CreateDbContextAsync())
+    {
+        var managerRow = await db.Users.SingleAsync(x => x.Id == "manager");
+        Check(managerRow.IsAdmin && managerRow.SecurityStamp == managerSecurityStamp &&
+            managerRow.ConcurrencyStamp != managerAccount.ConcurrencyStamp,
+            "Admin role grant rotates only the concurrency stamp and preserves sessions/security stamp");
+        Check(await db.Audits.AnyAsync(a => a.ActorId == "admin" && a.EntityId == "manager" && a.Action == "GlobalAdminGranted"),
+            "Admin grant is recorded in existing Audits by the live actor");
+    }
+    await Deny<CoreConflictException>(() => core.SaveGlobalAdminRolesAsync(admin,
+        new([new("manager", managerAccount.ConcurrencyStamp, false)])), "Stale account-role draft conflicts");
+    Check((await core.ReadGlobalAdminAccountsAsync(admin)).Accounts.Single(x => x.UserId == "manager").IsAdmin,
+        "Stale role draft leaves the target and its audit history unchanged");
+    accountSnapshot = await core.ReadGlobalAdminAccountsAsync(admin);
+    managerAccount = accountSnapshot.Accounts.Single(x => x.UserId == "manager");
+    await core.SaveGlobalAdminRolesAsync(admin, new([new("manager", managerAccount.ConcurrencyStamp, false)]));
+    var currentAccounts = await core.ReadGlobalAdminAccountsAsync(admin);
+    var memberAccount = currentAccounts.Accounts.Single(x => x.UserId == "member");
+    await Deny<CoreConflictException>(() => core.SaveGlobalAdminRolesAsync(admin, new([
+        new("member", memberAccount.ConcurrencyStamp, true),
+        new("manager", accountSnapshot.Accounts.Single(x => x.UserId == "manager").ConcurrencyStamp, true)
+    ])), "One stale row rejects the entire account-role batch");
+    Check(!(await core.ReadGlobalAdminAccountsAsync(admin)).Accounts.Single(x => x.UserId == "member").IsAdmin,
+        "Failed role batch rolls back every target");
+    currentAccounts = await core.ReadGlobalAdminAccountsAsync(admin);
+    await Deny<ValidationException>(() => core.SaveGlobalAdminRolesAsync(admin, new([
+        new("disabled", currentAccounts.Accounts.Single(x => x.UserId == "disabled").ConcurrencyStamp, true)
+    ])), "Disabled account cannot receive global-admin role");
+    await Deny<ValidationException>(() => core.SaveGlobalAdminRolesAsync(admin, new([
+        new("unconfirmed", currentAccounts.Accounts.Single(x => x.UserId == "unconfirmed").ConcurrencyStamp, true)
+    ])), "Unconfirmed account cannot receive global-admin role");
+    await using (var db = await factory.CreateDbContextAsync())
+    {
+        var unconfirmed = await db.Users.SingleAsync(x => x.Id == "unconfirmed");
+        unconfirmed.Enabled = false;
+        await db.SaveChangesAsync();
+        Check(!unconfirmed.EmailConfirmed && !unconfirmed.Enabled && !unconfirmed.IsAdmin,
+            "Denied unconfirmed fixture remains unconfirmed, disabled, and non-admin");
+    }
+    await Deny<UnauthorizedAccessException>(() => core.ReadProfileAsync(admin, "unconfirmed"),
+        "Unconfirmed fixture remains unavailable for profile reads");
+    await Deny<ValidationException>(() => core.SaveGlobalAdminRolesAsync(admin, new([
+        new("recovering", currentAccounts.Accounts.Single(x => x.UserId == "recovering").ConcurrencyStamp, true)
+    ])), "Account in active recovery cannot receive global-admin role");
+    await using (var db = await factory.CreateDbContextAsync())
+    {
+        (await db.Users.SingleAsync(x => x.Id == "admin")).Bootstrap = true;
+        await db.SaveChangesAsync();
+    }
+    currentAccounts = await core.ReadGlobalAdminAccountsAsync(admin);
+    await Deny<ValidationException>(() => core.SaveGlobalAdminRolesAsync(admin, new([
+        new("admin", currentAccounts.Accounts.Single(x => x.UserId == "admin").ConcurrencyStamp, false)
+    ])), "Bootstrap administrator cannot lose global-admin role");
+    await using (var db = await factory.CreateDbContextAsync())
+    {
+        (await db.Users.SingleAsync(x => x.Id == "admin")).Bootstrap = false;
+        await db.SaveChangesAsync();
+    }
+    currentAccounts = await core.ReadGlobalAdminAccountsAsync(admin);
+    await Deny<ValidationException>(() => core.SaveGlobalAdminRolesAsync(admin, new([
+        new("admin", currentAccounts.Accounts.Single(x => x.UserId == "admin").ConcurrencyStamp, false)
+    ])), "Last active confirmed administrator cannot lose global-admin role");
+    Check((await core.ReadGlobalAdminAccountsAsync(admin)).Accounts.Single(x => x.UserId == "admin").IsAdmin,
+        "Protected administrator-role denials leave the role unchanged");
+    currentAccounts = await core.ReadGlobalAdminAccountsAsync(admin);
+    await core.SaveGlobalAdminRolesAsync(admin, new([
+        new("manager", currentAccounts.Accounts.Single(x => x.UserId == "manager").ConcurrencyStamp, true)
+    ]));
+    var raceAccounts = await core.ReadGlobalAdminAccountsAsync(admin);
+    var adminRaceAccount = raceAccounts.Accounts.Single(x => x.UserId == "admin");
+    var managerRaceAccount = raceAccounts.Accounts.Single(x => x.UserId == "manager");
+    long adminRevokesBefore, managerRevokesBefore;
+    await using (var db = await factory.CreateDbContextAsync())
+    {
+        Check(await db.Users.CountAsync(x => x.IsAdmin && x.Enabled && x.EmailConfirmed) == 2,
+            "Two active administrators are the sole candidates before the concurrent final-admin race");
+        adminRevokesBefore = await db.Audits.LongCountAsync(x => x.Action == "GlobalAdminRevoked" && x.EntityId == "admin");
+        managerRevokesBefore = await db.Audits.LongCountAsync(x => x.Action == "GlobalAdminRevoked" && x.EntityId == "manager");
+    }
+    var racersReady = 0;
+    var bothRacersReady = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+    var raceStart = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+    async Task<(string TargetId, bool Saved)> ConcurrentFinalAdminRevoke(
+        ClaimsPrincipal actor, string targetId, string concurrencyStamp)
+    {
+        if (Interlocked.Increment(ref racersReady) == 2) bothRacersReady.TrySetResult(true);
+        await raceStart.Task;
+        try
+        {
+            await core.SaveGlobalAdminRolesAsync(actor,
+                new([new(targetId, concurrencyStamp, false)]));
+            return (targetId, true);
+        }
+        catch (CoreConflictException) { return (targetId, false); }
+        catch (ValidationException) { return (targetId, false); }
+        catch (UnauthorizedAccessException) { return (targetId, false); }
+        catch (DbUpdateConcurrencyException) { return (targetId, false); }
+        catch (DbUpdateException e) when (e.InnerException is SqliteException sql && sql.SqliteErrorCode is 5 or 6)
+        { return (targetId, false); }
+        catch (SqliteException e) when (e.SqliteErrorCode is 5 or 6) { return (targetId, false); }
+    }
+    var adminRevokeRace = Task.Run(() =>
+        ConcurrentFinalAdminRevoke(admin, "admin", adminRaceAccount.ConcurrencyStamp));
+    var managerRevokeRace = Task.Run(() =>
+        ConcurrentFinalAdminRevoke(manager, "manager", managerRaceAccount.ConcurrencyStamp));
+    await bothRacersReady.Task;
+    raceStart.TrySetResult(true);
+    var revokeRaceResults = await Task.WhenAll(adminRevokeRace, managerRevokeRace);
+    var adminRevokeSaved = revokeRaceResults.Any(x => x.TargetId == "admin" && x.Saved);
+    var managerRevokeSaved = revokeRaceResults.Any(x => x.TargetId == "manager" && x.Saved);
+    await using (var db = await factory.CreateDbContextAsync())
+    {
+        var activeAdminCount = await db.Users.CountAsync(x => x.IsAdmin && x.Enabled && x.EmailConfirmed);
+        var adminRevokesAfter = await db.Audits.LongCountAsync(x => x.Action == "GlobalAdminRevoked" && x.EntityId == "admin");
+        var managerRevokesAfter = await db.Audits.LongCountAsync(x => x.Action == "GlobalAdminRevoked" && x.EntityId == "manager");
+        var adminRole = await db.Users.Where(x => x.Id == "admin").Select(x => x.IsAdmin).SingleAsync();
+        var managerRole = await db.Users.Where(x => x.Id == "manager").Select(x => x.IsAdmin).SingleAsync();
+        Check(revokeRaceResults.Count(x => x.Saved) <= 1 && activeAdminCount >= 1,
+            "Concurrent revocation of different final administrators leaves at least one active administrator");
+        Check(adminRole == !adminRevokeSaved && managerRole == !managerRevokeSaved &&
+            adminRevokesAfter == adminRevokesBefore + (adminRevokeSaved ? 1 : 0) &&
+            managerRevokesAfter == managerRevokesBefore + (managerRevokeSaved ? 1 : 0),
+            "Concurrent role changes persist each account and its audit record atomically");
+    }
+    await using (var db = await factory.CreateDbContextAsync())
+    {
+        var adminRow = await db.Users.SingleAsync(x => x.Id == "admin");
+        var managerRow = await db.Users.SingleAsync(x => x.Id == "manager");
+        if (!adminRow.IsAdmin) { adminRow.IsAdmin = true; adminRow.ConcurrencyStamp = Guid.NewGuid().ToString("N"); }
+        if (managerRow.IsAdmin) { managerRow.IsAdmin = false; managerRow.ConcurrencyStamp = Guid.NewGuid().ToString("N"); }
+        await db.SaveChangesAsync();
+    }
     await Deny<CoreConflictException>(() => core.SaveServiceAsync(admin, new("Lost update", "", 0)), "Stale service draft cannot overwrite a saved version");
     async Task<bool> Race(string value)
     {

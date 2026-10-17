@@ -81,6 +81,16 @@ try
         request.Headers.TryAddWithoutValidation("Cookie", string.Join("; ", new[] { authCookie, csrf.Cookie }.Where(x => x.Length > 0)));
         return await client.SendAsync(request);
     }
+    async Task<HttpResponseMessage> PostRaw(string path, string body, (string Token, string Cookie) csrf,
+        string authCookie = "", string? originOverride = null, bool includeCsrf = true, string mediaType = "application/json")
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, path)
+        { Content = new StringContent(body, Encoding.UTF8, mediaType) };
+        request.Headers.TryAddWithoutValidation("Origin", originOverride ?? origin);
+        if (includeCsrf) request.Headers.TryAddWithoutValidation("X-CSRF-TOKEN", csrf.Token);
+        request.Headers.TryAddWithoutValidation("Cookie", string.Join("; ", new[] { authCookie, csrf.Cookie }.Where(x => x.Length > 0)));
+        return await client.SendAsync(request);
+    }
 
     using (var editor = await Get("/api/core/profile-editor", "test-auth=member"))
     {
@@ -89,6 +99,45 @@ try
         Check(json.GetProperty("actorId").GetString() == "member" && !json.TryGetProperty("email", out _), "editor response is actor-bound and excludes email");
     }
     var adminCsrf = await Csrf("test-auth=admin");
+    using (var adminAccounts = await Get("/api/core/admin-accounts", "test-auth=admin"))
+    {
+        Check(adminAccounts.StatusCode == HttpStatusCode.OK && adminAccounts.Headers.CacheControl?.NoStore == true,
+            "administrator-only account API is no-store");
+        var json = JsonDocument.Parse(await adminAccounts.Content.ReadAsStringAsync()).RootElement;
+        Check(json.GetProperty("actorId").GetString() == "admin" &&
+            json.GetProperty("accounts").EnumerateArray().Any(x => x.GetProperty("email").GetString() == "secret@test.invalid"),
+            "separate admin DTO returns current actor and email only through admin route");
+    }
+    using (var deniedAccounts = await Get("/api/core/admin-accounts", "test-auth=member"))
+        Check(deniedAccounts.StatusCode == HttpStatusCode.Forbidden, "ordinary member cannot read the admin account API");
+    using (var actorMismatch = await Post("/api/core/admin-accounts?expectedActor=member", new { changes = Array.Empty<object>() }, adminCsrf, "test-auth=admin"))
+        Check(actorMismatch.StatusCode == HttpStatusCode.Forbidden, "admin write rejects a mismatched expectedActor before body processing");
+    using (var badOrigin = await Post("/api/core/admin-accounts?expectedActor=admin", new { changes = Array.Empty<object>() }, adminCsrf, "test-auth=admin", "https://attacker.invalid"))
+        Check(badOrigin.StatusCode == HttpStatusCode.Forbidden, "admin write rejects a foreign Origin");
+    using (var noCsrf = await PostRaw("/api/core/admin-accounts?expectedActor=admin", "{\"changes\":[]}", adminCsrf, "test-auth=admin", includeCsrf: false))
+        Check(noCsrf.StatusCode == HttpStatusCode.BadRequest, "admin write requires an explicit CSRF header");
+    using (var strictJson = await PostRaw("/api/core/admin-accounts?expectedActor=admin", "{\"changes\":[],\"extra\":true}", adminCsrf, "test-auth=admin"))
+        Check(strictJson.StatusCode == HttpStatusCode.BadRequest, "admin role API rejects unknown JSON properties");
+    using (var duplicateJson = await PostRaw("/api/core/admin-accounts?expectedActor=admin", "{\"changes\":[],\"changes\":[]}", adminCsrf, "test-auth=admin"))
+        Check(duplicateJson.StatusCode == HttpStatusCode.BadRequest, "admin role API rejects duplicate JSON properties");
+    using (var invalidUtf8Request = new HttpRequestMessage(HttpMethod.Post, "/api/core/admin-accounts?expectedActor=admin")
+    {
+        Content = new ByteArrayContent([0x7b, 0xff, 0x7d])
+    })
+    {
+        invalidUtf8Request.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+        invalidUtf8Request.Headers.TryAddWithoutValidation("Origin", origin);
+        invalidUtf8Request.Headers.TryAddWithoutValidation("X-CSRF-TOKEN", adminCsrf.Token);
+        invalidUtf8Request.Headers.TryAddWithoutValidation("Cookie", $"test-auth=admin; {adminCsrf.Cookie}");
+        using var invalidUtf8 = await client.SendAsync(invalidUtf8Request);
+        Check(invalidUtf8.StatusCode == HttpStatusCode.BadRequest, "admin role API rejects invalid UTF-8");
+    }
+    using (var overLimit = await PostRaw("/api/core/admin-accounts?expectedActor=admin",
+        "{\"changes\":[],\"padding\":\"" + new string('x', 65_537) + "\"}", adminCsrf, "test-auth=admin"))
+        Check(overLimit.StatusCode == HttpStatusCode.RequestEntityTooLarge, "admin role API bounds JSON request size");
+    using (var noOpSave = await Post("/api/core/admin-accounts?expectedActor=admin", new { changes = Array.Empty<object>() }, adminCsrf, "test-auth=admin"))
+        Check(noOpSave.StatusCode == HttpStatusCode.OK && noOpSave.Headers.CacheControl?.NoStore == true,
+            "admin role API accepts an actor-bound, Origin/CSRF-protected no-op save without cache");
     using var forbiddenQuestion = await Post("/api/core/profile-questions?expectedActor=member", new { operation = "Add", text = "Should deny", type = "Text", rowVersion = 0 }, adminCsrf, "test-auth=admin");
     Check(forbiddenQuestion.StatusCode == HttpStatusCode.Forbidden, "expectedActor mismatch is rejected before write");
     using var add = await Post("/api/core/profile-questions?expectedActor=admin", new { operation = "Add", text = "公開プロフィールの質問", type = "Text", rowVersion = 0 }, adminCsrf, "test-auth=admin");
