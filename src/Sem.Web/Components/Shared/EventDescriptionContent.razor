@@ -1,0 +1,6 @@
+@using Sem.Web.Core
+<div class="event-description-content">@((MarkupString)EventDescription.Render(Source, Format))</div>
+@code {
+    [Parameter] public string Source { get; set; } = "";
+    [Parameter] public string Format { get; set; } = "text";
+}

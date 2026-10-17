@@ -141,6 +141,25 @@ try
         return response;
     }
 
+    // Event header JSON is bounded independently; all older theme/profile limits remain unchanged.
+    const string headerPng="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAFAAAAAoCAIAAADmAupWAAAATklEQVR4nO3PAQ3AIADAMMAN7pCA9Lv4k71VsM19z/iT9XXA2wzXGa4zXGe4znCd4TrDdYbrDNcZrjNcZ7jOcJ3hOsN1husM1xmuM1z3AF2YAWlbNButAAAAAElFTkSuQmCC";
+    var headerEdit=new EventEdit("HTTP header event", "", "", DateTimeOffset.Parse("2099-01-01T00:00:00Z"),null,"","View",[],0, HeaderImageDataUrl:headerPng);
+    var headerBody=JsonSerializer.Serialize(headerEdit,new JsonSerializerOptions(JsonSerializerDefaults.Web));
+    using(var largeEnvelope=await Post("event","",new string(' ',70000)+headerBody,"admin",adminCsrf)) {
+        if(!largeEnvelope.IsSuccessStatusCode) Console.WriteLine("Header HTTP diagnostic: "+largeEnvelope.StatusCode+" "+await largeEnvelope.Content.ReadAsStringAsync());
+        Check(largeEnvelope.StatusCode==HttpStatusCode.OK,"Event-only image envelope supports more than old 64KiB without weakening other action limits"); }
+    foreach(var chunked in new[]{false,true})
+        using(var oversizedHeader=await Post("event","",new string(' ',2*1024*1024+1),"admin",adminCsrf,chunked:chunked))
+            Check(oversizedHeader.StatusCode==HttpStatusCode.RequestEntityTooLarge,"Event image JSON rejects oversized "+(chunked?"streamed":"declared")+" body");
+    using(var missingCsrf=await Post("event","",headerBody,"admin",adminCsrf,includeToken:false))
+        Check(missingCsrf.StatusCode==HttpStatusCode.BadRequest,"Event image upload retains CSRF requirement");
+    using(var wrongOrigin=await Post("event","",headerBody,"admin",adminCsrf,includeOrigin:false))
+        Check(wrongOrigin.StatusCode==HttpStatusCode.Forbidden,"Event image upload retains Origin requirement");
+    using(var ordinaryMember=await Post("event","",headerBody,"member",memberCsrf))
+        Check(ordinaryMember.StatusCode==HttpStatusCode.Forbidden,"Ordinary member cannot create an image event via HTTP");
+    using(var unknown=await Post("event","",headerBody[..^1]+",\"unexpected\":true}","admin",adminCsrf))
+        Check(unknown.StatusCode==HttpStatusCode.BadRequest,"Event image write rejects unknown JSON properties");
+
     string Expected(string actor) => "expectedActor=" + Uri.EscapeDataString(actor);
     string Id(string value) => "id=" + Uri.EscapeDataString(value);
 

@@ -20,7 +20,7 @@ public sealed record ProfileView(string UserId, string DisplayName, string Readi
     string Icon = "", ProfileAnswerView[]? Answers = null, string? ImageDataUrl = null, long ImageRowVersion = 0);
 public sealed record MemberView(string UserId, string DisplayName);
 public sealed record EventView(string Id, string Title, string Description, string Location, string ScheduledDate,
-    string? OpensAt, string AnnouncementMessage, string PhaseKind, string[] ManagerIds, long RowVersion, bool CanManage, string ActivePhaseName, string ActivePhaseKind, int MaxPicks, bool ManualPhaseOverride, string LocationUrl = "");
+    string? OpensAt, string AnnouncementMessage, string PhaseKind, string[] ManagerIds, long RowVersion, bool CanManage, string ActivePhaseName, string ActivePhaseKind, int MaxPicks, bool ManualPhaseOverride, string LocationUrl = "", string DescriptionFormat = "text");
 public sealed record WorkspaceView(ServiceView Service, ProfileView Profile, string Email, bool IsAdmin, MemberView[] Members, EventView[] Events);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record GlobalAdminAccountView(string UserId, string DisplayName, string Email, bool IsAdmin, bool Enabled,
@@ -36,7 +36,7 @@ public sealed record ServiceEdit(string Name, string Description, long RowVersio
 public sealed record ProfileEdit(string DisplayName, string Reading, string CallName, SocialLink[] Social, long RowVersion);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record EventEdit(string Title, string Description, string Location, DateTimeOffset ScheduledDate,
-    DateTimeOffset? OpensAt, string AnnouncementMessage, string PhaseKind, string[] ManagerIds, long RowVersion, string? LocationUrl = null);
+    DateTimeOffset? OpensAt, string AnnouncementMessage, string PhaseKind, string[] ManagerIds, long RowVersion, string? LocationUrl = null, string? DescriptionFormat = null, string? HeaderImageDataUrl = null);
 
 public sealed partial class CoreFoundationService(IDbContextFactory<ApplicationDbContext> factory,
     IOptions<IdentityOptions> identityOptions, TimeProvider clock, BusinessNotificationStore businessNotifications, IConfiguration? notificationConfiguration = null, Microsoft.AspNetCore.DataProtection.IDataProtectionProvider? qrProtection = null)
@@ -80,7 +80,7 @@ public sealed partial class CoreFoundationService(IDbContextFactory<ApplicationD
             user.IsAdmin, members, events.Select(e => new EventView(e.Id, e.Title, e.Description, e.Location,
                 e.ScheduledDate, e.OpensAt, e.AnnouncementMessage, e.PhaseKind, e.Admins.Select(a => a.UserId).Order().ToArray(),
                 e.RowVersion, user.IsAdmin || e.Admins.Any(a => a.UserId == user.Id), e.Phases.Single(p => p.IsActive).Name,
-                e.Phases.Single(p => p.IsActive).Kind, e.Phases.Single(p => p.IsActive).MaxPicks, e.ManualPhaseOverride, e.LocationUrl)).ToArray());
+                e.Phases.Single(p => p.IsActive).Kind, e.Phases.Single(p => p.IsActive).MaxPicks, e.ManualPhaseOverride, e.LocationUrl, e.DescriptionFormat)).ToArray());
     }
     public async Task<GlobalAdminAccountsView> ReadGlobalAdminAccountsAsync(ClaimsPrincipal principal, CancellationToken ct = default)
     {
@@ -226,6 +226,7 @@ public sealed partial class CoreFoundationService(IDbContextFactory<ApplicationD
     public async Task<string> SaveEventAsync(ClaimsPrincipal principal, string? id, EventEdit edit, CancellationToken ct = default)
     {
         var title = Text(edit.Title, 100, "イベント名", true); var description = Text(edit.Description, 2000, "概要");
+        var descriptionFormat = edit.DescriptionFormat is null ? null : EventDescription.ValidateFormat(edit.DescriptionFormat);
         var locationUrl = edit.LocationUrl is null ? null : EventLocationLink.Validate(edit.LocationUrl);
         var location = Text(edit.Location, 500, "会場"); var announcement = Text(edit.AnnouncementMessage, 2000, "お知らせ");
         if (edit.ScheduledDate == default || edit.PhaseKind is not ("Hidden" or "View") || edit.OpensAt > edit.ScheduledDate || edit.RowVersion < 0)
@@ -238,6 +239,9 @@ public sealed partial class CoreFoundationService(IDbContextFactory<ApplicationD
         if (id is not null && item is null || !actor.IsAdmin && (item is null || !item.Admins.Any(a => a.UserId == actor.Id)))
             throw new UnauthorizedAccessException("このイベントは管理できません。");
         if ((item?.RowVersion ?? 0) != edit.RowVersion) throw new CoreConflictException();
+        // Authorization and stale-version rejection precede all native image decoding.
+        (byte[] Png, int Width, int Height)? header = edit.HeaderImageDataUrl is { Length: > 0 }
+            ? await EventHeaderImageNormalizer.NormalizeAsync(edit.HeaderImageDataUrl, ct) : null;
         if (await db.Users.CountAsync(u => managers.Contains(u.Id) && u.Enabled && u.EmailConfirmed, ct) != managers.Length)
             throw new ValidationException("有効なイベント管理者を選択してください。");
         if (item is null) {
@@ -260,13 +264,23 @@ public sealed partial class CoreFoundationService(IDbContextFactory<ApplicationD
             item.ManualPhaseOverride = true;
         }
         if (id is not null && (item.ScheduledDate != Utc(edit.ScheduledDate) || item.OpensAt != (edit.OpensAt is null ? null : Utc(edit.OpensAt.Value)))) await EnsurePlanEditable(db,id,ct);
-        item.Title = title; item.Description = description; item.Location = location;
+        item.Title = title; item.Description = description;
+        if (descriptionFormat is not null) item.DescriptionFormat = descriptionFormat; item.Location = location;
         if (locationUrl is not null) item.LocationUrl = locationUrl; item.ScheduledDate = Utc(edit.ScheduledDate);
         item.OpensAt = edit.OpensAt is null ? null : Utc(edit.OpensAt.Value); item.AnnouncementMessage = announcement;
         item.PhaseKind = edit.PhaseKind; item.RowVersion++;
         db.EventAdmins.RemoveRange(item.Admins.Where(a => !managers.Contains(a.UserId)));
         foreach (var manager in managers.Where(m => !item.Admins.Any(a => a.UserId == m)))
             item.Admins.Add(new() { EventId = item.Id, UserId = manager, GrantedAt = Utc(clock.GetUtcNow()) });
+        if (edit.HeaderImageDataUrl is not null)
+        {
+            var image = await db.EventHeaderImages.SingleOrDefaultAsync(x => x.EventId == item.Id, ct);
+            if (header is null) { if (image is not null) db.EventHeaderImages.Remove(image); }
+            else {
+                if (image is null) { image = new() { EventId = item.Id }; db.EventHeaderImages.Add(image); }
+                image.Data = header.Value.Png; image.Width = header.Value.Width; image.Height = header.Value.Height;
+            }
+        }
         Audit(db, actor.Id, id is null ? "SessionEventCreated" : "SessionEventUpdated", item.Id);
         await db.SaveChangesAsync(ct); await tx.CommitAsync(ct); return item.Id;
     }

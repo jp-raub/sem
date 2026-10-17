@@ -319,6 +319,33 @@ try
     await core.SaveEventAsync(admin,event2,Edit("Explicitly cleared venue link",[],3,"View") with {LocationUrl=""});
     Check((await core.ReadEventTabsAsync(member,event2)).LocationUrl=="","Explicit empty URL clears the link");
     Check(EventLocationLink.IsSafe("http://venue.example/map")&&!EventLocationLink.IsSafe("javascript:alert(1)")&&!EventLocationLink.IsSafe(null),"Display guard permits HTTP(S) only and handles missing old URL");
+    string headerData;
+    using(var raster=new ImageMagick.MagickImage(ImageMagick.MagickColors.CornflowerBlue,80,40)) headerData="data:image/png;base64,"+Convert.ToBase64String(raster.ToByteArray(ImageMagick.MagickFormat.Png));
+    var headerExpected="data:image/png;base64,"+Convert.ToBase64String((await EventHeaderImageNormalizer.NormalizeAsync(headerData)).Png);
+    var headerEvent=await core.SaveEventAsync(admin,null,Edit("Header image event",["manager"],0,"Hidden") with {HeaderImageDataUrl=headerData});
+    Check(await core.ReadEventHeaderImageForEditAsync(manager,headerEvent)==headerExpected,"Event manager can read normalized image without workspace-wide BLOB projection");
+    Check((await core.ReadEventTabsAsync(admin,headerEvent)).HeaderImageDataUrl==headerExpected,"Authorized event overview reads stored normalized header");
+    await Deny<UnauthorizedAccessException>(()=>core.ReadEventTabsAsync(member,headerEvent),"Hidden event header is not disclosed to ordinary members");
+    await Deny<UnauthorizedAccessException>(()=>core.ReadEventHeaderImageForEditAsync(member,headerEvent),"Member cannot read manager image editor endpoint");
+    await Deny<UnauthorizedAccessException>(()=>core.SaveEventAsync(member,headerEvent,Edit("Unauthorized image",[],1) with {HeaderImageDataUrl="not an image"}),"Image write authorizes before decoding supplied bytes");
+    await Deny<CoreConflictException>(()=>core.SaveEventAsync(manager,headerEvent,Edit("Stale image",["manager"],0) with {HeaderImageDataUrl="not an image"}),"Image write rejects stale version before decoding bytes");
+    await Deny<ValidationException>(()=>core.SaveEventAsync(manager,headerEvent,Edit("Invalid image",["manager"],1) with {HeaderImageDataUrl="data:image/svg+xml;base64,PHN2Zy8+"}),"Active SVG input rejected without changing event");
+    Check((await core.ReadAsync(admin)).Events.Single(e=>e.Id==headerEvent).RowVersion==1&&await core.ReadEventHeaderImageForEditAsync(manager,headerEvent)==headerExpected,"Invalid image preserves previous image and event version atomically");
+    await core.SaveEventAsync(manager,headerEvent,Edit("Preserve header",["manager"],1,"View"));
+    Check((await core.ReadEventTabsAsync(member,headerEvent)).HeaderImageDataUrl==headerExpected,"Legacy omission preserves image and published authorized participant can view it");
+    Check(!JsonSerializer.Serialize(await core.ReadAsync(admin)).Contains(headerExpected),"Workspace list never serializes all event header blobs");
+    await core.SaveEventAsync(manager,headerEvent,Edit("Remove header",["manager"],2,"View") with {HeaderImageDataUrl=""});
+    Check((await core.ReadEventTabsAsync(member,headerEvent)).HeaderImageDataUrl is null,"Explicit empty image removes header in same event transaction");
+    var descriptionEvent=(await core.ReadAsync(admin)).Events.Single(e=>e.Id==event2);
+    Check(descriptionEvent.DescriptionFormat=="text","Legacy event descriptions default to plain text");
+    await core.SaveEventAsync(admin,event2,Edit("Markdown description",[],descriptionEvent.RowVersion,"View") with {Description="## Music\n**safe**",DescriptionFormat="markdown"});
+    var described=await core.ReadEventTabsAsync(member,event2);
+    Check(described.DescriptionFormat=="markdown"&&described.Description=="## Music\n**safe**","Description source and selected format persist independently and read under event authorization");
+    await core.SaveEventAsync(admin,event2,Edit("Legacy client preserves format",[],descriptionEvent.RowVersion+1,"View"));
+    Check((await core.ReadEventTabsAsync(member,event2)).DescriptionFormat=="markdown","Legacy omitted format preserves saved choice");
+    await Deny<ValidationException>(()=>core.SaveEventAsync(admin,event2,Edit("Invalid format",[],descriptionEvent.RowVersion+2,"View") with {DescriptionFormat="javascript"}),"Unknown description write format is rejected");
+    await Deny<CoreConflictException>(()=>core.SaveEventAsync(admin,event2,Edit("Stale format",[],descriptionEvent.RowVersion,"View") with {DescriptionFormat="html"}),"Stale description format update cannot overwrite current event");
+
     await using (var db = await factory.CreateDbContextAsync())
     {
         Check(await db.Users.Where(u => u.Id == "manager" || u.Id == "member").AllAsync(u => !u.IsAdmin), "Event assignments never promote global-admin flags");
@@ -339,7 +366,7 @@ try
         Check(await db.Audits.AnyAsync(a => a.Action == "OwnProfileUpdated" && a.ActorId == "member") && await db.Audits.AnyAsync(a => a.Action == "SessionEventUpdated" && a.ActorId == "manager"), "Successful writes persist actor/target audit actions");
         Check(!await db.Users.AnyAsync(u => !u.EmailConfirmed && u.Enabled), "Foundation does not bypass confirmed-account gates");
         await SqliteStorageInitializer.InitializeAsync(db);
-        Check(await db.SessionEvents.CountAsync() == 2 && await db.UserProfiles.CountAsync() == 1, "Restart retains formal events and profiles without resetting them");
+        Check(await db.SessionEvents.CountAsync() == 3 && await db.UserProfiles.CountAsync() == 1, "Restart retains formal events and profiles without resetting them");
     }
     Console.WriteLine("Core foundation checks passed: " + passed);
 }

@@ -62,8 +62,12 @@ public static class ProfileImageNormalizer
 
     public static async Task<(byte[] Png, int Width, int Height)> NormalizeAsync(
         byte[] input, string mime, CancellationToken ct = default)
+        => await NormalizeRasterAsync(input, mime, MaxInputBytes, MaxLongEdge, ct);
+
+    internal static async Task<(byte[] Png, int Width, int Height)> NormalizeRasterAsync(
+        byte[] input, string mime, int maxInputBytes, int maxLongEdge, CancellationToken ct)
     {
-        if (input.Length is < 12 or > MaxInputBytes) throw new ValidationException("画像サイズを確認してください。");
+        if (input.Length < 12 || input.Length > maxInputBytes) throw new ValidationException("画像サイズを確認してください。");
         if (!IsAllowedMime(mime)) throw new ValidationException("PNG、JPEG、WebP画像のみ利用できます。");
         mime = mime.ToLowerInvariant();
         if (!SignatureMatches(input, mime)) throw new ValidationException("PNG、JPEG、WebP画像のみ利用できます。");
@@ -85,8 +89,8 @@ public static class ProfileImageNormalizer
             using var image = new MagickImage(input, format);
             if (image.Format != format) throw new ValidationException("画像の内容と形式が一致しません。");
             image.AutoOrient();
-            if (Math.Max(image.Width, image.Height) > MaxLongEdge)
-                image.Resize(new MagickGeometry(MaxLongEdge, MaxLongEdge) { IgnoreAspectRatio = false });
+            if (Math.Max(image.Width, image.Height) > maxLongEdge)
+                image.Resize(new MagickGeometry((uint)maxLongEdge, (uint)maxLongEdge) { IgnoreAspectRatio = false });
             image.Strip(); // EXIF/GPS, profiles, comments, and other source metadata are discarded.
             image.Format = MagickFormat.Png;
             var png = image.ToByteArray(MagickFormat.Png);

@@ -202,6 +202,7 @@ public static class CoreEndpoints
                         // Leave Kestrel chunk headroom while bounded readers retain their probe limit, so they can return a
                         // deterministic 413 without buffering beyond their effective request limits.
                         size.MaxRequestBodySize = eventImport ? EventImportRequestMaxBytes + 16 * 1024L :
+                            action == "event" ? 2 * 1024 * 1024L + 16 * 1024L :
                             globalAdminAccountsAction ? GlobalAdminAccountsRequestMaxBytes + 16 * 1024L :
                             themeAppearanceWrite ? ThemeAppearanceRequestMaxBytes + 16 * 1024L :
                             action == "profile-image" ? ProfileImageNormalizer.MaxInputBytes + 16 * 1024L :
@@ -516,7 +517,8 @@ public static class CoreEndpoints
                     await service.SaveProfileAsync(ctx.User, await ctx.Request.ReadFromJsonAsync<ProfileEdit>() ?? throw new ValidationException("入力が必要です。"), ctx.RequestAborted);
                 else if (post && action == "event")
                 {
-                    var json = await ctx.Request.ReadFromJsonAsync<JsonElement>();
+                    using var eventDocument = await ReadThemeAppearanceRequestAsync<JsonDocument>(ctx.Request, ctx.RequestAborted, 2 * 1024 * 1024);
+                    var json = eventDocument.RootElement;
                     if (json.ValueKind != JsonValueKind.Object) throw new ValidationException("入力形式を確認してください。");
                     foreach (var property in json.EnumerateObject())
                         if ((property.Name.Equals("scheduledDate", StringComparison.OrdinalIgnoreCase) || property.Name.Equals("opensAt", StringComparison.OrdinalIgnoreCase)) &&

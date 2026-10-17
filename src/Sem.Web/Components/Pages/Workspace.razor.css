@@ -183,3 +183,5 @@
         min-width: 780px;
     }
 }
+.event-header-editor { margin-block: 1rem; }
+.event-header-editor img { display:block; max-width:100%; max-height:240px; object-fit:contain; border-radius:12px; margin-block:12px; }

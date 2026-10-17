@@ -23,6 +23,7 @@ byte[] Fixture(uint w, uint h, MagickFormat format, string? comment = null)
     }
     return img.ToByteArray(format);
 }
+var headerSource = Fixture(2400, 1200, MagickFormat.Png, "private EXIF must not survive");
 var largePng = Fixture(1200, 600, MagickFormat.Png, "gps=must-not-survive");
 var overPixelCapPng = Fixture(5000, 5000, MagickFormat.Png);
 var smallJpeg = Fixture(80, 40, MagickFormat.Jpeg);
@@ -47,4 +48,11 @@ await Reject(largePng, "image/jpeg", "MIME and magic mismatch rejected");
 await Reject([.. "<svg xmlns='http://www.w3.org/2000/svg'/>"u8], "image/svg+xml", "SVG rejected");
 await Reject([.. new byte[64]], "image/png", "malformed raster rejected");
 await Reject([.. new byte[ProfileImageNormalizer.MaxInputBytes + 1]], "image/png", "input over 10 MiB rejected");
+var header = await EventHeaderImageNormalizer.NormalizeAsync("data:image/png;base64," + Convert.ToBase64String(headerSource));
+Check(header.Width == 1600 && header.Height == 800, "Event header uses a distinct 1600px long-edge limit without changing profile 512px contract");
+using(var decodedHeader = new MagickImage(header.Png, MagickFormat.Png)) Check(decodedHeader.GetExifProfile() is null && string.IsNullOrEmpty(decodedHeader.Comment), "Header normalization strips EXIF and comments");
+foreach(var invalid in new[]{"data:image/svg+xml;base64,"+Convert.ToBase64String("<svg/>"u8.ToArray()),"https://external.example/img", "data:image/png;base64,invalid!", "data:image/png;base64,"+Convert.ToBase64String(new byte[EventHeaderImageNormalizer.MaxInputBytes+1]),"data:image/png;base64,"+Convert.ToBase64String(smallJpeg)}){
+    try { await EventHeaderImageNormalizer.NormalizeAsync(invalid); throw new Exception("Header accepted invalid image"); }
+    catch(ValidationException){checks++;Console.WriteLine("PASS invalid header source rejected");}
+}
 Console.WriteLine($"PASS total={checks}");
