@@ -12,8 +12,14 @@ const workspace = await file('src/Sem.Web/Components/Pages/Workspace.razor');
 const home = await file('src/Sem.Web/Components/Pages/Home.razor');
 const endpoints = await file('src/Sem.Web/Runtime/SemEndpoints.cs');
 const loginEndpoints = await file('src/Sem.Web/Runtime/ApplicationLoginEndpoints.cs');
+const authStyles = await file('src/Sem.Web/Components/Pages/Auth.razor.css');
 
 assert.match(razor, /@page "\/auth"/);
+assert.match(razor, /PASSKEY SIGN IN/);
+assert.match(razor, /id="auth-heading">また、一緒に音楽を。/);
+assert.match(authStyles, /max-width: 440px/);
+assert.match(authStyles, /var\(--appearance-surface/);
+assert.match(authStyles, /forced-colors: active/);
 assert.match(razor, /@attribute \[AllowAnonymous\]/);
 assert.match(razor, /<form id="auth-form" method="post" action="\/auth"/);
 assert.match(razor, /<fieldset id="auth-fields" disabled>/);

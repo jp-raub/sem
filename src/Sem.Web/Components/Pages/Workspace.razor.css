@@ -1,0 +1,185 @@
+.workspace-lead {
+    max-width: 72ch;
+    margin: 0.4rem 0 1.25rem;
+    color: var(--appearance-text, #18312e);
+    font-size: 1.08rem;
+}
+
+.workspace-login-link {
+    margin: 0 0 0.5rem;
+    font-size: 0.9rem;
+}
+
+#core-refresh {
+    margin: 0 0 1rem;
+}
+
+.workspace-event-panel {
+    border-top: 4px solid var(--appearance-accent, #1e6557);
+}
+
+.workspace-events-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.workspace-events-heading h2 {
+    margin: 0;
+}
+
+.workspace-events-heading p {
+    margin: 0.35rem 0 0;
+    color: var(--appearance-text, #18312e);
+}
+
+.workspace-event-table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--appearance-line, #cbd8ce);
+    border-radius: 0.65rem;
+    background: var(--appearance-surface, #fffefa);
+}
+
+.workspace-event-table {
+    width: 100%;
+    min-width: 850px;
+    border-collapse: collapse;
+    table-layout: fixed;
+}
+
+.workspace-event-table th,
+.workspace-event-table td {
+    padding: 0.8rem 0.75rem;
+    border-bottom: 1px solid var(--appearance-line, #cbd8ce);
+    text-align: left;
+    vertical-align: top;
+    overflow-wrap: anywhere;
+}
+
+.workspace-event-table th {
+    background: var(--appearance-background, #f5f7f3);
+    color: var(--appearance-text, #18312e);
+    font-size: 0.88rem;
+    font-weight: 700;
+}
+
+.workspace-event-table tbody tr:hover {
+    background: color-mix(in srgb, var(--appearance-accent, #1e6557) 10%, var(--appearance-surface, #fffefa));
+}
+
+.workspace-event-table tbody tr:last-child td {
+    border-bottom: 0;
+}
+
+.workspace-event-table th:nth-child(1) { width: 24%; }
+.workspace-event-table th:nth-child(2) { width: 18%; }
+.workspace-event-table th:nth-child(3) { width: 16%; }
+.workspace-event-table th:nth-child(4) { width: 27%; }
+.workspace-event-table th:nth-child(5) { width: 15%; }
+
+.workspace-event-name p {
+    margin: 0.45rem 0;
+    color: var(--appearance-text, #18312e);
+    white-space: pre-line;
+}
+
+.workspace-event-name small,
+.workspace-event-date small,
+.workspace-event-phase small {
+    display: block;
+    margin-top: 0.35rem;
+    color: var(--appearance-text, #18312e);
+}
+
+.workspace-event-overview {
+    color: var(--appearance-accent, #1e6557);
+    font-size: 1.04rem;
+    font-weight: 700;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.15em;
+}
+
+.workspace-event-date time {
+    font-variant-numeric: tabular-nums;
+    font-weight: 650;
+}
+
+.workspace-event-phase > span {
+    display: inline-flex;
+    align-items: center;
+    min-height: 1.8rem;
+    padding: 0.15rem 0.6rem;
+    border: 1px solid var(--appearance-line, #cbd8ce);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--appearance-accent, #1e6557) 12%, var(--appearance-surface, #fffefa));
+    color: var(--appearance-text, #18312e);
+    font-weight: 650;
+}
+
+.workspace-event-announcement {
+    white-space: pre-line;
+}
+
+.workspace-event-actions summary {
+    cursor: pointer;
+    color: var(--appearance-accent, #1e6557);
+    font-weight: 650;
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
+}
+
+.workspace-event-action-list {
+    display: grid;
+    justify-items: start;
+    gap: 0.45rem;
+    min-width: 10rem;
+    margin-top: 0.65rem;
+    padding: 0.7rem;
+    border: 1px solid var(--appearance-line, #cbd8ce);
+    border-radius: 0.55rem;
+    background: var(--appearance-surface, #fffefa);
+    color: var(--appearance-text, #18312e);
+}
+
+.workspace-event-action-list a,
+.workspace-event-action-list button {
+    font: inherit;
+}
+
+.workspace-event-action-divider {
+    width: 100%;
+    border-top: 1px solid var(--appearance-line, #cbd8ce);
+}
+
+.workspace-event-overview:hover,
+.workspace-event-actions summary:hover,
+.workspace-event-action-list a:hover,
+.workspace-event-action-list button:hover:not(:disabled) {
+    color: var(--appearance-text, #18312e);
+    background: color-mix(in srgb, var(--appearance-accent, #1e6557) 12%, var(--appearance-surface, #fffefa));
+}
+
+.workspace-event-panel :focus-visible {
+    outline: 3px solid var(--appearance-accent, #1e6557);
+    outline-offset: 2px;
+}
+
+.workspace-secondary-link {
+    margin: 1rem 0;
+    color: var(--appearance-text, #18312e);
+    font-size: 0.85rem;
+    text-align: right;
+}
+
+@media (max-width: 680px) {
+    .workspace-events-heading {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .workspace-event-table {
+        min-width: 780px;
+    }
+}

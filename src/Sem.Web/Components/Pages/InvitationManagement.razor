@@ -7,7 +7,7 @@
 <PageTitle>招待管理</PageTitle>
 <main id="invitation-management-root" @ref="Root" aria-labelledby="invitation-management-title" class="panel" style="max-width:1200px;margin:24px auto;">
     <h1 id="invitation-management-title">招待・依頼の管理</h1>
-    <p>この画面では、許可された招待・依頼一覧の閲覧、管理者による直接招待の発行と既存招待の失効ができます。依頼の作成・承認は未統合です。発行した秘密リンクは成功後、この画面の一時欄でのみ表示します。</p>
+    <p>招待依頼の作成と本人リンクの確認、全体管理者による依頼判断・直接発行・既存招待の失効を行います。招待リンクは一覧に含めず、本人または発行者の一時欄にだけ表示します。</p>
     <p id="invitation-management-scope" role="status" aria-live="polite">一覧を準備しています。</p>
     <p id="invitation-management-status" role="status" aria-live="polite">読み込み中です。</p>
     <p id="invitation-management-error" role="alert"></p>
@@ -62,6 +62,56 @@
         <p id="invitation-management-unknown" role="alert" hidden></p>
     </section>
 
+    <section id="invitation-owner-link-result" class="panel" aria-labelledby="invitation-owner-link-heading" hidden>
+        <h2 id="invitation-owner-link-heading">本人の招待リンク（今回の表示のみ）</h2>
+        <p>リンク、上限、登録数、有効期限を確認してください。再読込またはページを離れるとリンクは消去されます。</p>
+        <p id="invitation-owner-link-summary"></p>
+        <label for="invitation-owner-link-value">招待リンク（読み取り専用）</label>
+        <input id="invitation-owner-link-value" type="text" readonly autocomplete="off" spellcheck="false" disabled />
+        <button id="invitation-owner-link-copy" type="button" disabled>リンクをコピー</button>
+        <p id="invitation-owner-link-copy-status" role="status" aria-live="polite"></p>
+    </section>
+
+    <section id="invitation-request-create" class="panel" aria-labelledby="invitation-request-create-heading" hidden>
+        <h2 id="invitation-request-create-heading">招待リンク発行を依頼</h2>
+        <p>理由を記入し、希望人数（1〜5名）と有効期間（1〜7日）を指定してください。期限は管理者が許可して発行した時点から計算します。</p>
+        <p id="invitation-request-create-status" role="status" aria-live="polite"></p>
+        <p id="invitation-request-create-error" role="alert"></p>
+        <form id="invitation-request-create-form" method="post">
+            <fieldset id="invitation-request-create-fields" disabled>
+                <label for="invitation-request-create-reason">依頼理由（前後空白を除き1〜500文字、制御文字不可）</label>
+                <textarea id="invitation-request-create-reason" maxlength="500" rows="3" autocomplete="off" required></textarea>
+                <label for="invitation-request-create-count">希望人数（1〜5）</label>
+                <input id="invitation-request-create-count" type="number" min="1" max="5" step="1" value="1" inputmode="numeric" />
+                <label for="invitation-request-create-days">希望有効期間（日、1〜7）</label>
+                <input id="invitation-request-create-days" type="number" min="1" max="7" step="1" value="1" inputmode="numeric" />
+                <button id="invitation-request-create-submit" type="submit" disabled>発行をリクエスト</button>
+            </fieldset>
+        </form>
+    </section>
+
+    <section id="invitation-request-review" class="panel" aria-labelledby="invitation-request-review-heading" hidden>
+        <h2 id="invitation-request-review-heading">依頼の確認・許可／拒否（全体管理者のみ）</h2>
+        <p id="invitation-request-review-summary"></p>
+        <p id="invitation-request-review-status" role="status" aria-live="polite"></p>
+        <p id="invitation-request-review-error" role="alert"></p>
+        <form id="invitation-request-review-form" method="post">
+            <label for="invitation-request-review-choice">判断</label>
+            <select id="invitation-request-review-choice" disabled>
+                <option value="approve">許可して招待リンクを発行</option>
+                <option value="reject">拒否（リンクは発行しない）</option>
+            </select>
+            <label for="invitation-request-review-comment">依頼者への判断コメント（任意・500文字以内、制御文字不可）</label>
+            <textarea id="invitation-request-review-comment" maxlength="500" rows="3" autocomplete="off" disabled></textarea>
+            <label for="invitation-request-review-confirm">
+                <input id="invitation-request-review-confirm" type="checkbox" disabled />
+                表示中の依頼と判断内容を確認し、直ちに確定することを確認しました。
+            </label>
+            <button id="invitation-request-review-submit" type="submit" disabled>判断を確定</button>
+            <button id="invitation-request-review-cancel" type="button" disabled>閉じる</button>
+        </form>
+    </section>
+
     <section aria-labelledby="invitation-management-invitations-heading">
         <h2 id="invitation-management-invitations-heading">招待一覧</h2>
         <p>表示対象はログインユーザーに許可された範囲です。1ページ最大50件で、表示中のページだけでは全件取得済みとは限りません。</p>
@@ -75,7 +125,7 @@
 
     <section aria-labelledby="invitation-management-requests-heading">
         <h2 id="invitation-management-requests-heading">依頼一覧</h2>
-        <p>依頼の作成・承認操作はこの画面では利用できません。</p>
+        <p>全体管理者には全依頼、その他のユーザーには本人の依頼だけを表示します。承認済みのリンクは依頼者本人だけが取得できます。</p>
         <div style="overflow-x:auto">
             <table id="invitation-management-requests" aria-describedby="invitation-management-requests-heading">
                 <thead id="invitation-management-requests-head"></thead>

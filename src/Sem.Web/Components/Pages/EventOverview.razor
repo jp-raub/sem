@@ -1,24 +1,225 @@
 @page "/events/{EventId}"
 @rendermode InteractiveServer
+@implements IDisposable
 @using Sem.Web.Core
+@using Sem.Web.Runtime
 @inject AuthenticationStateProvider Authentication
 @inject CoreFoundationService Core
+@inject Microsoft.Extensions.Options.IOptions<Microsoft.AspNetCore.Identity.IdentityOptions> IdentityOptions
+
 <PageTitle>@(View?.Title ?? "イベント")</PageTitle>
 <EventTabNavigation EventId="@EventId" Selected="main" />
 <section id="event-tab-panel" role="tabpanel" aria-label="イベント" aria-labelledby="event-tab-main" tabindex="0">
-<h1 id="event-overview-title">@(View?.Title ?? "イベント")</h1>
-<p role="alert">@Error</p>
-@if (View is not null) {
-    <p style="white-space:pre-wrap;overflow-wrap:anywhere">@View.Description</p>
-    <p>会場：@View.Location ／ 開催：@DateTimeOffset.Parse(View.ScheduledDate).ToOffset(TimeSpan.FromHours(9)).ToString("yyyy/MM/dd HH:mm")（日本時間）</p>
-    <p>現在のフェーズ：@View.PhaseName</p>
-    <p><a href="@Link("timetable")">タイムテーブル</a> ／ <a href="@Link("participation")">参加登録・観覧</a> ／ <a href="@Link("part-start-preferences")">自分のパート開始通知</a> ／ <a href="@Link("public-answers")">公開設問回答</a> ／ <a href="@Link("comments")">コメント</a> ／ <a href="@Link("qr")">自分の受付QR</a></p>
-}
-<p><a href="/workspace#core-events">イベント一覧へ戻る</a></p>
+    <p class="event-breadcrumb"><a href="/workspace#core-events">イベント一覧</a><span aria-hidden="true"> / </span>@(View?.Title ?? "イベント")</p>
+    <p role="alert">@Error</p>
+    @if (View is not null)
+    {
+        <header class="event-overview-hero">
+            <div class="event-overview-meta">
+                <span class="event-overview-eyebrow">SESSION EVENT</span>
+                <span class="event-overview-phase">@View.PhaseName</span>
+            </div>
+            <h1 id="event-overview-title">@View.Title</h1>
+            <p class="event-overview-datetime">
+                @DateTimeOffset.Parse(View.ScheduledDate).ToOffset(TimeSpan.FromHours(9)).ToString("yyyy/MM/dd HH:mm")（日本時間）
+                <span aria-hidden="true"> · </span>@View.Location
+            </p>
+            @if (!string.IsNullOrWhiteSpace(View.Description))
+            {
+                <p class="event-overview-description">@View.Description</p>
+            }
+        </header>
+
+        <nav class="event-overview-actions" aria-label="このイベントの操作">
+            <a href="#event-timetable-section">タイムテーブル</a>
+            <a href="#event-participation-section">参加登録・観覧</a>
+            <a href="@Link("comments")">コメント</a>
+            <a href="@Link("part-start-preferences")">自分のパート開始通知</a>
+            <a href="@Link("public-answers")">公開設問回答</a>
+            <a href="@Link("qr")">自分の受付QR</a>
+        </nav>
+
+        <section id="event-timetable-section" class="event-journey-section" aria-labelledby="event-timetable-heading">
+            <Timetable EventId="@EventId"
+                       Embedded="true"
+                       ContextGeneration="@ContextGeneration"
+                       ContextIdentityKey="@ContextIdentityKey"
+                       RowsUpdated="OnTimetableRowsUpdated" />
+        </section>
+
+        <section id="event-participation-section" class="event-journey-section" aria-labelledby="event-participation-heading">
+            <Participation EventId="@EventId"
+                           Embedded="true"
+                           ContextGeneration="@ContextGeneration"
+                           TimedRowsEventId="@TimedRowsEventId"
+                           TimedRowsContextGeneration="@TimedRowsContextGeneration"
+                           TimedRows="@TimedRows"
+                           TimetableClockFormat="@TimetableClockFormat"
+                           TimetableDurationFormat="@TimetableDurationFormat" />
+        </section>
+
+        <p class="event-back-link"><a href="/workspace#core-events">イベント一覧へ戻る</a></p>
+    }
 </section>
+
 @code {
     [Parameter] public string EventId { get; set; } = "";
-    EventTabsView? View; string Error = "";
+    EventTabsView? View;
+    IReadOnlyList<TimedPart>? TimedRows;
+    string? TimedRowsEventId;
+    long TimedRowsContextGeneration = -1;
+    string TimetableClockFormat = "seconds";
+    string TimetableDurationFormat = "units";
+    string ContextIdentityKey = "";
+    string Error = "";
+    sealed record IdentityBinding(string ActorId, string SecurityStampHash, string SessionHash);
+    IdentityBinding? BoundIdentity;
+    string? BoundEventId;
+    bool HasBoundContext;
+    long LoadGeneration;
+    long ContextGeneration;
+    bool Disposed;
+
     string Link(string suffix) => "/events/" + Uri.EscapeDataString(EventId) + "/" + suffix;
-    protected override async Task OnParametersSetAsync() { View = null; Error = ""; try { View = await Core.ReadEventTabsAsync((await Authentication.GetAuthenticationStateAsync()).User, EventId); } catch { Error = "ログイン状態と現在のイベント閲覧権限を確認してください。"; } }
+
+    protected override void OnInitialized()
+    {
+        Authentication.AuthenticationStateChanged += AuthenticationChanged;
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var principal = (await Authentication.GetAuthenticationStateAsync()).User;
+        await RefreshContextAsync(EventId, principal);
+    }
+
+    async Task RefreshContextAsync(string eventId, System.Security.Claims.ClaimsPrincipal principal)
+    {
+        var identity = BindingFor(principal);
+        ContextIdentityKey = IdentityKey(identity);
+        var contextChanged = !HasBoundContext || BoundEventId != eventId || BoundIdentity != identity;
+        HasBoundContext = true;
+        BoundEventId = eventId;
+        BoundIdentity = identity;
+        if (contextChanged)
+        {
+            ContextGeneration++;
+            TimedRows = null;
+            TimedRowsEventId = null;
+            TimedRowsContextGeneration = -1;
+            TimetableClockFormat = "seconds";
+            TimetableDurationFormat = "units";
+            View = null;
+            StateHasChanged();
+        }
+        Error = "";
+        var generation = ++LoadGeneration;
+        try
+        {
+            var view = await Core.ReadEventTabsAsync(principal, eventId);
+            if (!Disposed && generation == LoadGeneration && eventId == EventId && BoundEventId == eventId && BoundIdentity == identity)
+            {
+                View = view;
+            }
+        }
+        catch (UnauthorizedAccessException)
+        {
+            if (!Disposed && generation == LoadGeneration && eventId == EventId && BoundEventId == eventId && BoundIdentity == identity)
+            {
+                ContextGeneration++;
+                TimedRows = null;
+                TimedRowsEventId = null;
+                TimedRowsContextGeneration = -1;
+                TimetableClockFormat = "seconds";
+                TimetableDurationFormat = "units";
+                ContextIdentityKey = "";
+                View = null;
+                Error = "ログイン状態と現在のイベント閲覧権限を確認してください。";
+            }
+        }
+        catch
+        {
+            if (!Disposed && generation == LoadGeneration && eventId == EventId && BoundEventId == eventId && BoundIdentity == identity)
+            {
+                if (contextChanged)
+                {
+                    View = null;
+                }
+                Error = "ログイン状態と現在のイベント閲覧権限を確認してください。";
+            }
+        }
+    }
+
+    async Task OnTimetableRowsUpdated((string EventId, long ContextGeneration, string ContextIdentityKey, IReadOnlyList<TimedPart>? Rows, string ClockFormat, string DurationFormat) update)
+    {
+        var principal = (await Authentication.GetAuthenticationStateAsync()).User;
+        if (BindingFor(principal) != BoundIdentity)
+        {
+            await RefreshContextAsync(EventId, principal);
+            return;
+        }
+        if (Disposed || update.EventId != EventId || update.EventId != BoundEventId ||
+            update.ContextGeneration != ContextGeneration || BoundIdentity is null ||
+            string.IsNullOrEmpty(ContextIdentityKey) || update.ContextIdentityKey != ContextIdentityKey)
+        {
+            return;
+        }
+
+        TimedRows = update.Rows is null ? null : Array.AsReadOnly(update.Rows.ToArray());
+        TimedRowsEventId = update.Rows is null ? null : update.EventId;
+        TimedRowsContextGeneration = update.Rows is null ? -1 : update.ContextGeneration;
+        TimetableClockFormat = update.ClockFormat is "seconds" or "minutes" ? update.ClockFormat : "seconds";
+        TimetableDurationFormat = update.DurationFormat is "units" or "colon" ? update.DurationFormat : "units";
+    }
+
+    string IdentityKey(IdentityBinding? identity) => identity is null
+        ? ""
+        : SemEndpoints.Hash($"{identity.ActorId}\u001f{identity.SecurityStampHash}\u001f{identity.SessionHash}");
+
+    void AuthenticationChanged(Task<AuthenticationState> stateTask)
+    {
+        _ = InvokeAsync(async () =>
+        {
+            System.Security.Claims.ClaimsPrincipal principal;
+            try
+            {
+                principal = (await stateTask).User;
+            }
+            catch
+            {
+                principal = new System.Security.Claims.ClaimsPrincipal(new System.Security.Claims.ClaimsIdentity());
+            }
+            if (Disposed)
+            {
+                return;
+            }
+            await RefreshContextAsync(EventId, principal);
+            if (!Disposed)
+            {
+                StateHasChanged();
+            }
+        });
+    }
+
+    IdentityBinding? BindingFor(System.Security.Claims.ClaimsPrincipal principal)
+    {
+        var claims = IdentityOptions.Value.ClaimsIdentity;
+        var actorId = principal.FindFirst(claims.UserIdClaimType)?.Value;
+        var stamp = principal.FindFirst(claims.SecurityStampClaimType)?.Value;
+        var session = principal.FindFirst(PasskeyAdditionService.SessionClaim)?.Value;
+        if (principal.Identity?.IsAuthenticated != true || string.IsNullOrWhiteSpace(actorId) ||
+            string.IsNullOrWhiteSpace(stamp) || string.IsNullOrWhiteSpace(session))
+        {
+            return null;
+        }
+        return new(actorId, SemEndpoints.Hash(stamp), SemEndpoints.Hash(session));
+    }
+
+    public void Dispose()
+    {
+        Disposed = true;
+        LoadGeneration++;
+        ContextGeneration++;
+        Authentication.AuthenticationStateChanged -= AuthenticationChanged;
+    }
 }

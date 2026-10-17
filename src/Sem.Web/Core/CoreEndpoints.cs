@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Antiforgery;
@@ -12,6 +13,7 @@ public static class CoreEndpoints
     // A 1 MiB UTF-8 CSV can expand sixfold when JSON-escaped; the 7 MiB envelope
     // leaves room for the fixed apply fields while keeping the in-memory read bounded.
     private const int EventImportRequestMaxBytes = 7 * 1024 * 1024;
+    private const int GlobalAdminAccountsRequestMaxBytes = 65_536;
     private static readonly JsonSerializerOptions EventImportJsonOptions = new(JsonSerializerDefaults.Web);
 
     private static async Task<T> ReadEventImportRequestAsync<T>(HttpRequest request, CancellationToken ct) where T : class
@@ -41,6 +43,12 @@ public static class CoreEndpoints
             {
                 var action = ctx.Request.RouteValues["action"]?.ToString();
                 var post = HttpMethods.IsPost(ctx.Request.Method);
+                var globalAdminAccountsAction = action == "admin-accounts";
+                if (globalAdminAccountsAction && !HttpMethods.IsGet(ctx.Request.Method) && !post)
+                {
+                    ctx.Response.StatusCode = 405;
+                    return;
+                }
                 var eventImport = action is "event-import-preview" or "event-import-apply";
                 var eventImportSample = action == "event-import-sample";
                 var eventImportContext = action == "event-import-context";
@@ -87,6 +95,12 @@ public static class CoreEndpoints
                     await ctx.Response.WriteAsJsonAsync(new ThemeAppearanceHttpResponse(eventId, appearance));
                     return;
                 }
+                if (globalAdminAccountsAction && !post)
+                {
+                    if (ctx.Request.Query.Count != 0) throw new ValidationException("クエリは指定できません。");
+                    await ctx.Response.WriteAsJsonAsync(await service.ReadGlobalAdminAccountsAsync(ctx.User, ctx.RequestAborted));
+                    return;
+                }
                 if (action == "profile-registration-history")
                 {
                     // This endpoint is read-only; reject writes before inspecting any request body.
@@ -121,6 +135,20 @@ public static class CoreEndpoints
                 if (post)
                 {
                     if (ctx.Request.Headers.Origin.ToString() != deployment.PublicUrl.TrimEnd('/')) throw new UnauthorizedAccessException();
+                    if (globalAdminAccountsAction)
+                    {
+                        var expectedActor = ctx.Request.Query["expectedActor"];
+                        if (ctx.Request.Query.Count != 1 || expectedActor.Count != 1 ||
+                            string.IsNullOrWhiteSpace(expectedActor[0]) || expectedActor[0]!.Length > 128 ||
+                            expectedActor[0]!.Any(char.IsControl) || ctx.Request.Headers.Origin.Count != 1)
+                            throw new ValidationException("操作者と送信元を確認してください。");
+                        await service.AuthorizeGlobalAdminAccountsAsync(ctx.User, expectedActor[0]!, ctx.RequestAborted);
+                        if (!ctx.Request.HasJsonContentType()) throw new ValidationException("JSON形式で送信してください。");
+                        if (ctx.Request.ContentLength > GlobalAdminAccountsRequestMaxBytes) throw new CoreRequestPayloadTooLargeException();
+                        var csrfHeader = ctx.Request.Headers["X-CSRF-TOKEN"];
+                        if (csrfHeader.Count != 1 || string.IsNullOrWhiteSpace(csrfHeader[0]))
+                            throw new ValidationException("CSRFヘッダーを確認してください。");
+                    }
                     if (profileImageAction)
                     {
                         (profileImageExpectedActor, profileImageExpectedVersion) = RequiredProfileImageQuery(ctx.Request.Query, action == "profile-image");
@@ -174,6 +202,7 @@ public static class CoreEndpoints
                         // Leave Kestrel chunk headroom while bounded readers retain their probe limit, so they can return a
                         // deterministic 413 without buffering beyond their effective request limits.
                         size.MaxRequestBodySize = eventImport ? EventImportRequestMaxBytes + 16 * 1024L :
+                            globalAdminAccountsAction ? GlobalAdminAccountsRequestMaxBytes + 16 * 1024L :
                             themeAppearanceWrite ? ThemeAppearanceRequestMaxBytes + 16 * 1024L :
                             action == "profile-image" ? ProfileImageNormalizer.MaxInputBytes + 16 * 1024L :
                             action == "profile-image-delete" ? 65536 + 16 * 1024L :
@@ -182,6 +211,13 @@ public static class CoreEndpoints
                     }
                     await csrf.ValidateRequestAsync(ctx);
                     if (eventImport && ctx.Request.ContentLength > EventImportRequestMaxBytes) throw new EventImportPayloadTooLargeException();
+                }
+                if (globalAdminAccountsAction && post)
+                {
+                    var edit = await ReadGlobalAdminRolesEditAsync(ctx.Request, ctx.RequestAborted);
+                    await service.SaveGlobalAdminRolesAsync(ctx.User, edit, ctx.RequestAborted);
+                    await ctx.Response.WriteAsJsonAsync(new { message = "アカウント権限を保存しました。" });
+                    return;
                 }
                 if (profileImageAction)
                 {
@@ -576,6 +612,61 @@ public static class CoreEndpoints
         if (body.Length > maxBytes) throw new CoreRequestPayloadTooLargeException();
         return JsonSerializer.Deserialize<T>(body.GetBuffer().AsSpan(0, (int)body.Length), ThemeAppearanceJsonOptions)
             ?? throw new ValidationException("入力が必要です。");
+    }
+
+    private static async Task<GlobalAdminRolesEdit> ReadGlobalAdminRolesEditAsync(HttpRequest request, CancellationToken ct)
+    {
+        if (!request.HasJsonContentType()) throw new ValidationException("JSON形式で送信してください。");
+        if (request.ContentLength > GlobalAdminAccountsRequestMaxBytes) throw new CoreRequestPayloadTooLargeException();
+        using var body = new MemoryStream();
+        var buffer = new byte[8192];
+        while (true)
+        {
+            var remaining = GlobalAdminAccountsRequestMaxBytes + 1 - (int)body.Length;
+            if (remaining <= 0) throw new CoreRequestPayloadTooLargeException();
+            var read = await request.Body.ReadAsync(buffer.AsMemory(0, Math.Min(buffer.Length, remaining)), ct);
+            if (read == 0) break;
+            await body.WriteAsync(buffer.AsMemory(0, read), ct);
+        }
+        if (body.Length > GlobalAdminAccountsRequestMaxBytes) throw new CoreRequestPayloadTooLargeException();
+        string json;
+        try { json = new UTF8Encoding(false, true).GetString(body.GetBuffer(), 0, (int)body.Length); }
+        catch (DecoderFallbackException) { throw new ValidationException("UTF-8 JSONを指定してください。"); }
+
+        using var document = JsonDocument.Parse(json, new JsonDocumentOptions { MaxDepth = 8 });
+        var root = document.RootElement;
+        static Dictionary<string, JsonElement> ExactObject(JsonElement value, string[] allowed, string label)
+        {
+            if (value.ValueKind != JsonValueKind.Object) throw new ValidationException(label + "はJSONオブジェクトで指定してください。");
+            var properties = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
+            foreach (var property in value.EnumerateObject())
+                if (!allowed.Contains(property.Name, StringComparer.Ordinal) || !properties.TryAdd(property.Name, property.Value))
+                    throw new ValidationException("不明または重複した項目があります。");
+            return properties;
+        }
+        var rootProperties = ExactObject(root, ["changes"], "入力");
+        if (rootProperties.Count != 1 || !rootProperties.TryGetValue("changes", out var rows) || rows.ValueKind != JsonValueKind.Array)
+            throw new ValidationException("変更一覧を指定してください。");
+        if (rows.GetArrayLength() > 500) throw new ValidationException("変更件数が上限を超えています。");
+        var changes = new List<GlobalAdminRoleChange>();
+        foreach (var row in rows.EnumerateArray())
+        {
+            var fields = ExactObject(row, ["userId", "expectedConcurrencyStamp", "isAdmin"], "変更行");
+            if (fields.Count != 3 ||
+                !fields.TryGetValue("userId", out var idValue) || idValue.ValueKind != JsonValueKind.String ||
+                !fields.TryGetValue("expectedConcurrencyStamp", out var stampValue) || stampValue.ValueKind != JsonValueKind.String ||
+                !fields.TryGetValue("isAdmin", out var adminValue) || adminValue.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+                throw new ValidationException("変更行の項目を確認してください。");
+            var id = idValue.GetString()!;
+            var stamp = stampValue.GetString()!;
+            if (string.IsNullOrWhiteSpace(id) || id.Length > 128 || id.Any(char.IsControl) ||
+                stamp.Length > 128 || stamp.Any(char.IsControl))
+                throw new ValidationException("変更行の識別子または更新版を確認してください。");
+            changes.Add(new(id, stamp, adminValue.GetBoolean()));
+        }
+        if (changes.Select(x => x.UserId).Distinct(StringComparer.Ordinal).Count() != changes.Count)
+            throw new ValidationException("同じアカウントが複数回指定されています。");
+        return new(changes.ToArray());
     }
 
     private sealed class CoreRequestPayloadTooLargeException : Exception { }

@@ -29,6 +29,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<PasskeyRecoveryRateState> PasskeyRecoveryRateStates => Set<PasskeyRecoveryRateState>();
     public DbSet<PasskeyRecoveryMail> PasskeyRecoveryMails => Set<PasskeyRecoveryMail>();
     public DbSet<PasskeyRecoveryAudit> PasskeyRecoveryAudits => Set<PasskeyRecoveryAudit>();
+    public DbSet<PasskeyDeletionProof> PasskeyDeletionProofs => Set<PasskeyDeletionProof>();
     public DbSet<RevokedAuthSession> RevokedAuthSessions => Set<RevokedAuthSession>();
     public DbSet<ServiceSettings> ServiceSettings => Set<ServiceSettings>();
     public DbSet<UserProfile> UserProfiles => Set<UserProfile>();
@@ -482,12 +483,33 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         b.Entity<Invitation>().Property(i => i.Purpose).HasMaxLength(500);
         b.Entity<Invitation>().Property(i => i.IssuanceSource).HasMaxLength(32);
         b.Entity<Invitation>().HasIndex(i => i.TokenHash).IsUnique();
+        b.Entity<Invitation>().HasIndex(i => i.RequestId).IsUnique()
+            .HasFilter("\"RequestId\" IS NOT NULL");
+        b.Entity<InvitationRequest>().Property(r => r.DecisionComment).HasMaxLength(500);
         b.Entity<EmailTicket>().HasIndex(t => t.Hash).IsUnique();
         b.Entity<PushDevice>().HasIndex(d => d.Endpoint).IsUnique();
         b.Entity<Participation>().HasIndex(p => new { p.EventId, p.UserId }).IsUnique();
         b.Entity<PasskeyAddition>().HasIndex(p => p.EmailTokenHash).IsUnique();
         b.Entity<PasskeyAddition>().HasIndex(p => new { p.UserId, p.SessionHash })
             .IsUnique().HasFilter("\"Cancelled\" = 0 AND \"CompletedAt\" IS NULL");
+        b.Entity<PasskeyDeletionProof>().Property(p => p.Id).HasMaxLength(32);
+        b.Entity<PasskeyDeletionProof>().Property(p => p.UserId).HasMaxLength(450);
+        b.Entity<PasskeyDeletionProof>().Property(p => p.CredentialHash).HasMaxLength(64);
+        b.Entity<PasskeyDeletionProof>().Property(p => p.SessionHash).HasMaxLength(64);
+        b.Entity<PasskeyDeletionProof>().Property(p => p.ChallengeHash).HasMaxLength(64);
+        b.Entity<PasskeyDeletionProof>().HasOne<ApplicationUser>().WithMany()
+            .HasForeignKey(p => p.UserId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<PasskeyDeletionProof>().HasIndex(p => new { p.UserId, p.SessionHash })
+            .HasFilter("\"ConsumedAt\" IS NULL");
+        b.Entity<PasskeyDeletionProof>().ToTable("PasskeyDeletionProofs", t =>
+        {
+            t.HasCheckConstraint("CK_PasskeyDeletionProof_Hashes",
+                "length(\"CredentialHash\")=64 AND length(\"SessionHash\")=64 AND length(\"SecurityStamp\")>0 AND (\"ChallengeHash\" IS NULL OR length(\"ChallengeHash\")=64)");
+            t.HasCheckConstraint("CK_PasskeyDeletionProof_Time",
+                "\"CreatedAt\">=0 AND \"ExpiresAt\">\"CreatedAt\" AND (\"VerifiedAt\" IS NULL OR (\"VerifiedAt\">=\"CreatedAt\" AND \"VerifiedAt\"<\"ExpiresAt\")) AND (\"ConsumedAt\" IS NULL OR \"ConsumedAt\">=\"CreatedAt\")");
+            t.HasCheckConstraint("CK_PasskeyDeletionProof_State",
+                "\"ConsumedAt\" IS NOT NULL OR (\"VerifiedAt\" IS NULL AND \"ChallengeHash\" IS NOT NULL) OR (\"VerifiedAt\" IS NOT NULL AND \"ChallengeHash\" IS NULL)");
+        });
         b.Entity<ThemeCatalogEntry>().HasKey(x => x.Id);
         b.Entity<ThemeCatalogEntry>().Property(x => x.Id).HasMaxLength(64);
         b.Entity<ThemeCatalogEntry>().Property(x => x.Name).HasMaxLength(30);

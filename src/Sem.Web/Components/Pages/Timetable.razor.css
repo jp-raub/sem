@@ -1,0 +1,12 @@
+.timetable-view{min-width:0}
+.timetable-view-embedded{padding-top:4px}
+.timetable-view-embedded>h2{margin:0 0 14px}
+.timetable-embedded-links{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px}
+.timetable-embedded-links a{min-height:44px;display:inline-flex;align-items:center;padding:6px 10px}
+.timetable-table-scroll{max-width:100%;overflow-x:auto;overscroll-behavior-inline:contain}
+.timetable-table-scroll table{min-width:680px}
+@media(max-width:600px){.timetable-view-embedded>h2{font-size:1.25rem}.timetable-embedded-links{gap:4px}.timetable-table-scroll table{min-width:620px}}
+.timetable-calculation-details{margin:8px 0 12px}
+.timetable-calculation-details>summary{min-height:40px;display:flex;align-items:center;cursor:pointer;font-weight:650;color:var(--appearance-accent,#1e6557)}
+.timetable-calculation-details[open]>summary{margin-bottom:8px}
+.timetable-view-embedded .timetable-calculation-details:not([open]){padding:0}

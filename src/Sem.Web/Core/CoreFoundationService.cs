@@ -23,6 +23,14 @@ public sealed record EventView(string Id, string Title, string Description, stri
     string? OpensAt, string AnnouncementMessage, string PhaseKind, string[] ManagerIds, long RowVersion, bool CanManage, string ActivePhaseName, string ActivePhaseKind, int MaxPicks, bool ManualPhaseOverride);
 public sealed record WorkspaceView(ServiceView Service, ProfileView Profile, string Email, bool IsAdmin, MemberView[] Members, EventView[] Events);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record GlobalAdminAccountView(string UserId, string DisplayName, string Email, bool IsAdmin, bool Enabled,
+    bool EmailConfirmed, bool Bootstrap, bool IsRecovering, string ConcurrencyStamp, string LastLoginDisplay);
+public sealed record GlobalAdminAccountsView(string ActorId, GlobalAdminAccountView[] Accounts);
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record GlobalAdminRoleChange(string UserId, string ExpectedConcurrencyStamp, bool IsAdmin);
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record GlobalAdminRolesEdit(GlobalAdminRoleChange[] Changes);
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record ServiceEdit(string Name, string Description, long RowVersion);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record ProfileEdit(string DisplayName, string Reading, string CallName, SocialLink[] Social, long RowVersion);
@@ -73,6 +81,94 @@ public sealed partial class CoreFoundationService(IDbContextFactory<ApplicationD
                 e.ScheduledDate, e.OpensAt, e.AnnouncementMessage, e.PhaseKind, e.Admins.Select(a => a.UserId).Order().ToArray(),
                 e.RowVersion, user.IsAdmin || e.Admins.Any(a => a.UserId == user.Id), e.Phases.Single(p => p.IsActive).Name,
                 e.Phases.Single(p => p.IsActive).Kind, e.Phases.Single(p => p.IsActive).MaxPicks, e.ManualPhaseOverride)).ToArray());
+    }
+    public async Task<GlobalAdminAccountsView> ReadGlobalAdminAccountsAsync(ClaimsPrincipal principal, CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var actor = await Actor(db, principal, ct);
+        if (!actor.IsAdmin) throw new UnauthorizedAccessException("全体管理者のみ閲覧できます。");
+        var now = clock.GetUtcNow().ToUnixTimeSeconds();
+        var recoveringIds = (await db.PasskeyRecoveryOperations.AsNoTracking()
+            .Where(x => x.ExpiresAt > now &&
+                (x.Status == "Pending" || x.Status == "EmailConfirmed" || x.Status == "HostPrepared"))
+            .Select(x => x.UserId).Distinct().ToArrayAsync(ct)).ToHashSet(StringComparer.Ordinal);
+        var accounts = await db.Users.AsNoTracking().OrderBy(x => x.DisplayName).ThenBy(x => x.Id)
+            .Select(x => new
+            {
+                x.Id, x.DisplayName, x.Email, x.IsAdmin, x.Enabled, x.EmailConfirmed, x.Bootstrap,
+                x.ConcurrencyStamp
+            }).ToArrayAsync(ct);
+        return new(actor.Id, accounts.Select(x => new GlobalAdminAccountView(
+            x.Id, x.DisplayName, x.Email ?? "", x.IsAdmin, x.Enabled, x.EmailConfirmed, x.Bootstrap,
+            recoveringIds.Contains(x.Id), x.ConcurrencyStamp ?? "", "記録なし")).ToArray());
+    }
+    public async Task AuthorizeGlobalAdminAccountsAsync(ClaimsPrincipal principal, string expectedActor, CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var actor = await Actor(db, principal, ct);
+        var claimActor = principal.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (!actor.IsAdmin || string.IsNullOrWhiteSpace(claimActor) ||
+            !string.Equals(actor.Id, expectedActor, StringComparison.Ordinal) ||
+            !string.Equals(claimActor, expectedActor, StringComparison.Ordinal))
+            throw new UnauthorizedAccessException("全体管理者の操作者確認に失敗しました。");
+    }
+    public async Task SaveGlobalAdminRolesAsync(ClaimsPrincipal principal, GlobalAdminRolesEdit edit, CancellationToken ct = default)
+    {
+        var changes = edit.Changes ?? throw new ValidationException("変更内容を確認してください。");
+        if (changes.Length > 500 || changes.Any(x => x is null ||
+                string.IsNullOrWhiteSpace(x.UserId) || x.UserId.Length > 128 || x.UserId.Any(char.IsControl) ||
+                x.ExpectedConcurrencyStamp is null || x.ExpectedConcurrencyStamp.Length > 128 ||
+                x.ExpectedConcurrencyStamp.Any(char.IsControl)) ||
+            changes.Select(x => x.UserId).Distinct(StringComparer.Ordinal).Count() != changes.Length)
+            throw new ValidationException("アカウントの変更内容を確認してください。");
+
+        await using var db = await factory.CreateDbContextAsync(ct);
+        await using var tx = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
+        var actor = await Actor(db, principal, ct);
+        if (!actor.IsAdmin) throw new UnauthorizedAccessException("全体管理者のみ変更できます。");
+        var ids = changes.Select(x => x.UserId).ToArray();
+        var targets = await db.Users.Where(x => ids.Contains(x.Id)).ToDictionaryAsync(x => x.Id, StringComparer.Ordinal, ct);
+        if (targets.Count != changes.Length) throw new CoreConflictException();
+
+        foreach (var change in changes)
+        {
+            var target = targets[change.UserId];
+            if (!string.Equals(target.ConcurrencyStamp ?? "", change.ExpectedConcurrencyStamp, StringComparison.Ordinal))
+                throw new CoreConflictException();
+            if (target.Bootstrap && target.IsAdmin && !change.IsAdmin)
+                throw new ValidationException("Bootstrap 管理者の全体管理者権限は解除できません。");
+            if (change.IsAdmin && !target.IsAdmin)
+            {
+                if (!target.Enabled || !target.EmailConfirmed)
+                    throw new ValidationException("未有効またはメール未確認のアカウントには全体管理者権限を付与できません。");
+                var now = clock.GetUtcNow().ToUnixTimeSeconds();
+                if (await db.PasskeyRecoveryOperations.AnyAsync(x => x.UserId == target.Id &&
+                        x.ExpiresAt > now && (x.Status == "Pending" || x.Status == "EmailConfirmed" || x.Status == "HostPrepared"), ct))
+                    throw new ValidationException("復旧中のアカウントには全体管理者権限を付与できません。");
+            }
+        }
+
+        var activeAdminCount = await db.Users.CountAsync(x => x.IsAdmin && x.Enabled && x.EmailConfirmed, ct);
+        var finalActiveAdminCount = activeAdminCount;
+        foreach (var change in changes)
+        {
+            var target = targets[change.UserId];
+            if (!target.Enabled || !target.EmailConfirmed || target.IsAdmin == change.IsAdmin) continue;
+            finalActiveAdminCount += change.IsAdmin ? 1 : -1;
+        }
+        if (finalActiveAdminCount < 1)
+            throw new ValidationException("最後の有効な全体管理者の権限は解除できません。");
+
+        foreach (var change in changes)
+        {
+            var target = targets[change.UserId];
+            if (target.IsAdmin == change.IsAdmin) continue;
+            target.IsAdmin = change.IsAdmin;
+            target.ConcurrencyStamp = Guid.NewGuid().ToString("N");
+            Audit(db, actor.Id, change.IsAdmin ? "GlobalAdminGranted" : "GlobalAdminRevoked", target.Id);
+        }
+        await db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
     }
     public async Task<ProfileView> ReadProfileAsync(ClaimsPrincipal principal, string id, CancellationToken ct = default)
     {

@@ -1,5 +1,18 @@
 'use strict';
+const fs=require('node:fs');
+const path=require('node:path');
 module.exports=async({p,g,ok})=>{
+ const sourceRoot=path.resolve(__dirname,'..','src','Sem.Web','Components','Pages');
+ const overviewSource=fs.readFileSync(path.join(sourceRoot,'EventOverview.razor'),'utf8');
+ const timetableSource=fs.readFileSync(path.join(sourceRoot,'Timetable.razor'),'utf8');
+ const participationSource=fs.readFileSync(path.join(sourceRoot,'Participation.razor'),'utf8');
+ for(const [name,source] of [['EventOverview',overviewSource],['Timetable',timetableSource],['Participation',participationSource]]){
+  ok(source.includes('UserIdClaimType')&&source.includes('SecurityStampClaimType')&&source.includes('PasskeyAdditionService.SessionClaim')&&source.includes('SemEndpoints.Hash'),name+' binds retained UI state to actor security stamp and authentication session');
+ }
+ ok(overviewSource.includes('if (contextChanged)')&&overviewSource.includes('BoundEventId == eventId && BoundIdentity == identity'),'Same overview event/auth binding keeps the mounted child components during parameter refresh');
+ ok(timetableSource.includes('BoundEventId==EventId&&BoundIdentity==identity')&&participationSource.includes('BoundEventId==EventId&&BoundIdentity==identity'),'Same event/auth binding does not reset timetable or participation local state');
+ ok(/if\(HasBoundContext&&BoundEventId==EventId&&BoundIdentity==identity\)return false;[\s\S]*?ClearContext\(\);return true;/.test(timetableSource)&&/if\(HasBoundContext&&BoundEventId==EventId&&BoundIdentity==identity\)return false;[\s\S]*?ClearContext\(\);return true;/.test(participationSource),'An event or actor/stamp/session binding change clears each child context before reloading');
+ ok(overviewSource.includes('Authentication.AuthenticationStateChanged += AuthenticationChanged')&&overviewSource.includes('Authentication.AuthenticationStateChanged -= AuthenticationChanged'),'An identity/session change clears the embedded child subtree and the subscription is disposed');
  const origin='https://localhost:18443';
  const api=(action,data,q='')=>p.evaluate(async({action,data,q})=>{const{token}=await(await fetch('/api/csrf')).json();const r=await fetch('/api/core/'+action+q,{method:data===undefined?'GET':'POST',headers:data===undefined?{}:{'Content-Type':'application/json','X-CSRF-TOKEN':token},body:data===undefined?undefined:JSON.stringify(data)});return{status:r.status,body:await r.json()};},{action,data,q});
  const fixture=(await api('workspace')).body.events.find(e=>e.title==='Profile-link native fixture');if(!fixture)throw Error('Profile-link event missing');
@@ -9,6 +22,12 @@ module.exports=async({p,g,ok})=>{
  const selected=page=>page.locator('[role=tab][aria-selected=true]').getAttribute('data-event-tab');
  try{
   await a.setViewportSize({width:390,height:844});await a.goto(origin+'/events/'+fixture.id);await ready(a);
+  await a.locator('#event-timetable-section #event-timetable-heading').waitFor();
+  await a.locator('#event-participation-section #event-participation-heading').waitFor();
+  ok(await a.locator('#event-timetable-section').count()===1&&await a.locator('#event-participation-section').count()===1,'Main overview reuses the existing timetable and participation screens in the same event view');
+  const duplicateIds=await a.locator('[id]').evaluateAll(elements=>{const counts=new Map();for(const element of elements)counts.set(element.id,(counts.get(element.id)||0)+1);return [...counts].filter(([,count])=>count>1).map(([id])=>id);});
+  ok(duplicateIds.length===0,'Integrated overview has no duplicate DOM ids: '+duplicateIds.join(','));
+  ok(await a.locator('title').count()===1,'Embedded screens do not add duplicate PageTitle elements');
   ok((await a.locator('[role=tab]').evaluateAll(bs=>bs.map(b=>b.dataset.eventTab))).join(',')==='main,roster','Ordinary off-day event shows only main and public roster tabs');
   ok(await a.locator('#event-overview-title').innerText()===fixture.title,'Main overview reads approved event title');
   await a.locator('[data-event-tab=main]').focus();await a.keyboard.press('End');await a.waitForURL('**/participants');await ready(a);await a.locator('[data-participant-roster-user]').first().waitFor();

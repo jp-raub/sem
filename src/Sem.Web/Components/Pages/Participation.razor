@@ -1,40 +1,137 @@
 @page "/events/{EventId}/participation"
 @rendermode InteractiveServer
 @using Sem.Web.Core
+@using Sem.Web.Runtime
 @using System.Security.Claims
 @inject AuthenticationStateProvider Authentication
 @inject CoreFoundationService Core
-<PageTitle>イベント参加登録</PageTitle>
-<h1>イベント参加登録：@Plan?.Title</h1><p><a href="/workspace">業務基盤へ戻る</a></p>
+@inject Microsoft.Extensions.Options.IOptions<Microsoft.AspNetCore.Identity.IdentityOptions> IdentityOptions
+@if (!Embedded)
+{
+    <PageTitle>イベント参加登録</PageTitle>
+}
+<div class="participation-view @(Embedded ? "participation-view-embedded" : "")">
+<NavigationLock ConfirmExternalNavigation="@Uncertain" OnBeforeInternalNavigation="PreventUncertainNavigation" />
+@if (Embedded)
+{
+    <h2 id="event-participation-heading">参加登録・観覧</h2>
+}
+else
+{
+    <h1>イベント参加登録：@Plan?.Title</h1>
+    <p><a href="/workspace">業務基盤へ戻る</a></p>
+}
 <p>選択枠を一括登録します。競合・上限により一部だけ成功する場合があります。本人による取消はできません。解除は管理者へ依頼してください。</p>
 <p id="participation-error" role="alert">@Error</p><p id="participation-message" role="status">@Message</p>
 @if(Plan is not null){
  <p id="participation-phase">@Plan.PhaseName（@Plan.PhaseKind）／このフェーズの登録 @Plan.OwnPhaseSongCount 曲・上限 @(Plan.MaxPicks<0?"制限なし":Plan.MaxPicks.ToString())</p>
  <p id="participation-count">参加人数 @Plan.ParticipantCount ／ @(Plan.Capacity?.ToString()??"制限なし") 人（観覧を含むユニーク人数）</p>
  <button id="participation-refresh" disabled="@Busy" @onclick="Load">最新状態を取得</button>
+ @if(Embedded){<p class="participation-refresh-note">他の画面でイベントが更新されて競合した場合は、最新状態を取得してから再操作してください。最新状態の取得では未保存の枠選択・設問回答が再読込されます。</p>}
  <fieldset disabled="@Uncertain">
  @if(Plan.CanManage){<section class="panel"><h2>管理者操作</h2><label>対象者<select id="participation-subject" value="@(Subject??CurrentId)" @onchange="ChangeSubject" disabled="@Busy">@foreach(var u in Members){<option value="@u.UserId">@u.DisplayName</option>}</select></label>
  <label><input id="participation-exception" type="checkbox" @bind="Exception" disabled="@Busy" />声／楽器の兼務制約の例外登録</label><label><input id="participation-release-mode" type="checkbox" @bind="ReleaseMode" disabled="@Busy" />登録解除モード</label><label>例外／解除理由<input id="participation-reason" @bind="Reason" maxlength="500" /></label><p>例外は兼務制約のみ。現在の受付フェーズ・曲数・人数上限を回避しません。他人の保存済み回答は表示しません。</p>
  <label>参加人数上限（空欄は制限なし）<input id="participation-capacity" @bind="Capacity" /></label><button id="participation-capacity-save" disabled="@Busy" @onclick="SaveCapacity">人数上限を保存</button></section>}
- <table><thead><tr><th>選択</th><th>曲</th><th>パート</th><th>担当</th></tr></thead><tbody>
- @foreach(var p in Plan.Slots){<tr data-participation-slot="@p.Id"><td><input data-participation-select="@p.Id" type="checkbox" checked="@Selected.Contains(p.Id)" disabled="@(Busy||(ReleaseMode?!Plan.CanManage||p.AssignedUserId!=Plan.OwnUserId:p.AssignedUserId!=null||Plan.PhaseKind!="Custom"||Plan.MaxPicks==0))" @onchange="a=>Toggle(p.Id,a.Value is true)" /></td><td>@p.Title</td><td>@p.PartName（@(p.Category=="Sing"?"声":"楽器")）</td><td>@(p.AssignedName??"空き枠")</td></tr>}
- </tbody></table>
- <section class="panel"><h2>イベント設問</h2>@foreach(var q in Plan.Questions){<label>@q.Text（@(q.Required?"必須":"任意")）<span data-answer-publication="@q.Id">@(q.Public?(q.Type=="Text"&&q.PublicText?"回答数・回答者・回答本文がイベント閲覧者に公開されます。":q.Type=="Text"?"回答数と回答者がイベント閲覧者に公開されます。本文は公開されません。":"YES／NOの回答と回答者がイベント閲覧者に公開されます。"):"回答は公開集計に含めません。")</span>@if(q.Type=="YesNo"){<select data-participation-answer="@q.Id" value="@Values.GetValueOrDefault(q.Id)" @onchange="a=>Values[q.Id]=a.Value?.ToString()" disabled="@(Busy||ReleaseMode||Plan.PhaseKind!="Custom")"><option value="">未回答</option><option value="YES">YES</option><option value="NO">NO</option></select>}else{<textarea data-participation-answer="@q.Id" value="@Values.GetValueOrDefault(q.Id)" @onchange="a=>Values[q.Id]=a.Value?.ToString()" maxlength="2000" disabled="@(Busy||ReleaseMode||Plan.PhaseKind!="Custom")"></textarea>}</label>}</section>
- <label>申込みと一緒に本人として投稿するコメント（任意・3文字以上・イベント閲覧者に公開）<textarea id="participation-comment" @bind="Comment" disabled="@(Busy||ReleaseMode)"></textarea></label>
- <button id="participation-submit" disabled="@(Busy||ReleaseMode&&Selected.Count==0||!ReleaseMode&&Plan.PhaseKind!="Custom"||!ReleaseMode&&Selected.Count>0&&Plan.MaxPicks==0||!ReleaseMode&&Subject is not null&&Subject!=CurrentId&&Selected.Count==0)" @onclick="Submit">@(ReleaseMode?"選択した登録を解除":Selected.Count>0?"選択枠を登録":HasParticipation?"設問回答を更新":"観覧のみで申し込む")</button>
- @if(Last is not null){<ul id="participation-results">@foreach(var item in Last.Items){<li>@(item.Success?"成功":"未登録")：@Code(item.Code)</li>}</ul>}
+ <div class="participation-entry-layout @(Embedded ? "participation-entry-layout-embedded" : "participation-entry-layout-standalone")">
+  <div class="participation-slot-area">
+   @if(ShowMatrix)
+   {
+    <Sem.Web.Components.Shared.EventPartMatrix Rows="@(MatrixRows!)"
+                                                Slots="@Plan.Slots"
+                                                SelectedIds="@Selected"
+                                                IsDisabled="SlotDisabled"
+                                                OnToggle="OnMatrixToggle"
+                                                OwnUserId="@Plan.OwnUserId"
+                                                ReleaseMode="@ReleaseMode"
+                                                ClockFormat="@TimetableClockFormat"
+                                                DurationFormat="@TimetableDurationFormat" />
+   }
+   @if(Embedded && (MatrixRows is null || MatrixRows.Count == 0))
+   {
+    <p class="participation-matrix-fallback" role="status">タイムテーブル行を確認できないため、現在の枠一覧を表示しています。</p>
+   }
+   else if(Embedded && FallbackSlots.Count > 0)
+   {
+    <p class="participation-matrix-fallback" role="status">タイムテーブルに含まれていない曲の参加枠は、下の一覧に表示しています。</p>
+   }
+   @if(ShowFallbackTable)
+   {
+    <div class="participation-table-scroll"><table><thead><tr><th>選択</th><th>曲</th><th>パート</th><th>担当</th></tr></thead><tbody>
+    @foreach(var p in FallbackSlots){<tr data-participation-slot="@p.Id"><td><input data-participation-select="@p.Id" type="checkbox" checked="@Selected.Contains(p.Id)" disabled="@SlotDisabled(p)" @onchange="a=>Toggle(p.Id,a.Value is true)" /></td><td>@p.Title</td><td>@p.PartName（@(p.Category=="Sing"?"声":"楽器")）</td><td>@(p.AssignedName??"空き枠")</td></tr>}
+    </tbody></table></div>
+   }
+  </div>
+  <aside class="participation-entry-panel">
+   @if(Embedded)
+   {
+    <p class="participation-entry-eyebrow">YOUR ENTRY</p>
+    <h3>参加パートを登録</h3>
+    <div class="participation-selection-list" aria-live="polite">
+     @if(Selected.Count == 0)
+     {
+      <p class="participation-selection-empty">左の空き枠を選択すると、ここに候補が表示されます。</p>
+     }
+     else
+     {
+      @foreach(var slot in Plan.Slots.Where(x=>Selected.Contains(x.Id)))
+      {
+       <div class="participation-selection-chip">
+        <span>@slot.Title / @slot.PartName</span>
+        <button type="button" aria-label="@($"{slot.Title} / {slot.PartName} の選択を解除")" disabled="@Busy" @onclick="()=>Toggle(slot.Id,false)">×</button>
+       </div>
+      }
+     }
+    </div>
+   }
+   <section class="panel"><h2>イベント設問</h2>@foreach(var q in Plan.Questions){<label>@q.Text（@(q.Required?"必須":"任意")）<span data-answer-publication="@q.Id">@(q.Public?(q.Type=="Text"&&q.PublicText?"回答数・回答者・回答本文がイベント閲覧者に公開されます。":q.Type=="Text"?"回答数と回答者がイベント閲覧者に公開されます。本文は公開されません。":"YES／NOの回答と回答者がイベント閲覧者に公開されます。"):"回答は公開集計に含めません。")</span>@if(q.Type=="YesNo"){<select data-participation-answer="@q.Id" value="@Values.GetValueOrDefault(q.Id)" @onchange="a=>Values[q.Id]=a.Value?.ToString()" disabled="@(Busy||ReleaseMode||Plan.PhaseKind!="Custom")"><option value="">未回答</option><option value="YES">YES</option><option value="NO">NO</option></select>}else{<textarea data-participation-answer="@q.Id" value="@Values.GetValueOrDefault(q.Id)" @onchange="a=>Values[q.Id]=a.Value?.ToString()" maxlength="2000" disabled="@(Busy||ReleaseMode||Plan.PhaseKind!="Custom")"></textarea>}</label>}</section>
+   <label>申込みと一緒に本人として投稿するコメント（任意・3文字以上・イベント閲覧者に公開）<textarea id="participation-comment" @bind="Comment" disabled="@(Busy||ReleaseMode)"></textarea></label>
+   <button id="participation-submit" disabled="@(Busy||ReleaseMode&&Selected.Count==0||!ReleaseMode&&Plan.PhaseKind!="Custom"||!ReleaseMode&&Selected.Count>0&&Plan.MaxPicks==0||!ReleaseMode&&Subject is not null&&Subject!=CurrentId&&Selected.Count==0)" @onclick="Submit">@(ReleaseMode?"選択した登録を解除":Selected.Count>0?"選択枠を登録":HasParticipation?"設問回答を更新":"観覧のみで申し込む")</button>
+   @if(Last is not null){<ul id="participation-results">@foreach(var item in Last.Items){<li>@(item.Success?"成功":"未登録")：@Code(item.Code)</li>}</ul>}
+  </aside>
+ </div>
  <section><h2>観覧のみの申込み</h2>@foreach(var s in Plan.Spectators){<p>@s.Name @if(Plan.CanManage){<button data-participation-remove-spectator="@s.UserId" disabled="@Busy" @onclick="()=>RemoveSpectator(s.UserId)">管理者による削除</button>}</p>}</section>
- <p><a href="@($"/events/{EventId}/public-answers")">公開回答集計を見る</a>。<a href="@($"/events/{EventId}/comments")">コメントのみ投稿・一覧へ</a>。統合画面は後続の実装です。通知・進行はそれぞれの専用画面で確認してください。</p>
+ <p><a href="@($"/events/{EventId}/public-answers")">公開回答集計を見る</a>。<a href="@($"/events/{EventId}/comments")">コメントのみ投稿・一覧へ</a>。通知・進行はそれぞれの専用画面で確認してください。</p>
  </fieldset>
  @if(Uncertain){<p role="alert">送信結果が未確認です。同じ操作IDで結果を確認します。入力は変更しないでください。</p><button id="participation-retry" disabled="@Busy" @onclick="Submit">同じ操作IDで結果を確認／再試行</button>}
 }
+</div>
 @code{
  [Parameter]public string EventId{get;set;}="";
+ [Parameter]public bool Embedded{get;set;}
+ [Parameter]public long ContextGeneration{get;set;}
+ [Parameter]public string? TimedRowsEventId{get;set;}
+ [Parameter]public long TimedRowsContextGeneration{get;set;}=-1;
+ [Parameter]public IReadOnlyList<TimedPart>? TimedRows{get;set;}
+ [Parameter]public string TimetableClockFormat{get;set;}="seconds";
+ [Parameter]public string TimetableDurationFormat{get;set;}="units";
+ sealed record IdentityBinding(string ActorId,string SecurityStampHash,string SessionHash);
+ IdentityBinding?BoundIdentity;string?BoundEventId;bool HasBoundContext;long LoadGeneration;
  ParticipationPlan?Plan;ParticipationResult?Last;MemberView[]Members=[];HashSet<string>Selected=[];Dictionary<string,string?>Values=[];string?Subject;string CurrentId="",Error="",Message="",Reason="",Capacity="";bool Busy,Exception,Uncertain;ParticipationEdit?Pending;string Comment="";bool _release;
  bool ReleaseMode{get=>_release;set{_release=value;Selected.Clear();}}
  bool HasParticipation=>Plan is not null&&(Plan.OwnSpectator||Plan.Slots.Any(x=>x.AssignedUserId==Plan.OwnUserId));
- protected override async Task OnParametersSetAsync(){Subject=null;Pending=null;Uncertain=false;Comment="";await Load();}
- async Task Load(){try{var principal=(await Authentication.GetAuthenticationStateAsync()).User;CurrentId=principal.FindFirstValue(ClaimTypes.NameIdentifier)??"";Plan=await Core.ReadParticipationAsync(principal,EventId,subjectId:Subject);if(Plan.CanManage)Members=(await Core.ReadAsync(principal)).Members;Selected.Clear();Values=Plan.Questions.ToDictionary(x=>x.Id,x=>x.OwnValue);Capacity=Plan.Capacity?.ToString()??"";Error="";}catch{Clear();Error="ログイン状態とイベントの公開・権限を確認してください。";}}
+ IReadOnlyList<TimedPart>? MatrixRows=>Embedded&&TimedRowsEventId==EventId&&TimedRowsContextGeneration==ContextGeneration?TimedRows:null;
+ bool ShowMatrix=>Embedded&&MatrixRows is {Count:>0};
+ IReadOnlyList<ParticipationSlot> FallbackSlots
+ {
+  get
+  {
+   if(Plan is null)return Array.Empty<ParticipationSlot>();
+   var rows=MatrixRows;
+   if(!Embedded||rows is null||rows.Count==0)return Plan.Slots;
+   var timedSongIds=rows.Where(row=>row.Kind=="Song"&&row.SongId is not null).Select(row=>row.SongId!).ToHashSet(StringComparer.Ordinal);
+   return Plan.Slots.Where(slot=>!timedSongIds.Contains(slot.SongId)).ToArray();
+  }
+ }
+ bool ShowFallbackTable=>!Embedded||MatrixRows is null||MatrixRows.Count==0||FallbackSlots.Count>0;
+ bool SlotDisabled(ParticipationSlot slot)=>Plan is null||Busy||(ReleaseMode?!Plan.CanManage||slot.AssignedUserId!=Plan.OwnUserId:slot.AssignedUserId is not null||Plan.PhaseKind!="Custom"||Plan.MaxPicks==0);
+ Task OnMatrixToggle(string id){Toggle(id,!Selected.Contains(id));return Task.CompletedTask;}
+ void PreventUncertainNavigation(Microsoft.AspNetCore.Components.Routing.LocationChangingContext context){if(Uncertain){context.PreventNavigation();Error="送信結果が未確認です。同じ操作IDで結果を確認／再試行してから移動してください。";}}
+ protected override async Task OnParametersSetAsync(){var principal=(await Authentication.GetAuthenticationStateAsync()).User;if(BindContext(principal))await Load(principal,++LoadGeneration);}
+ IdentityBinding? BindingFor(ClaimsPrincipal principal){var claims=IdentityOptions.Value.ClaimsIdentity;var actor=principal.FindFirst(claims.UserIdClaimType)?.Value;var stamp=principal.FindFirst(claims.SecurityStampClaimType)?.Value;var session=principal.FindFirst(PasskeyAdditionService.SessionClaim)?.Value;if(principal.Identity?.IsAuthenticated!=true||string.IsNullOrWhiteSpace(actor)||string.IsNullOrWhiteSpace(stamp)||string.IsNullOrWhiteSpace(session))return null;return new(actor,SemEndpoints.Hash(stamp),SemEndpoints.Hash(session));}
+ bool BindContext(ClaimsPrincipal principal){var identity=BindingFor(principal);if(HasBoundContext&&BoundEventId==EventId&&BoundIdentity==identity)return false;HasBoundContext=true;BoundEventId=EventId;BoundIdentity=identity;LoadGeneration++;ClearContext();return true;}
+ void ClearContext(){Plan=null;Last=null;Members=[];Selected=[];Values=[];Subject=null;CurrentId="";Error=Message=Reason=Capacity="";Busy=Exception=Uncertain=false;Pending=null;Comment="";_release=false;}
+ async Task Load(){var principal=(await Authentication.GetAuthenticationStateAsync()).User;BindContext(principal);await Load(principal,++LoadGeneration);}
+ async Task Load(ClaimsPrincipal principal,long generation){try{var currentId=principal.FindFirstValue(ClaimTypes.NameIdentifier)??"";var plan=await Core.ReadParticipationAsync(principal,EventId,subjectId:Subject);if(generation!=LoadGeneration||BoundEventId!=EventId)return;MemberView[] members=plan.CanManage?(await Core.ReadAsync(principal)).Members:[];if(generation!=LoadGeneration||BoundEventId!=EventId)return;CurrentId=currentId;Plan=plan;Members=members;Selected.Clear();Values=Plan.Questions.ToDictionary(x=>x.Id,x=>x.OwnValue);Capacity=Plan.Capacity?.ToString()??"";Error="";}catch{if(generation!=LoadGeneration||BoundEventId!=EventId)return;Clear();Error="ログイン状態とイベントの公開・権限を確認してください。";}}
  void Clear(){Plan=null;Members=[];Values=[];Selected=[];Last=null;}
  void Toggle(string id,bool on){if(on)Selected.Add(id);else Selected.Remove(id);}
  async Task ChangeSubject(ChangeEventArgs e){Subject=e.Value?.ToString();if(Subject==CurrentId)Subject=null;Last=null;await Load();}
