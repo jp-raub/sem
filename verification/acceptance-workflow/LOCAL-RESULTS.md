@@ -2,6 +2,8 @@
 
 Base: `5d649f8d8d684271e7e17eec0596e074e471696c`.
 
+The recorded local run and 400-file hash manifest below refer to the initial UI/retention implementation at `4c22dd3e26be13080ea1ee5b7f7410927d4ffff1`. Later profile-card and interaction-readiness additions require their own current-head CI; do not reuse the earlier success as proof for those additions.
+
 - 76 independent .NET projects built/run serially: 76 passed, 0 failed. See dotnet-results.tsv.
 - The 400 product source files were hashed before and after this run: no changes.
 - Existing synthetic UI modules: 9/9 passed. New dialog lifecycle module also passed (10 modules total).

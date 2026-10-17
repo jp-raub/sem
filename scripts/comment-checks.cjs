@@ -12,8 +12,9 @@ module.exports=async({p,g,ok})=>{
   const defs=(await api(p,'definitions',undefined,q)).body;const vo=defs.definitions.find(d=>d.category==='Sing');let songs=(await api(p,'songs',undefined,q)).body;const songRows=[1,2].map(n=>({id:guid(),title:'Comment song '+n,artist:'',performanceSeconds:60,prepSeconds:null,definitionIds:[vo.id]}));songs=(await api(p,'songs',{rowVersion:songs.rowVersion,defaultPrepSeconds:600,songs:songRows},q)).body;
   await w.goto('https://localhost:18443/events/'+id);
   await w.locator('[data-event-matrix-slot]').first().waitFor();
-  await w.waitForTimeout(1200);
+  await w.locator('[data-participation-interactive="true"]').waitFor();
   const selectedSlot=(await api(g,'participation',undefined,q)).body.slots[0].id;
+  await w.locator('[data-event-matrix-slot="'+selectedSlot+'"]').evaluate(e=>e.scrollIntoView({block:'center',inline:'end'}));
   await w.locator('[data-event-matrix-slot="'+selectedSlot+'"]').click();
   await w.locator('[data-participation-answer="'+question+'"]').selectOption('YES');
   await w.locator('#comment-compose-open').click();
@@ -34,9 +35,11 @@ module.exports=async({p,g,ok})=>{
   ok(!untouched.ownSpectator&&!untouched.slots.some(x=>x.assignedUserId===untouched.ownUserId),'Embedded standalone post creates no registration or spectator');
   ok(await w.locator('[data-comment] img').count()===0,'Embedded comment body remains encoded');
   await a.goto('https://localhost:18443/events/'+id);
+  await a.locator('[data-participation-interactive="true"]').waitFor();
   await a.locator('.participation-admin-tools').waitFor();
   ok(!(await a.locator('.participation-admin-tools').getAttribute('open'))&&await a.locator('#participation-subject').isHidden(),'Management tools are compact and initially collapsed');
   await a.locator('.participation-admin-tools > summary').click();
+  await a.locator('#participation-subject').waitFor();
   ok(await a.locator('#participation-subject').isVisible(),'Management controls remain available by explicit expansion');
   const draft=(view,slots,comment)=>({requestId:guid(),rowVersion:view.rowVersion,phaseId:view.phaseId,kind:'Register',slots:slots.map(s=>({id:s.id,rowVersion:s.rowVersion})),answers:[{questionId:question,value:'YES'}],participantVersion:view.participantVersion,comment});let admin=(await api(p,'participation',undefined,q)).body;ok((await api(p,'participation',draft(admin,[admin.slots[0]],null),q)).status===200,'Native fixture creates occupied slot via existing registration');let member=(await api(g,'participation',undefined,q)).body;const combined=draft(member,member.slots,'Native partial signup comment');let result=await api(g,'participation',combined,q);ok(result.status===200&&result.body.succeeded===2&&result.body.items.some(x=>x.code==='Occupied')&&result.body.items.some(x=>x.code==='CommentCreated'),'Native partial registration preserves occupied failure and independent comment success');ok((await api(g,'participation',combined,q)).body.replayed&&(await api(g,'comments',undefined,q)).body.comments.filter(x=>x.id===combined.requestId).length===1,'Combined API replay adds no second comment');
   await w.goto('https://localhost:18443/events/'+id+'/participation');await w.locator('#participation-comment').waitFor();await w.waitForTimeout(1500);await w.locator('#participation-comment').fill('Native answer update with comment');await w.locator('#participation-submit').click();await w.waitForFunction(()=>document.getElementById('participation-message').textContent.includes('2 件成功'));ok((await api(g,'comments',undefined,q)).body.comments.some(x=>x.body==='Native answer update with comment')&&await w.locator('#participation-comment').inputValue()==='','Real Blazor answer update posts one comment and clears successful draft');

@@ -30,6 +30,7 @@ node --check scripts/account-passkeys-native-checks.cjs
 node scripts/account-passkeys-ui-checks.mjs 2>&1 | tee verification/account-passkeys-ui.log
 node scripts/legacy-passkey-url-checks.mjs 2>&1 | tee verification/legacy-passkey-url.log
 node scripts/dialog-lifecycle-checks.mjs 2>&1 | tee verification/dialog-lifecycle-ui.log
+node --check scripts/participant-profile-checks.cjs
 node --check scripts/acceptance-navigation-checks.cjs
 node --check scripts/acceptance-retention-checks.cjs
 node --check scripts/comment-checks.cjs

@@ -4,8 +4,8 @@
 @using Sem.Web.Core
 @using Microsoft.JSInterop
 @inject IJSRuntime JS
-<PageTitle>メンバープロフィール</PageTitle>
-<h1>メンバープロフィール</h1><p><a href="/workspace">業務基盤へ戻る</a></p>
+@if(!Compact){<PageTitle>メンバープロフィール</PageTitle>
+<h1>メンバープロフィール</h1><p><a href="/workspace">イベント一覧へ戻る</a></p>}
 <p id="member-profile-error" role="alert">@Error</p>
 @if(ProfileBusy){<p role="status" aria-live="polite">プロフィールを取得しています。</p>}
 <button id="member-profile-refresh" disabled="@ProfileBusy" @onclick="LoadProfile">最新情報を取得</button>
@@ -25,7 +25,7 @@
   else{<dl>@foreach(var answer in Profile.Answers){<dt>@answer.Text</dt><dd>@(answer.Value is null ? "未回答" : answer.Type == "YesNo" ? answer.Value == "YES" ? "はい" : "いいえ" : answer.Value)</dd>}</dl>}
  </section>
  <p>メール・認証情報は表示しません。</p>
- <section aria-labelledby="member-profile-history-heading">
+ @if(!Compact){<section aria-labelledby="member-profile-history-heading">
   <h3 id="member-profile-history-heading">現在のイベント登録</h3>
   <button id="member-profile-history-load" disabled="@HistoryBusy" @onclick="LoadHistory">登録履歴を取得</button>
   <p id="member-profile-history-error" role="alert">@HistoryError</p>
@@ -45,10 +45,12 @@
     </ol>
    }
   }
- </section>
+ </section>}
+ @if(Compact){<p><a id="profile-card-details" href="@($"/profiles/{Uri.EscapeDataString(UserId)}")">登録履歴を含む詳細プロフィールへ</a></p>}
  </section>
 }
 @code{
+ [Parameter]public bool Compact{get;set;}
  [Parameter]public string UserId{get;set;}="";
  ProfileView?Profile;ProfileRegistrationHistoryView?History;string Error="",HistoryError="";bool ProfileBusy,HistoryBusy,InitialLoadStarted,ImportAttempted,Disposed;long Generation;IJSObjectReference?Module;
  protected override void OnParametersSet(){Generation++;Profile=null;History=null;Error="";HistoryError="";ProfileBusy=HistoryBusy=false;InitialLoadStarted=false;}

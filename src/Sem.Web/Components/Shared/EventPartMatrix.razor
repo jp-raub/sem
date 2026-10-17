@@ -68,10 +68,11 @@
                                                         type="button"
                                                         class="@SlotClass(slot, pressed)"
                                                         data-event-matrix-slot="@slot.Id"
+                                                        data-event-profile="@(CanViewProfile(slot)?slot.AssignedUserId:null)"
                                                         aria-pressed="@(pressed ? "true" : "false")"
                                                         aria-label="@SlotLabel(timed.Title, column, slot, index, cellSlots.Length)"
-                                                        disabled="@IsDisabled(slot)"
-                                                        @onclick="() => OnToggle.InvokeAsync(slot.Id)">
+                                                        disabled="@(!CanViewProfile(slot)&&IsDisabled(slot))"
+                                                        @onclick="() => CanViewProfile(slot) ? OnViewProfile.InvokeAsync(slot.AssignedUserId!) : OnToggle.InvokeAsync(slot.Id)">
                                                     @SlotText(slot, pressed)
                                                     @if (cellSlots.Length > 1)
                                                     {
@@ -119,6 +120,8 @@
     [Parameter, EditorRequired] public ParticipationSlot[] Slots { get; set; } = [];
     [Parameter, EditorRequired] public IReadOnlySet<string> SelectedIds { get; set; } = new HashSet<string>(StringComparer.Ordinal);
     [Parameter, EditorRequired] public Func<ParticipationSlot, bool> IsDisabled { get; set; } = _ => true;
+    [Parameter] public EventCallback<string> OnViewProfile { get; set; }
+    bool CanViewProfile(ParticipationSlot slot) => !ReleaseMode && slot.AssignedUserId is not null && OnViewProfile.HasDelegate;
     [Parameter] public EventCallback<string> OnToggle { get; set; }
     [Parameter] public string OwnUserId { get; set; } = "";
     [Parameter] public bool ReleaseMode { get; set; }

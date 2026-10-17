@@ -22,7 +22,7 @@ TimedPart Row(string id, string kind, string? songId, string title) =>
 ParticipationSlot Slot(string id, string songId, string part, string? owner = null, string? name = null) =>
     new(id, songId, "曲 " + songId, part, "Instrument", owner, name, null, 1);
 async Task<string> Render(IReadOnlyList<TimedPart> rows, ParticipationSlot[] slots,
-    IReadOnlySet<string>? selected = null, bool release = false, bool disabled = false, bool decode = true)
+    IReadOnlySet<string>? selected = null, bool release = false, bool disabled = false, bool decode = true, bool profiles = false)
 {
     return await renderer.Dispatcher.InvokeAsync(async () =>
     {
@@ -30,6 +30,7 @@ async Task<string> Render(IReadOnlyList<TimedPart> rows, ParticipationSlot[] slo
             new Dictionary<string, object?>
             {
                 ["Rows"] = rows,
+                ["OnViewProfile"] = profiles ? EventCallback.Factory.Create<string>(new object(), (string _) => {}) : default(EventCallback<string>),
                 ["Slots"] = slots,
                 ["SelectedIds"] = selected ?? new HashSet<string>(),
                 ["OwnUserId"] = "me",
@@ -101,4 +102,9 @@ Check(TimetableDisplay.Clock(start,"minutes",start)=="10:00", "Configured minute
 Check(TimetableDisplay.Clock(start.AddDays(1),"seconds",start)=="2026/10/18 10:00:00", "Day crossing keeps explicit full date");
 Check(TimetableDisplay.Clock(start.AddDays(-1),"seconds",start)=="2026/10/16 10:00:00", "Prior-day opening keeps explicit date");
 Check(start.Second==0 && TimetableCalculator.Clock(start,"seconds")=="2026/10/17 10:00:00", "Existing calculation/editor date format is unchanged");
+var profileHtml = await Render([song], slots, disabled:true, profiles:true);
+Check(profileHtml.Contains("data-event-profile=\"me\"") && profileHtml.Contains("data-event-profile=\"other-user\""), "Assigned matrix slots expose profile actions for self and others");
+Check(Regex.Matches(profileHtml, "disabled").Count == 1, "Profile actions remain available when registration is disabled, while the empty slot stays disabled");
+var releaseHtml = await Render([song], slots, release:true, disabled:true, profiles:true);
+Check(!releaseHtml.Contains("data-event-profile"), "Release mode preserves registration controls instead of opening profiles");
 Console.WriteLine($"PASS {checks} matrix rendering checks (not interactive browser acceptance)");

@@ -144,7 +144,7 @@ module.exports = async ({ p, g, ok }) => {
         await memberPage.goto(origin + '/events/' + integrated.id);
         await memberPage.locator('#participation-submit').waitFor();
         // Match standalone UI tests: SSR controls can appear before the interactive circuit.
-        await memberPage.waitForTimeout(3000);
+        await memberPage.locator('[data-participation-interactive="true"]').waitFor();
         await memberPage.locator('.event-part-matrix').waitFor();
         await memberPage.locator(`[data-event-matrix-slot="${memberVoiceSlot.id}"]`).waitFor();
         ok(await memberPage.locator('.participation-entry-eyebrow').innerText() === 'YOUR ENTRY',
@@ -158,6 +158,7 @@ module.exports = async ({ p, g, ok }) => {
         ok(await memberPage.locator('#timetable-refresh').count() === 1,
             'Embedded timetable exposes one refresh action for callback-state check');
 
+        await memberPage.locator(`[data-event-matrix-slot="${memberVoiceSlot.id}"]`).evaluate(e=>e.scrollIntoView({block:"center",inline:"end"}));
         await memberPage.locator(`[data-event-matrix-slot="${memberVoiceSlot.id}"]`).click();
         await memberPage.waitForFunction(() => document.querySelectorAll('.participation-selection-chip').length === 1);
         await memberPage.locator(`[data-participation-answer="${question.id}"]`).selectOption('YES');
@@ -195,6 +196,7 @@ module.exports = async ({ p, g, ok }) => {
         ok(await memberPage.locator('.participation-selection-chip').count() === 0
             && await memberPage.locator(`[data-participation-answer="${question.id}"]`).inputValue() === '',
         'Explicit latest-state refresh replaces stale unsaved selection and answer with current data');
+        await memberPage.locator(`[data-event-matrix-slot="${memberVoiceSlot.id}"]`).evaluate(e=>e.scrollIntoView({block:"center",inline:"end"}));
         await memberPage.locator(`[data-event-matrix-slot="${memberVoiceSlot.id}"]`).click();
         await memberPage.waitForFunction(() => document.querySelectorAll('.participation-selection-chip').length === 1);
         await memberPage.locator(`[data-participation-answer="${question.id}"]`).selectOption('YES');
@@ -212,7 +214,7 @@ module.exports = async ({ p, g, ok }) => {
         await adminPage.goto(origin + '/events/' + integrated.id);
         await adminPage.locator('#participation-submit').waitFor();
         // SSR markup precedes the interactive Blazor circuit, as on the existing standalone checks.
-        await adminPage.waitForTimeout(3000);
+        await adminPage.locator('[data-participation-interactive="true"]').waitFor();
         await adminPage.locator(`[data-event-matrix-slot="${memberVoiceSlot.id}"]`).waitFor();
         const otherText = await adminPage.locator(`[data-event-matrix-slot="${memberVoiceSlot.id}"]`).innerText();
         ok(otherText.includes('他人:') && otherText.includes(assignedMemberSlot.assignedName),
@@ -220,6 +222,7 @@ module.exports = async ({ p, g, ok }) => {
 
         const adminAnswer = adminPage.locator(`[data-participation-answer="${question.id}"]`);
         await adminAnswer.selectOption('NO');
+        await adminPage.locator(`[data-event-matrix-slot="${managerVoiceSlot.id}"]`).evaluate(e=>e.scrollIntoView({block:"center",inline:"end"}));
         await adminPage.locator(`[data-event-matrix-slot="${managerVoiceSlot.id}"]`).click();
         await adminPage.waitForFunction(() => document.querySelectorAll('.participation-selection-chip').length === 1);
         ok(await adminAnswer.inputValue() === 'NO', 'Admin self-registration retains the selected answer before submit');

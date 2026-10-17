@@ -1,0 +1,4 @@
+.profile-card{width:min(620px,calc(100vw - 32px));max-height:85vh;overflow:auto;border:1px solid var(--appearance-line,#cbd8ce);border-radius:14px;padding:20px;background:var(--appearance-surface,#fffefa);color:var(--appearance-text,#18312e)}
+.profile-card::backdrop{background:rgb(0 0 0 / .5)}
+.profile-card h2{margin-top:0}
+.profile-card button:focus-visible{outline:3px solid var(--appearance-accent,#1e6557);outline-offset:3px}
