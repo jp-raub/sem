@@ -52,6 +52,31 @@ try
             new Message { Id="nav-read", UserId="member", ReadAt=2, Created=1 }, new Message { Id="nav-admin", UserId="admin", Created=1 });
         await db.SaveChangesAsync();
     }
+    await using(var db=await factory.CreateDbContextAsync()){
+        db.Audits.AddRange(Enumerable.Range(0,205).Select(i=>new Audit{Id="audit-ui-"+i.ToString("D3"),ActorId="admin",Action="SessionEventUpdated",EntityId="event-"+i,At=1700000000+i}));
+        db.Audits.Add(new Audit{Id="audit-ui-secret",ActorId="admin",Action="PasskeyDeleteProofIssued",EntityId="proof-secret-not-public",At=1800000000});
+        await db.SaveChangesAsync();
+    }
+    var audit=await core.ReadAdminAuditAsync(admin);
+    Check(audit.Entries.Length==100&&audit.HasMore,"Audit view is bounded to latest 100 with explicit older records");
+    Check(audit.Entries[0].Id=="audit-ui-secret"&&audit.Entries[1].Id=="audit-ui-204","Audit order is newest first");
+    Check(audit.Entries[0].Actor=="Admin","Audit resolves actor display name without email DTO");
+    var auditJson=JsonSerializer.Serialize(audit);
+    Check(!auditJson.Contains("proof-secret-not-public")&&!auditJson.Contains("@test.example")&&!auditJson.Contains("admin-stamp"),"Audit projection excludes auth identifiers, email and security stamp");
+    Check((await core.ReadAdminAuditAsync(admin,200)).Entries.Length==200,"Audit upper limit is enforced");
+    await Deny<ValidationException>(()=>core.ReadAdminAuditAsync(admin,201),"Unbounded audit request rejected");
+    await Deny<ValidationException>(()=>core.ReadAdminAuditAsync(admin,0),"Nonpositive audit limit rejected");
+    await Deny<UnauthorizedAccessException>(()=>core.ReadAdminAuditAsync(member),"Ordinary member cannot read admin audit");
+    await Deny<UnauthorizedAccessException>(()=>core.ReadAdminAuditAsync(Principal("member",forgedAdmin:true)),"Forged Admin role claim grants no audit access");
+    await Deny<UnauthorizedAccessException>(()=>core.ReadAdminAuditAsync(manager),"Event manager cannot read global audit");
+    await Deny<UnauthorizedAccessException>(()=>core.ReadAdminAuditAsync(new ClaimsPrincipal(new ClaimsIdentity())),"Anonymous audit request denied");
+    await Deny<UnauthorizedAccessException>(()=>core.ReadAdminAuditAsync(Principal("admin",stamp:"stale")),"Audit revalidates security stamp");
+    await Deny<UnauthorizedAccessException>(()=>core.ReadAdminAuditAsync(Principal("disabled")),"Disabled account cannot read audit");
+    await Deny<UnauthorizedAccessException>(()=>core.ReadAdminAuditAsync(Principal("unconfirmed")),"Unconfirmed account cannot read audit");
+    await using(var db=await factory.CreateDbContextAsync()){
+        db.RevokedAuthSessions.Add(new(){TokenHash=SemEndpoints.Hash("admin-audit-revoked"),UserId="admin",RevokedAt="2026-10-18T00:00:00.000Z"});await db.SaveChangesAsync();
+    }
+    await Deny<UnauthorizedAccessException>(()=>core.ReadAdminAuditAsync(Principal("admin","audit-revoked")),"Revoked session cannot read audit");
     var navigation = await core.ReadNavigationAsync(Principal("member", forgedAdmin:true));
     Check(!navigation.IsAdmin && navigation.UnreadCount == 1 && navigation.UserId == "member", "Header uses current DB role and only own unread messages");
     Check(navigation.ServiceName == "Retained bootstrap site", "Header falls back to the existing bootstrap service name");
@@ -290,6 +315,7 @@ try
     {
         var a = await db.Users.FindAsync("admin"); a!.IsAdmin = false; await db.SaveChangesAsync();
     }
+    await Deny<UnauthorizedAccessException>(()=>core.ReadAdminAuditAsync(admin),"Demotion immediately removes audit access on existing session");
     await Deny<UnauthorizedAccessException>(() => core.SaveServiceAsync(admin, new("After demotion", "", 2)), "Global-admin demotion takes effect without trusting cached role claims");
     await using (var db = await factory.CreateDbContextAsync())
     {

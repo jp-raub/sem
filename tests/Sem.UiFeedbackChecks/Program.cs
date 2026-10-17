@@ -50,7 +50,7 @@ Check(string.Join(",",DisplayOrdering.Dates(rows,x=>x.Date,x=>x.Id).Select(x=>x.
 Check(DisplayOrdering.Dates(rows,x=>x.Date,x=>x.Id,false).First().Id == "b", "Date ascending reverses instants without changing equal-date identity order");
 Check(string.Join(",",rows.Select(x=>x.Id)) == "b,c,a", "Display sorting never mutates original manual order");
 Check(!DisplayOrdering.Names(Array.Empty<SortRow>(),x=>x.Name,x=>x.Id).Any(), "Empty lists retain empty state");
-var services = new ServiceCollection().AddLogging().BuildServiceProvider();
+var services = new ServiceCollection().AddLogging().AddSingleton<IJSRuntime>(new FakeJs()).BuildServiceProvider();
 await using var renderer = new HtmlRenderer(services,services.GetRequiredService<ILoggerFactory>());
 async Task<string> Heading(bool active,bool descending,bool disabled=false) => await renderer.Dispatcher.InvokeAsync(async()=> {
     var rendered = await renderer.RenderComponentAsync<SortHeading>(ParameterView.FromDictionary(new Dictionary<string,object?>{["Label"]="<Name>",["Active"]=active,["Descending"]=descending,["Disabled"]=disabled}));return rendered.ToHtmlString();
@@ -65,7 +65,16 @@ Check(heading.Contains("type=\"button\"") && !heading.Contains("<Name>"), "Sort 
 var clicks=0;var sortHeading=new SortHeading();
 typeof(SortHeading).GetProperty("Changed")!.SetValue(sortHeading, EventCallback.Factory.Create(new object(),()=>clicks++));
 await sortHeading.Changed.InvokeAsync();Check(clicks==1,"Sort callback is explicit and invokes once");
-Console.WriteLine($"UI feedback and display sorting checks passed: {checks}");
+var options=new[]{new AdminCandidateOption("a","Alice <script>","alice@example.test"),new AdminCandidateOption("b","Bob","bob@example.test")};
+Check(AdminCandidatePicker.Filter(options,new HashSet<string>{"a"},"",true).Single().Id=="b","Already selected managers excluded from candidates");
+Check(AdminCandidatePicker.Filter(options,new HashSet<string>(),"ALICE@",true).Single().Id=="a","Global manager search supports case-insensitive email");
+Check(AdminCandidatePicker.Filter(options,new HashSet<string>(),"ALICE@",false).Length==0,"Event-only manager cannot search hidden email");
+Check(AdminCandidatePicker.Filter(Enumerable.Range(0,20).Select(i=>new AdminCandidateOption(i.ToString(),"User")).ToArray(),new HashSet<string>(),"",false).Length==10,"Candidate dropdown is bounded to ten options");
+var pickerHtml=await renderer.Dispatcher.InvokeAsync(async()=>{
+ var rendered=await renderer.RenderComponentAsync<AdminCandidatePicker>(ParameterView.FromDictionary(new Dictionary<string,object?>{["Options"]=options,["SelectedIds"]=new HashSet<string>{"a"},["ShowEmail"]=false}));return rendered.ToHtmlString();});
+Check(!pickerHtml.Contains("alice@example.test")&&!pickerHtml.Contains("bob@example.test"),"Name-only picker never renders email into SSR");
+Check(!pickerHtml.Contains("<script>")&&pickerHtml.Contains("aria-expanded=\"false\""),"Candidate names are encoded and initial disclosure is closed");
+Console.WriteLine($"UI feedback, sort and admin picker checks passed: {checks}");
 
 sealed class FakeJs : IJSRuntime
 {

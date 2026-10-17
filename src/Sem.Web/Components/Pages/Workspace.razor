@@ -117,10 +117,9 @@ else
                 <label>表示<select id="event-phase" @bind="Phase"><option value="Hidden">非表示</option><option value="View">閲覧公開</option></select></label>
                 <fieldset>
                     <legend>担当管理者（0名以上・複数選択可）</legend>
-                    @foreach (var member in View.Members)
-                    {
-                        <label><input type="checkbox" checked="@Managers.Contains(member.UserId)" @onchange="e => ToggleManager(member.UserId, e.Value is true)" />@member.DisplayName</label>
-                    }
+                    <AdminCandidatePicker Options="ManagerOptions" SelectedIds="Managers" ShowEmail="@(View.IsAdmin && ManagerEmailsLoaded)" Disabled="Busy" Add="id=>ToggleManager(id,true)" Remove="id=>ToggleManager(id,false)" />
+                    @if(View.IsAdmin && !ManagerEmailsLoaded){<p>メール候補は未取得です。表示名で選択できます。</p>}
+                    @if(!View.IsAdmin){<p>イベント限定管理者には表示名だけを表示します。メール一覧は公開しません。</p>}
                 </fieldset>
                 <p>閲覧公開は参加受付ではありません。参加受付は各イベントのフェーズ管理で設定してください。</p>
                 <button id="event-core-save" disabled="@Busy">保存</button><button type="button" disabled="@Busy" @onclick="Cancel">取消</button>
@@ -157,7 +156,7 @@ else
     <p>基本プロフィールはログイン済みメンバーに公開されます。<a href="/profile/settings">プロフィール全項目・メール変更・パスキーの管理</a>。メール・登録履歴はプロフィールQRに含まれません。</p></section>
     @if (View.IsAdmin)
     {
-        <section class="panel" id="core-service"><h2>サービス管理</h2><p><a href="/service/part-presets">新規イベント用パートプリセット</a> ／ <a id="digest-preview-link" href="/service/digest-preview">日次ダイジェスト文面プレビュー</a> ／ <a id="manual-push-control-link" href="/service/manual-push">手動Pushの運用制御</a> ／ <a id="recovery-admin-link" href="/service/passkey-recovery">パスキー認証の復旧</a></p>
+        <section class="panel" id="core-service"><h2>サービス管理</h2><p><a id="admin-audit-link" href="/service/audit">監査ログ</a> ／ <a href="/service/part-presets">新規イベント用パートプリセット</a> ／ <a id="digest-preview-link" href="/service/digest-preview">日次ダイジェスト文面プレビュー</a> ／ <a id="manual-push-control-link" href="/service/manual-push">手動Pushの運用制御</a> ／ <a id="recovery-admin-link" href="/service/passkey-recovery">パスキー認証の復旧</a></p>
         @if (Editing == "service")
         {
             <form @onsubmit="SaveService" @onsubmit:preventDefault>
@@ -181,11 +180,13 @@ else
                 }
                 else
                 {
+                    <label class="admin-account-filter">アカウントを表示名・メールで絞り込み<input id="admin-account-search" type="search" maxlength="200" @bind="AdminAccountQuery" @bind:event="oninput" /></label>
+                    <p role="status">@FilteredAdminAccounts.Count() 件を表示（全 @AdminAccounts.Accounts.Length 件）。権限の下書きは検索で消えません。</p>
                     <div class="admin-account-table-wrap" tabindex="0" aria-label="アカウント権限一覧">
                         <table class="admin-account-table">
                             <thead><tr><th scope="col">表示名</th><th scope="col">権限タグ</th><th scope="col">最終ログイン</th></tr></thead>
                             <tbody>
-                            @foreach (var account in AdminAccounts.Accounts)
+                            @foreach (var account in FilteredAdminAccounts)
                             {
                                 var draftIsAdmin = AdminRoleDraft.TryGetValue(account.UserId, out var draft) ? draft : account.IsAdmin;
                                 var eventAdminCount = View.Events.Count(e => e.ManagerIds.Contains(account.UserId, StringComparer.Ordinal));
@@ -272,6 +273,16 @@ else
 
     bool EventSortByName, EventSortDescending = true;
     void SortEvents(bool byName) { if (EventSortByName == byName) EventSortDescending = !EventSortDescending; else { EventSortByName = byName; EventSortDescending = false; } }
+    string AdminAccountQuery="";
+    bool ManagerEmailsLoaded;
+    int ManagerLoadGeneration;
+    AdminCandidateOption[] ManagerOptions=[];
+    IEnumerable<GlobalAdminAccountView> FilteredAdminAccounts => (AdminAccounts?.Accounts ?? []).Where(x=>x.DisplayName.Contains(AdminAccountQuery.Trim(),StringComparison.OrdinalIgnoreCase)||x.Email.Contains(AdminAccountQuery.Trim(),StringComparison.OrdinalIgnoreCase));
+    async Task LoadManagerOptions(){
+        var generation=++ManagerLoadGeneration;var id=EventId;ManagerEmailsLoaded=false;ManagerOptions=View!.Members.Select(x=>new AdminCandidateOption(x.UserId,x.DisplayName)).ToArray();
+        if(!View.IsAdmin)return;
+        try{var accounts=await Core.ReadGlobalAdminAccountsAsync((await Authentication.GetAuthenticationStateAsync()).User);if(generation!=ManagerLoadGeneration||Editing!="event"||EventId!=id)return;ManagerOptions=accounts.Accounts.Where(x=>x.Enabled&&x.EmailConfirmed).Select(x=>new AdminCandidateOption(x.UserId,x.DisplayName,x.Email)).ToArray();ManagerEmailsLoaded=true;}catch(UnauthorizedAccessException){ManagerEmailsLoaded=false;}catch{ManagerEmailsLoaded=false;}
+    }
     WorkspaceView? View;
     GlobalAdminAccountsView? AdminAccounts;
     ProfileView? Preview;
@@ -314,7 +325,7 @@ else
     }
     void Cancel()
     {
-        Editing = null; Error = ""; Message = "下書きを取り消しました。";
+        Editing = null; ManagerLoadGeneration++; ManagerOptions=[]; ManagerEmailsLoaded=false; Error = ""; Message = "下書きを取り消しました。";
         ClearAdminAccountDraft();
     }
     async Task EditService()
@@ -417,11 +428,12 @@ else
         Editing = "profile"; var p = View!.Profile; ProfileName = p.DisplayName; Reading = p.Reading; CallName = p.CallName; Version = p.RowVersion;
         Social = p.Social.Select(s => new SocialDraft { Service = s.Service, Url = s.Url }).ToList();
     }
-    void NewEvent() { Editing = "event"; EventId = null; Version = 0; EventTitle = EventDescription = EventLocation = Starts = Opens = Announcement = ""; Phase = "Hidden"; Managers = []; }
-    void EditEvent(EventView e)
+    async Task NewEvent() { Editing = "event"; EventId = null; Version = 0; EventTitle = EventDescription = EventLocation = Starts = Opens = Announcement = ""; Phase = "Hidden"; Managers = []; await LoadManagerOptions(); }
+    async Task EditEvent(EventView e)
     {
         Editing = "event"; EventId = e.Id; Version = e.RowVersion; EventTitle = e.Title; EventDescription = e.Description; EventLocation = e.Location;
         Starts = Local(e.ScheduledDate); Opens = e.OpensAt is null ? "" : Local(e.OpensAt); Announcement = e.AnnouncementMessage; Phase = e.PhaseKind; Managers = e.ManagerIds.ToHashSet();
+        await LoadManagerOptions();
     }
     void ToggleManager(string id, bool selected) { if (selected) Managers.Add(id); else Managers.Remove(id); }
     async Task SaveService() => await Save(p => Core.SaveServiceAsync(p, new(ServiceName, ServiceDescription, Version)));

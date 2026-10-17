@@ -34,10 +34,17 @@ node scripts/account-passkeys-ui-checks.mjs 2>&1 | tee verification/account-pass
 node scripts/legacy-passkey-url-checks.mjs 2>&1 | tee verification/legacy-passkey-url.log
 node scripts/dialog-lifecycle-checks.mjs 2>&1 | tee verification/dialog-lifecycle-ui.log
 node --check src/Sem.Web/wwwroot/operation-feedback.js
+node --check src/Sem.Web/wwwroot/operation-result-presenter.js
+node scripts/operation-result-presenter-checks.mjs
+node scripts/profile-result-boundary-checks.mjs
+node scripts/profile-image-transport-checks.mjs
+node scripts/profile-history-transport-checks.mjs
+node --check src/Sem.Web/wwwroot/admin-candidate-picker.js
 node --check src/Sem.Web/wwwroot/field-help.js
 node scripts/field-help-ui-checks.mjs 2>&1 | tee verification/field-help-ui.log
 node --check scripts/participant-profile-checks.cjs
 node --check scripts/acceptance-navigation-checks.cjs
+node --check scripts/admin-search-audit-checks.cjs
 node --check scripts/acceptance-retention-checks.cjs
 node --check scripts/comment-checks.cjs
 bash -n scripts/acceptance-browser-fixture.sh

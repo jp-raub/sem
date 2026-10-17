@@ -1,3 +1,4 @@
+import { createResultPresenter } from './operation-result-presenter.js';
 const MAX_JSON_BYTES = 512 * 1024;
 const MAX_CSRF_BYTES = 16 * 1024;
 const MAX_MUTATION_RESPONSE_BYTES = 4 * 1024;
@@ -670,6 +671,7 @@ async function issueInvitation(state, event) {
     state.issueErrorMessage = '';
     state.errorMessage = '';
     render(state);
+    state.resultPresenter.show('success', '招待リンクを発行しました。本人向けの一時欄を確認してください。');
   } catch (error) {
     if (!isOperationCurrent(state, operation)) return;
     if (error instanceof AuthenticationStateError) clearActorState(state);
@@ -691,6 +693,7 @@ async function issueInvitation(state, event) {
       state.issueStatusMessage = state.statusMessage;
       render(state);
     }
+    state.resultPresenter.show(state.unknown ? 'unknown' : 'error', state.unknown?.message || state.issueErrorMessage || '処理を開始できませんでした。');
   } finally {
     if (isOperationCurrent(state, operation)) { state.busy = false; render(state); }
   }
@@ -847,6 +850,7 @@ async function createInvitationRequest(state, event) {
     state.requestStatusMessage = `依頼 ${value.id} を受け付けました。管理者の判断は依頼一覧で確認できます。`;
     state.requestErrorMessage = '';
     render(state);
+    state.resultPresenter.show('success', state.requestStatusMessage);
     void loadPage(state, 1);
   } catch (error) {
     if (!isOperationCurrent(state, operation)) return;
@@ -863,6 +867,7 @@ async function createInvitationRequest(state, event) {
       state.requestStatusMessage = '依頼は送信されていません。';
       render(state);
     }
+    state.resultPresenter.show(state.unknown ? 'unknown' : 'error', state.unknown?.message || state.requestErrorMessage || '処理を開始できませんでした。');
   } finally {
     if (isOperationCurrent(state, operation)) { state.busy = false; render(state); }
   }
@@ -922,6 +927,7 @@ async function decideInvitationRequest(state, event) {
       : '依頼を拒否しました。依頼者へ通知しました。';
     state.reviewErrorMessage = '';
     render(state);
+    state.resultPresenter.show('success', state.reviewStatusMessage);
     void loadPage(state, state.page || 1);
   } catch (error) {
     if (!isOperationCurrent(state, operation)) return;
@@ -938,6 +944,7 @@ async function decideInvitationRequest(state, event) {
       state.reviewStatusMessage = '判断は送信されていません。';
       render(state);
     }
+    state.resultPresenter.show(state.unknown ? 'unknown' : 'error', state.unknown?.message || state.reviewErrorMessage || '処理を開始できませんでした。');
   } finally {
     if (isOperationCurrent(state, operation)) { state.busy = false; render(state); }
   }
@@ -977,6 +984,7 @@ async function revokeSelected(state, event) {
     state.statusMessage = `招待ID ${target.id} の失効をサーバーが確認しました。確認欄は解除済みです。`;
     state.errorMessage = '';
     render(state);
+    state.resultPresenter.show('success', state.statusMessage);
   } catch (error) {
     if (!isOperationCurrent(state, operation)) return;
     if (error instanceof AuthenticationStateError) clearActorState(state);
@@ -993,6 +1001,7 @@ async function revokeSelected(state, event) {
       state.statusMessage = '確認してから明示的に再試行できます。';
       render(state);
     }
+    state.resultPresenter.show(state.unknown ? 'unknown' : 'error', state.unknown?.message || state.errorMessage || '処理を開始できませんでした。');
   } finally {
     if (isOperationCurrent(state, operation)) { state.busy = false; render(state); }
   }
@@ -1003,6 +1012,7 @@ function abortRequests(state) {
 }
 
 function onPageHide(state) {
+  state.resultPresenter?.clear();
   if (liveState !== state || state.disposed || state.pageHidden || state.generation !== nextGeneration) return;
   state.operationGeneration++;
   state.actorId = null;
@@ -1061,6 +1071,7 @@ function onPageShow(state) {
 }
 
 function clearActorState(state) {
+  state.resultPresenter?.clear();
   state.operationGeneration++;
   state.actorId = null;
   state.isAdmin = false;
@@ -1084,6 +1095,7 @@ function clearActorState(state) {
 }
 
 function disposeState(state) {
+  state.resultPresenter?.clear();
   if (!state || state.disposed) return;
   state.disposed = true;
   if (state.root && state.listeners) {
@@ -1130,6 +1142,7 @@ export async function init(root, owner) {
   };
   if (Object.values(state.elements).some(node => !node)) throw new TypeError('invitation UI elements missing');
   liveState = state;
+  state.resultPresenter = createResultPresenter(root, () => isCurrent(state) && !!state.actorId);
   state.listeners = {
     click: event => {
       const target = event.target;

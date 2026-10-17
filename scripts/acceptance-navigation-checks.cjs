@@ -15,6 +15,7 @@ module.exports=async({p,g,ok})=>{
   await dateHeader.locator('button').click();await page.waitForFunction(()=>document.querySelectorAll('.workspace-event-table th')[1]?.getAttribute('aria-sort')==='ascending');
   const instants=await page.locator('.workspace-event-date time').evaluateAll(nodes=>nodes.map(e=>Date.parse(e.getAttribute('datetime'))));
   ok(instants.every((n,i)=>i===0||instants[i-1]<=n),'Date ascending orders real event instants without changing stored events');
+  await require('./admin-search-audit-checks.cjs')({p,g,ok});
   await page.locator('#navigation-toggle').waitFor();await page.locator('#navigation-toggle').click();
   const profile=page.locator('#navigation-panel a[href="/profile/settings#profile-edit-heading"]');
   const account=page.locator('#navigation-panel a[href="/profile/settings#account-passkeys"]');

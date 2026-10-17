@@ -53,6 +53,11 @@ for i in $(seq 1 60); do if curl -fsS http://127.0.0.1:18080/health/ready >/dev/
 [[ "$ready" == true ]]
 export SEM_E2E_KEY="$run/key.pem" SEM_E2E_CERT="$run/cert.pem"
 export SEM_STORAGE_UPGRADE_COMMAND="$run/restore.sh" SEM_ACCEPTANCE_RETENTION_COMMAND="$run/restore.sh"
-export SEM_EVENT_MATRIX_CHECKS=1 SEM_COMMENT_CHECKS=1 SEM_PACED_API_CHECKS=1 SEM_ACCEPTANCE_WORKFLOW_CHECKS=1
+export SEM_PACED_API_CHECKS=1
+case "${SEM_ACCEPTANCE_FOCUS:-full}" in
+ full) export SEM_EVENT_MATRIX_CHECKS=1 SEM_COMMENT_CHECKS=1 SEM_ACCEPTANCE_WORKFLOW_CHECKS=1 ;;
+ admin-search) export SEM_ADMIN_SEARCH_AUDIT_CHECKS=1 ;;
+ *) echo 'Unknown acceptance focus; full verification was not run.' >&2; exit 1 ;;
+esac
 export SEM_E2E_RESULTS="$root/verification/acceptance-native"
 node scripts/e2e.cjs
