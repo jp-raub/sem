@@ -63,7 +63,7 @@ try
         await migrator.MigrateAsync("20261015050000_AddThemeCatalog");
         oldDb.Users.Add(new ApplicationUser { Id = "legacy-user", UserName = "legacy@test", Email = "legacy@test",
             DisplayName = "Legacy", SecurityStamp = "legacy-stamp", Enabled = true, EmailConfirmed = true });
-        oldDb.SessionEvents.Add(new SessionEvent { Id = "legacy-event", Title = "preserved title",
+        await LegacySessionEventSeed.AddAsync(oldDb,new SessionEvent { Id = "legacy-event", Title = "preserved title",
             ScheduledDate = "2026-10-15T00:00:00.000Z", CreatedAt = "2026-10-01T00:00:00.000Z" });
         await oldDb.SaveChangesAsync();
         await oldDb.Database.ExecuteSqlRawAsync(

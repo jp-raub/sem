@@ -166,72 +166,6 @@ namespace Sem.Web.Data.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
-            modelBuilder.Entity("Sem.Web.Core.ThemeCatalogEntry", b =>
-                {
-                    b.Property<string>("Id").IsRequired().HasMaxLength(64).HasColumnType("TEXT");
-                    b.Property<string>("Name").IsRequired().HasMaxLength(30).HasColumnType("TEXT");
-                    b.Property<string>("Accent").IsRequired().HasMaxLength(7).HasColumnType("TEXT");
-                    b.Property<string>("Background").IsRequired().HasMaxLength(7).HasColumnType("TEXT");
-                    b.Property<string>("Surface").IsRequired().HasMaxLength(7).HasColumnType("TEXT");
-                    b.Property<string>("Text").IsRequired().HasMaxLength(7).HasColumnType("TEXT");
-                    b.Property<bool>("BuiltIn").HasColumnType("INTEGER");
-                    b.Property<long>("RowVersion").IsConcurrencyToken().HasColumnType("INTEGER");
-                    b.HasKey("Id");
-                    b.ToTable("ThemeCatalogEntries", t =>
-                    {
-                        t.HasCheckConstraint("CK_ThemeCatalog_Id", "length(\"Id\") BETWEEN 1 AND 64 AND \"Id\" NOT GLOB '*[^a-z0-9-]*' AND \"Id\" NOT GLOB '-*' AND \"Id\" NOT GLOB '*-' AND \"Id\" NOT GLOB '*--*'");
-                        t.HasCheckConstraint("CK_ThemeCatalog_Name", "length(\"Name\") BETWEEN 1 AND 30 AND length(trim(\"Name\")) >= 1");
-                        t.HasCheckConstraint("CK_ThemeCatalog_Colors", "length(\"Accent\")=7 AND \"Accent\" GLOB '#[0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F]' AND length(\"Background\")=7 AND \"Background\" GLOB '#[0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F]' AND length(\"Surface\")=7 AND \"Surface\" GLOB '#[0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F]' AND length(\"Text\")=7 AND \"Text\" GLOB '#[0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F]'");
-                        t.HasCheckConstraint("CK_ThemeCatalog_FlagsAndVersion", "\"BuiltIn\" IN (0,1) AND \"RowVersion\">=0");
-                    });
-                });
-
-            modelBuilder.Entity("Sem.Web.Core.UserThemePreference", b =>
-                {
-                    b.Property<string>("UserId").IsRequired().HasMaxLength(450).HasColumnType("TEXT");
-                    b.Property<string>("ThemeId").HasMaxLength(64).HasColumnType("TEXT");
-                    b.Property<int?>("Mode").HasColumnType("INTEGER");
-                    b.Property<long>("RowVersion").IsConcurrencyToken().HasColumnType("INTEGER");
-                    b.HasKey("UserId");
-                    b.HasIndex("ThemeId");
-                    b.ToTable("UserThemePreferences", t =>
-                    {
-                        t.HasCheckConstraint("CK_UserThemePreferences_Mode", "\"Mode\" IS NULL OR \"Mode\" IN (0,1,2)");
-                        t.HasCheckConstraint("CK_UserThemePreferences_RowVersion", "\"RowVersion\">=0");
-                    });
-                });
-
-            modelBuilder.Entity("Sem.Web.Core.EventThemePreference", b =>
-                {
-                    b.Property<string>("EventId").IsRequired().HasMaxLength(450).HasColumnType("TEXT");
-                    b.Property<string>("ThemeId").HasMaxLength(64).HasColumnType("TEXT");
-                    b.Property<int?>("Mode").HasColumnType("INTEGER");
-                    b.Property<long>("RowVersion").IsConcurrencyToken().HasColumnType("INTEGER");
-                    b.HasKey("EventId");
-                    b.HasIndex("ThemeId");
-                    b.ToTable("EventThemePreferences", t =>
-                    {
-                        t.HasCheckConstraint("CK_EventThemePreferences_Mode", "\"Mode\" IS NULL OR \"Mode\" IN (0,1,2)");
-                        t.HasCheckConstraint("CK_EventThemePreferences_RowVersion", "\"RowVersion\">=0");
-                    });
-                });
-
-            modelBuilder.Entity("Sem.Web.Core.SiteThemePreference", b =>
-                {
-                    b.Property<int>("Id").ValueGeneratedNever().HasColumnType("INTEGER");
-                    b.Property<string>("ThemeId").HasMaxLength(64).HasColumnType("TEXT");
-                    b.Property<int?>("Mode").HasColumnType("INTEGER");
-                    b.Property<long>("RowVersion").IsConcurrencyToken().HasColumnType("INTEGER");
-                    b.HasKey("Id");
-                    b.HasIndex("ThemeId");
-                    b.ToTable("SiteThemePreferences", t =>
-                    {
-                        t.HasCheckConstraint("CK_SiteThemePreferences_Id", "\"Id\"=1");
-                        t.HasCheckConstraint("CK_SiteThemePreferences_Mode", "\"Mode\" IS NULL OR \"Mode\" IN (0,1,2)");
-                        t.HasCheckConstraint("CK_SiteThemePreferences_RowVersion", "\"RowVersion\">=0");
-                    });
-                });
-
             modelBuilder.Entity("Sem.Web.Core.BusinessNotification", b =>
                 {
                     b.Property<string>("Id")
@@ -1110,6 +1044,35 @@ namespace Sem.Web.Data.Migrations
                     b.ToTable("EventSpectators");
                 });
 
+            modelBuilder.Entity("Sem.Web.Core.EventThemePreference", b =>
+                {
+                    b.Property<string>("EventId")
+                        .HasMaxLength(450)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("Mode")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("RowVersion")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ThemeId")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("EventId");
+
+                    b.HasIndex("ThemeId");
+
+                    b.ToTable("EventThemePreferences", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_EventThemePreferences_Mode", "\"Mode\" IS NULL OR \"Mode\" IN (0,1,2)");
+
+                            t.HasCheckConstraint("CK_EventThemePreferences_RowVersion", "\"RowVersion\">=0");
+                        });
+                });
+
             modelBuilder.Entity("Sem.Web.Core.ManualNotificationOperation", b =>
                 {
                     b.Property<string>("Id")
@@ -1552,6 +1515,135 @@ namespace Sem.Web.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Sem.Web.Core.ProfileAnswer", b =>
+                {
+                    b.Property<string>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("QuestionId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UpdatedAt")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("UserId", "QuestionId");
+
+                    b.HasIndex("QuestionId");
+
+                    b.ToTable("ProfileAnswers", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ProfileAnswers_Value", "length(\"Value\")<=1000");
+                        });
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.ProfileImage", b =>
+                {
+                    b.Property<string>("UserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("TEXT");
+
+                    b.Property<byte[]>("Data")
+                        .IsRequired()
+                        .HasColumnType("BLOB");
+
+                    b.Property<int>("Height")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("RowVersion")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Width")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("UserId");
+
+                    b.ToTable("ProfileImages", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ProfileImages_Data", "(length(\"Data\")=0 AND \"Width\"=0 AND \"Height\"=0) OR (length(\"Data\") BETWEEN 8 AND 1048576 AND \"Width\" BETWEEN 1 AND 512 AND \"Height\" BETWEEN 1 AND 512)");
+
+                            t.HasCheckConstraint("CK_ProfileImages_RowVersion", "\"RowVersion\">0");
+                        });
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.ProfileQrCredential", b =>
+                {
+                    b.Property<string>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ExpiresAt")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("IssuedAt")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("RowVersion")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("UserId");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.ToTable("ProfileQrCredentials", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ProfileQrCredentials_Expiry", "\"ExpiresAt\">\"IssuedAt\" AND \"RowVersion\">0");
+
+                            t.HasCheckConstraint("CK_ProfileQrCredentials_Hash", "length(\"TokenHash\")=64");
+                        });
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.ProfileQuestion", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("RowVersion")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SortOrder", "Id");
+
+                    b.ToTable("ProfileQuestions", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ProfileQuestions_Enabled", "\"Enabled\" IN (0,1)");
+
+                            t.HasCheckConstraint("CK_ProfileQuestions_Order", "\"SortOrder\">=0 AND \"RowVersion\">=0");
+
+                            t.HasCheckConstraint("CK_ProfileQuestions_Text", "length(trim(\"Text\")) BETWEEN 1 AND 200");
+
+                            t.HasCheckConstraint("CK_ProfileQuestions_Type", "\"Type\" IN ('Text','YesNo')");
+                        });
+                });
+
             modelBuilder.Entity("Sem.Web.Core.ProgressEstimate", b =>
                 {
                     b.Property<string>("EventId")
@@ -1845,6 +1937,13 @@ namespace Sem.Web.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("LocationUrl")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(2048)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("");
+
                     b.Property<bool>("ManualPhaseOverride")
                         .HasColumnType("INTEGER");
 
@@ -1936,6 +2035,36 @@ namespace Sem.Web.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Sem.Web.Core.SiteThemePreference", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("Mode")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("RowVersion")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ThemeId")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ThemeId");
+
+                    b.ToTable("SiteThemePreferences", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_SiteThemePreferences_Id", "\"Id\"=1");
+
+                            t.HasCheckConstraint("CK_SiteThemePreferences_Mode", "\"Mode\" IS NULL OR \"Mode\" IN (0,1,2)");
+
+                            t.HasCheckConstraint("CK_SiteThemePreferences_RowVersion", "\"RowVersion\">=0");
+                        });
+                });
+
             modelBuilder.Entity("Sem.Web.Core.Song", b =>
                 {
                     b.Property<string>("Id")
@@ -2024,6 +2153,58 @@ namespace Sem.Web.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Sem.Web.Core.ThemeCatalogEntry", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Accent")
+                        .IsRequired()
+                        .HasMaxLength(7)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Background")
+                        .IsRequired()
+                        .HasMaxLength(7)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("BuiltIn")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("RowVersion")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Surface")
+                        .IsRequired()
+                        .HasMaxLength(7)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasMaxLength(7)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("ThemeCatalogEntries", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ThemeCatalog_Colors", "length(\"Accent\")=7 AND \"Accent\" GLOB '#[0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F]' AND length(\"Background\")=7 AND \"Background\" GLOB '#[0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F]' AND length(\"Surface\")=7 AND \"Surface\" GLOB '#[0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F]' AND length(\"Text\")=7 AND \"Text\" GLOB '#[0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F]'");
+
+                            t.HasCheckConstraint("CK_ThemeCatalog_FlagsAndVersion", "\"BuiltIn\" IN (0,1) AND \"RowVersion\">=0");
+
+                            t.HasCheckConstraint("CK_ThemeCatalog_Id", "length(\"Id\") BETWEEN 1 AND 64 AND \"Id\" NOT GLOB '*[^a-z0-9-]*' AND \"Id\" NOT GLOB '-*' AND \"Id\" NOT GLOB '*-' AND \"Id\" NOT GLOB '*--*'");
+
+                            t.HasCheckConstraint("CK_ThemeCatalog_Name", "length(\"Name\") BETWEEN 1 AND 30 AND length(trim(\"Name\")) >= 1");
+                        });
+                });
+
             modelBuilder.Entity("Sem.Web.Core.TimePart", b =>
                 {
                     b.Property<string>("Id")
@@ -2074,68 +2255,6 @@ namespace Sem.Web.Data.Migrations
                         });
                 });
 
-            modelBuilder.Entity("Sem.Web.Core.ProfileAnswer", b =>
-                {
-                    b.Property<string>("UserId").HasColumnType("TEXT");
-                    b.Property<string>("QuestionId").HasColumnType("TEXT");
-                    b.Property<string>("UpdatedAt").IsRequired().HasColumnType("TEXT");
-                    b.Property<string>("Value").IsRequired().HasColumnType("TEXT");
-                    b.HasKey("UserId", "QuestionId");
-                    b.HasIndex("QuestionId");
-                    b.ToTable("ProfileAnswers", null, t =>
-                        t.HasCheckConstraint("CK_ProfileAnswers_Value", "length(\"Value\")<=1000"));
-                });
-
-            modelBuilder.Entity("Sem.Web.Core.ProfileQrCredential", b =>
-                {
-                    b.Property<string>("UserId").HasColumnType("TEXT");
-                    b.Property<string>("TokenHash").IsRequired().HasColumnType("TEXT");
-                    b.Property<string>("IssuedAt").IsRequired().HasColumnType("TEXT");
-                    b.Property<string>("ExpiresAt").IsRequired().HasColumnType("TEXT");
-                    b.Property<long>("RowVersion").IsConcurrencyToken().HasColumnType("INTEGER");
-                    b.HasKey("UserId");
-                    b.HasIndex("TokenHash").IsUnique();
-                    b.ToTable("ProfileQrCredentials", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_ProfileQrCredentials_Hash", "length(\"TokenHash\")=64");
-                            t.HasCheckConstraint("CK_ProfileQrCredentials_Expiry", "\"ExpiresAt\">\"IssuedAt\" AND \"RowVersion\">0");
-                        });
-                });
-
-            modelBuilder.Entity("Sem.Web.Core.ProfileImage", b =>
-                {
-                    b.Property<string>("UserId").HasMaxLength(450).HasColumnType("TEXT");
-                    b.Property<byte[]>("Data").IsRequired().HasColumnType("BLOB");
-                    b.Property<int>("Width").HasColumnType("INTEGER");
-                    b.Property<int>("Height").HasColumnType("INTEGER");
-                    b.Property<long>("RowVersion").IsConcurrencyToken().HasColumnType("INTEGER");
-                    b.HasKey("UserId");
-                    b.ToTable("ProfileImages", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_ProfileImages_Data", "(length(\"Data\")=0 AND \"Width\"=0 AND \"Height\"=0) OR (length(\"Data\") BETWEEN 8 AND 1048576 AND \"Width\" BETWEEN 1 AND 512 AND \"Height\" BETWEEN 1 AND 512)");
-                            t.HasCheckConstraint("CK_ProfileImages_RowVersion", "\"RowVersion\">0");
-                        });
-                });
-
-            modelBuilder.Entity("Sem.Web.Core.ProfileQuestion", b =>
-                {
-                    b.Property<string>("Id").HasColumnType("TEXT");
-                    b.Property<bool>("Enabled").HasColumnType("INTEGER");
-                    b.Property<int>("SortOrder").HasColumnType("INTEGER");
-                    b.Property<string>("Text").IsRequired().HasColumnType("TEXT");
-                    b.Property<string>("Type").IsRequired().HasColumnType("TEXT");
-                    b.Property<long>("RowVersion").IsConcurrencyToken().HasColumnType("INTEGER");
-                    b.HasKey("Id");
-                    b.HasIndex("SortOrder", "Id");
-                    b.ToTable("ProfileQuestions", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_ProfileQuestions_Type", "\"Type\" IN ('Text','YesNo')");
-                            t.HasCheckConstraint("CK_ProfileQuestions_Text", "length(trim(\"Text\")) BETWEEN 1 AND 200");
-                            t.HasCheckConstraint("CK_ProfileQuestions_Enabled", "\"Enabled\" IN (0,1)");
-                            t.HasCheckConstraint("CK_ProfileQuestions_Order", "\"SortOrder\">=0 AND \"RowVersion\">=0");
-                        });
-                });
-
             modelBuilder.Entity("Sem.Web.Core.UserProfile", b =>
                 {
                     b.Property<string>("UserId")
@@ -2145,11 +2264,11 @@ namespace Sem.Web.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("Reading")
+                    b.Property<string>("Icon")
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("Icon")
+                    b.Property<string>("Reading")
                         .IsRequired()
                         .HasColumnType("TEXT");
 
@@ -2165,8 +2284,38 @@ namespace Sem.Web.Data.Migrations
 
                     b.ToTable("UserProfiles", null, t =>
                         {
-                            t.HasCheckConstraint("CK_UserProfiles_SocialJson", "json_valid(\"SocialJson\")");
                             t.HasCheckConstraint("CK_UserProfiles_Icon", "length(\"Icon\")<=64");
+
+                            t.HasCheckConstraint("CK_UserProfiles_SocialJson", "json_valid(\"SocialJson\")");
+                        });
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.UserThemePreference", b =>
+                {
+                    b.Property<string>("UserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("Mode")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("RowVersion")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ThemeId")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("UserId");
+
+                    b.HasIndex("ThemeId");
+
+                    b.ToTable("UserThemePreferences", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_UserThemePreferences_Mode", "\"Mode\" IS NULL OR \"Mode\" IN (0,1,2)");
+
+                            t.HasCheckConstraint("CK_UserThemePreferences_RowVersion", "\"RowVersion\">=0");
                         });
                 });
 
@@ -2314,6 +2463,170 @@ namespace Sem.Web.Data.Migrations
                     b.ToTable("Deliveries");
                 });
 
+            modelBuilder.Entity("Sem.Web.Runtime.EmailChangeMail", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Claim")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Due")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Error")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("ExpiresAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("LeaseUntil")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("OperationId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ProtectedPayload")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("SentAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("Status", "Due");
+
+                    b.ToTable("EmailChangeMails", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_EmailChangeMail_Claim", "(\"Status\"='Sending' AND \"Claim\" IS NOT NULL AND \"LeaseUntil\" IS NOT NULL) OR (\"Status\"<>'Sending' AND \"Claim\" IS NULL AND \"LeaseUntil\" IS NULL)");
+
+                            t.HasCheckConstraint("CK_EmailChangeMail_Kind", "\"Kind\" IN ('Verification','OldAddressNotice')");
+
+                            t.HasCheckConstraint("CK_EmailChangeMail_State", "\"Status\" IN ('Pending','Sending','Sent','Failed','Cancelled') AND \"Attempts\" BETWEEN 0 AND 5");
+                        });
+                });
+
+            modelBuilder.Entity("Sem.Web.Runtime.EmailChangeOperation", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("ChallengeExpiresAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ChallengeHash")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CreatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("ExpiresAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("LastSentAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("OriginalEmailHash")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ProtectedTargetEmail")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("ReauthenticatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("RowVersion")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SecurityStamp")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SessionHash")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TargetEmailHash")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TokenHash")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TargetEmailHash")
+                        .IsUnique();
+
+                    b.HasIndex("UserId")
+                        .IsUnique();
+
+                    b.ToTable("EmailChangeOperations", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_EmailChangeOperation_Hashes", "length(\"OriginalEmailHash\")=64 AND length(\"SessionHash\")=64 AND (\"TargetEmailHash\" IS NULL OR length(\"TargetEmailHash\")=64) AND (\"TokenHash\" IS NULL OR length(\"TokenHash\")=64)");
+
+                            t.HasCheckConstraint("CK_EmailChangeOperation_State", "\"Status\" IN ('Pending','Completed','Cancelled','Invalidated') AND \"RowVersion\">0");
+                        });
+                });
+
+            modelBuilder.Entity("Sem.Web.Runtime.EmailChangeRateState", b =>
+                {
+                    b.Property<string>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PasskeyFailures")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("RowVersion")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SendTimes")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("VerificationFailures")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("UserId");
+
+                    b.ToTable("EmailChangeRateStates", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_EmailChangeRateState_Version", "\"RowVersion\">0");
+                        });
+                });
+
             modelBuilder.Entity("Sem.Web.Runtime.EmailTicket", b =>
                 {
                     b.Property<string>("Id")
@@ -2355,16 +2668,12 @@ namespace Sem.Web.Data.Migrations
                     b.Property<long>("Expires")
                         .HasColumnType("INTEGER");
 
-                    b.Property<string>("IssuerId")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
                     b.Property<string>("IssuanceSource")
                         .HasMaxLength(32)
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("Purpose")
-                        .HasMaxLength(500)
+                    b.Property<string>("IssuerId")
+                        .IsRequired()
                         .HasColumnType("TEXT");
 
                     b.Property<int>("Limit")
@@ -2376,6 +2685,10 @@ namespace Sem.Web.Data.Migrations
 
                     b.Property<string>("ProtectedToken")
                         .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Purpose")
+                        .HasMaxLength(500)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("RequestId")
@@ -2399,12 +2712,12 @@ namespace Sem.Web.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("TokenHash")
-                        .IsUnique();
-
                     b.HasIndex("RequestId")
                         .IsUnique()
                         .HasFilter("\"RequestId\" IS NOT NULL");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
 
                     b.ToTable("Invitations");
                 });
@@ -2426,11 +2739,11 @@ namespace Sem.Web.Data.Migrations
                     b.Property<long?>("DecidedAt")
                         .HasColumnType("INTEGER");
 
-                    b.Property<string>("DecisionComment")
-                        .HasMaxLength(500)
+                    b.Property<string>("DecidedBy")
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("DecidedBy")
+                    b.Property<string>("DecisionComment")
+                        .HasMaxLength(500)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Reason")
@@ -2499,130 +2812,6 @@ namespace Sem.Web.Data.Migrations
                     b.ToTable("Participations");
                 });
 
-            modelBuilder.Entity("Sem.Web.Runtime.PasskeyRecoveryAdminChallenge", b =>
-                {
-                    b.Property<string>("Id").HasColumnType("TEXT");
-                    b.Property<string>("AdminId").IsRequired().HasColumnType("TEXT");
-                    b.Property<string>("TargetUserId").IsRequired().HasColumnType("TEXT");
-                    b.Property<string>("SessionHash").IsRequired().HasColumnType("TEXT");
-                    b.Property<string>("ContextHash").IsRequired().HasColumnType("TEXT");
-                    b.Property<string>("ChallengeHash").IsRequired().HasColumnType("TEXT");
-                    b.Property<long>("CreatedAt").HasColumnType("INTEGER");
-                    b.Property<long>("ExpiresAt").HasColumnType("INTEGER");
-                    b.Property<long?>("UsedAt").HasColumnType("INTEGER");
-                    b.HasKey("Id");
-                    b.HasIndex("TargetUserId");
-                    b.HasIndex("AdminId", "TargetUserId", "SessionHash", "ExpiresAt");
-                    b.ToTable("PasskeyRecoveryAdminChallenges", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_PasskeyRecoveryAdminChallenge_Hashes", "length(\"SessionHash\")=64 AND length(\"ContextHash\")=64 AND length(\"ChallengeHash\")=64");
-                            t.HasCheckConstraint("CK_PasskeyRecoveryAdminChallenge_Time", "\"ExpiresAt\">\"CreatedAt\"");
-                        });
-                });
-
-            modelBuilder.Entity("Sem.Web.Runtime.PasskeyRecoveryAudit", b =>
-                {
-                    b.Property<string>("Id").HasColumnType("TEXT");
-                    b.Property<string>("OperationId").IsRequired().HasColumnType("TEXT");
-                    b.Property<string>("AdminId").HasColumnType("TEXT");
-                    b.Property<string>("ActorType").IsRequired().HasColumnType("TEXT");
-                    b.Property<string>("ActorId").IsRequired().HasColumnType("TEXT");
-                    b.Property<string>("BackupId").HasColumnType("TEXT");
-                    b.Property<string>("TargetUserId").IsRequired().HasColumnType("TEXT");
-                    b.Property<string>("Action").IsRequired().HasColumnType("TEXT");
-                    b.Property<string>("Reason").IsRequired().HasColumnType("TEXT");
-                    b.Property<long>("At").HasColumnType("INTEGER");
-                    b.HasKey("Id");
-                    b.HasIndex("AdminId");
-                    b.HasIndex("TargetUserId");
-                    b.HasIndex("OperationId", "At");
-                    b.ToTable("PasskeyRecoveryAudits", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_PasskeyRecoveryAudit_Action", "\"Action\" IN ('RecoveryStarted','RecoveryMailResent','RecoveryEmailConfirmed','RecoveryCompleted','RecoveryHostPrepared','RecoveryHostReset')");
-                            t.HasCheckConstraint("CK_PasskeyRecoveryAudit_Reason", "length(trim(\"Reason\")) BETWEEN 3 AND 500");
-                            t.HasCheckConstraint("CK_PasskeyRecoveryAudit_Actor", "((\"ActorType\"='Administrator' AND \"AdminId\" IS NOT NULL AND \"ActorId\"=\"AdminId\" AND \"BackupId\" IS NULL) OR (\"ActorType\"='HostOperator' AND \"AdminId\" IS NULL AND length(trim(\"ActorId\")) BETWEEN 1 AND 128 AND \"BackupId\" IS NOT NULL AND length(\"BackupId\")=64))");
-                        });
-                });
-
-            modelBuilder.Entity("Sem.Web.Runtime.PasskeyRecoveryMail", b =>
-                {
-                    b.Property<string>("Id").HasColumnType("TEXT");
-                    b.Property<string>("UserId").IsRequired().HasColumnType("TEXT");
-                    b.Property<string>("OperationId").IsRequired().HasColumnType("TEXT");
-                    b.Property<string>("Kind").IsRequired().HasColumnType("TEXT");
-                    b.Property<string>("ProtectedPayload").IsRequired().HasColumnType("TEXT");
-                    b.Property<string>("ProofHash").HasColumnType("TEXT");
-                    b.Property<long>("Due").HasColumnType("INTEGER");
-                    b.Property<long>("ExpiresAt").HasColumnType("INTEGER");
-                    b.Property<string>("Status").IsRequired().HasColumnType("TEXT");
-                    b.Property<int>("Attempts").HasColumnType("INTEGER");
-                    b.Property<long?>("SentAt").HasColumnType("INTEGER");
-                    b.Property<string>("Claim").HasColumnType("TEXT");
-                    b.Property<long?>("LeaseUntil").HasColumnType("INTEGER");
-                    b.Property<string>("Error").HasColumnType("TEXT");
-                    b.HasKey("Id");
-                    b.HasIndex("OperationId", "Kind");
-                    b.HasIndex("Status", "Due");
-                    b.HasIndex("UserId");
-                    b.ToTable("PasskeyRecoveryMails", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_PasskeyRecoveryMail_Kind", "\"Kind\" IN ('RecoveryLink','RecoveryComplete')");
-                            t.HasCheckConstraint("CK_PasskeyRecoveryMail_State", "\"Status\" IN ('Pending','Sending','Sent','Failed','Cancelled') AND \"Attempts\" BETWEEN 0 AND 5");
-                            t.HasCheckConstraint("CK_PasskeyRecoveryMail_Claim", "(\"Status\"='Sending' AND \"Claim\" IS NOT NULL AND \"LeaseUntil\" IS NOT NULL) OR (\"Status\"<>'Sending' AND \"Claim\" IS NULL AND \"LeaseUntil\" IS NULL)");
-                            t.HasCheckConstraint("CK_PasskeyRecoveryMail_ProofHash", "\"ProofHash\" IS NULL OR length(\"ProofHash\")=64");
-                        });
-                });
-
-            modelBuilder.Entity("Sem.Web.Runtime.PasskeyRecoveryOperation", b =>
-                {
-                    b.Property<string>("Id").HasColumnType("TEXT");
-                    b.Property<string>("UserId").IsRequired().HasColumnType("TEXT");
-                    b.Property<string>("AdminId").HasColumnType("TEXT");
-                    b.Property<string>("RecoveryMode").IsRequired().HasColumnType("TEXT");
-                    b.Property<string>("ActorType").IsRequired().HasColumnType("TEXT");
-                    b.Property<string>("ActorId").IsRequired().HasColumnType("TEXT");
-                    b.Property<string>("BackupId").HasColumnType("TEXT");
-                    b.Property<string>("Reason").IsRequired().HasColumnType("TEXT");
-                    b.Property<string>("Status").IsRequired().HasColumnType("TEXT");
-                    b.Property<string>("EmailHash").IsRequired().HasColumnType("TEXT");
-                    b.Property<string>("SecurityStamp").IsRequired().HasColumnType("TEXT");
-                    b.Property<string>("TokenHash").HasColumnType("TEXT");
-                    b.Property<string>("GrantHash").HasColumnType("TEXT");
-                    b.Property<string>("CreationChallengeHash").HasColumnType("TEXT");
-                    b.Property<long>("CreatedAt").HasColumnType("INTEGER");
-                    b.Property<long>("ExpiresAt").HasColumnType("INTEGER");
-                    b.Property<long?>("EmailVerifiedAt").HasColumnType("INTEGER");
-                    b.Property<long?>("GrantExpiresAt").HasColumnType("INTEGER");
-                    b.Property<long?>("LastSentAt").HasColumnType("INTEGER");
-                    b.Property<bool>("DisabledForRecovery").HasColumnType("INTEGER");
-                    b.Property<long>("RowVersion").IsConcurrencyToken().HasColumnType("INTEGER");
-                    b.HasKey("Id");
-                    b.HasIndex("AdminId");
-                    b.HasIndex("UserId").IsUnique();
-                    b.ToTable("PasskeyRecoveryOperations", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_PasskeyRecoveryOperation_Hashes", "length(\"EmailHash\")=64 AND length(\"SecurityStamp\")>0 AND (\"TokenHash\" IS NULL OR length(\"TokenHash\")=64) AND (\"GrantHash\" IS NULL OR length(\"GrantHash\")=64) AND (\"CreationChallengeHash\" IS NULL OR length(\"CreationChallengeHash\")=64)");
-                            t.HasCheckConstraint("CK_PasskeyRecoveryOperation_Reason", "length(trim(\"Reason\")) BETWEEN 3 AND 500");
-                            t.HasCheckConstraint("CK_PasskeyRecoveryOperation_State", "\"Status\" IN ('Pending','HostPrepared','EmailConfirmed','Completed','Expired','Cancelled','Invalidated') AND \"RowVersion\">0");
-                            t.HasCheckConstraint("CK_PasskeyRecoveryOperation_Actor", "((\"RecoveryMode\"='Administrator' AND \"ActorType\"='Administrator' AND \"AdminId\" IS NOT NULL AND \"ActorId\"=\"AdminId\" AND \"BackupId\" IS NULL) OR (\"RecoveryMode\"='HostEmergency' AND \"ActorType\"='HostOperator' AND \"AdminId\" IS NULL AND length(trim(\"ActorId\")) BETWEEN 1 AND 128 AND \"BackupId\" IS NOT NULL AND length(\"BackupId\")=64))");
-                        });
-                });
-
-            modelBuilder.Entity("Sem.Web.Runtime.PasskeyRecoveryRateState", b =>
-                {
-                    b.Property<string>("UserId").IsRequired().HasColumnType("TEXT");
-                    b.Property<string>("Purpose").IsRequired().HasColumnType("TEXT");
-                    b.Property<string>("SendTimes").IsRequired().HasColumnType("TEXT");
-                    b.Property<string>("ProofFailures").IsRequired().HasColumnType("TEXT");
-                    b.Property<string>("EmailFailures").IsRequired().HasColumnType("TEXT");
-                    b.Property<long>("RowVersion").IsConcurrencyToken().HasColumnType("INTEGER");
-                    b.HasKey("UserId", "Purpose");
-                    b.ToTable("PasskeyRecoveryRateStates", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_PasskeyRecoveryRateState_Version", "\"RowVersion\">0");
-                        });
-                });
-
             modelBuilder.Entity("Sem.Web.Runtime.PasskeyAddition", b =>
                 {
                     b.Property<string>("Id")
@@ -2689,18 +2878,29 @@ namespace Sem.Web.Data.Migrations
             modelBuilder.Entity("Sem.Web.Runtime.PasskeyDeletionProof", b =>
                 {
                     b.Property<string>("Id")
-                        .IsRequired()
                         .HasMaxLength(32)
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasMaxLength(450)
+                    b.Property<string>("ChallengeHash")
+                        .HasMaxLength(64)
                         .HasColumnType("TEXT");
+
+                    b.Property<long?>("ConsumedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("CreatedAt")
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("CredentialHash")
                         .IsRequired()
                         .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("ExpiresAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SecurityStamp")
+                        .IsRequired()
                         .HasColumnType("TEXT");
 
                     b.Property<string>("SessionHash")
@@ -2708,24 +2908,12 @@ namespace Sem.Web.Data.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("SecurityStamp")
+                    b.Property<string>("UserId")
                         .IsRequired()
+                        .HasMaxLength(450)
                         .HasColumnType("TEXT");
-
-                    b.Property<string>("ChallengeHash")
-                        .HasMaxLength(64)
-                        .HasColumnType("TEXT");
-
-                    b.Property<long>("CreatedAt")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<long>("ExpiresAt")
-                        .HasColumnType("INTEGER");
 
                     b.Property<long?>("VerifiedAt")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<long?>("ConsumedAt")
                         .HasColumnType("INTEGER");
 
                     b.HasKey("Id");
@@ -2736,8 +2924,308 @@ namespace Sem.Web.Data.Migrations
                     b.ToTable("PasskeyDeletionProofs", null, t =>
                         {
                             t.HasCheckConstraint("CK_PasskeyDeletionProof_Hashes", "length(\"CredentialHash\")=64 AND length(\"SessionHash\")=64 AND length(\"SecurityStamp\")>0 AND (\"ChallengeHash\" IS NULL OR length(\"ChallengeHash\")=64)");
-                            t.HasCheckConstraint("CK_PasskeyDeletionProof_Time", "\"CreatedAt\">=0 AND \"ExpiresAt\">\"CreatedAt\" AND (\"VerifiedAt\" IS NULL OR (\"VerifiedAt\">=\"CreatedAt\" AND \"VerifiedAt\"<\"ExpiresAt\")) AND (\"ConsumedAt\" IS NULL OR \"ConsumedAt\">=\"CreatedAt\")");
+
                             t.HasCheckConstraint("CK_PasskeyDeletionProof_State", "\"ConsumedAt\" IS NOT NULL OR (\"VerifiedAt\" IS NULL AND \"ChallengeHash\" IS NOT NULL) OR (\"VerifiedAt\" IS NOT NULL AND \"ChallengeHash\" IS NULL)");
+
+                            t.HasCheckConstraint("CK_PasskeyDeletionProof_Time", "\"CreatedAt\">=0 AND \"ExpiresAt\">\"CreatedAt\" AND (\"VerifiedAt\" IS NULL OR (\"VerifiedAt\">=\"CreatedAt\" AND \"VerifiedAt\"<\"ExpiresAt\")) AND (\"ConsumedAt\" IS NULL OR \"ConsumedAt\">=\"CreatedAt\")");
+                        });
+                });
+
+            modelBuilder.Entity("Sem.Web.Runtime.PasskeyRecoveryAdminChallenge", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AdminId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ChallengeHash")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ContextHash")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CreatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("ExpiresAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SessionHash")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TargetUserId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("UsedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TargetUserId");
+
+                    b.HasIndex("AdminId", "TargetUserId", "SessionHash", "ExpiresAt");
+
+                    b.ToTable("PasskeyRecoveryAdminChallenges", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_PasskeyRecoveryAdminChallenge_Hashes", "length(\"SessionHash\")=64 AND length(\"ContextHash\")=64 AND length(\"ChallengeHash\")=64");
+
+                            t.HasCheckConstraint("CK_PasskeyRecoveryAdminChallenge_Time", "\"ExpiresAt\">\"CreatedAt\"");
+                        });
+                });
+
+            modelBuilder.Entity("Sem.Web.Runtime.PasskeyRecoveryAudit", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ActorId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ActorType")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AdminId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("At")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("BackupId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OperationId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TargetUserId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AdminId");
+
+                    b.HasIndex("TargetUserId");
+
+                    b.HasIndex("OperationId", "At");
+
+                    b.ToTable("PasskeyRecoveryAudits", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_PasskeyRecoveryAudit_Action", "\"Action\" IN ('RecoveryStarted','RecoveryMailResent','RecoveryEmailConfirmed','RecoveryCompleted','RecoveryHostPrepared','RecoveryHostReset')");
+
+                            t.HasCheckConstraint("CK_PasskeyRecoveryAudit_Actor", "((\"ActorType\"='Administrator' AND \"AdminId\" IS NOT NULL AND \"ActorId\"=\"AdminId\" AND \"BackupId\" IS NULL) OR (\"ActorType\"='HostOperator' AND \"AdminId\" IS NULL AND length(trim(\"ActorId\")) BETWEEN 1 AND 128 AND \"BackupId\" IS NOT NULL AND length(\"BackupId\")=64))");
+
+                            t.HasCheckConstraint("CK_PasskeyRecoveryAudit_Reason", "length(trim(\"Reason\")) BETWEEN 3 AND 500");
+                        });
+                });
+
+            modelBuilder.Entity("Sem.Web.Runtime.PasskeyRecoveryMail", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Claim")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Due")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Error")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("ExpiresAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("LeaseUntil")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("OperationId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ProofHash")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ProtectedPayload")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("SentAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("OperationId", "Kind");
+
+                    b.HasIndex("Status", "Due");
+
+                    b.ToTable("PasskeyRecoveryMails", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_PasskeyRecoveryMail_Claim", "(\"Status\"='Sending' AND \"Claim\" IS NOT NULL AND \"LeaseUntil\" IS NOT NULL) OR (\"Status\"<>'Sending' AND \"Claim\" IS NULL AND \"LeaseUntil\" IS NULL)");
+
+                            t.HasCheckConstraint("CK_PasskeyRecoveryMail_Kind", "\"Kind\" IN ('RecoveryLink','RecoveryComplete')");
+
+                            t.HasCheckConstraint("CK_PasskeyRecoveryMail_ProofHash", "\"ProofHash\" IS NULL OR length(\"ProofHash\")=64");
+
+                            t.HasCheckConstraint("CK_PasskeyRecoveryMail_State", "\"Status\" IN ('Pending','Sending','Sent','Failed','Cancelled') AND \"Attempts\" BETWEEN 0 AND 5");
+                        });
+                });
+
+            modelBuilder.Entity("Sem.Web.Runtime.PasskeyRecoveryOperation", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ActorId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ActorType")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AdminId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("BackupId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CreatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("CreationChallengeHash")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("DisabledForRecovery")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("EmailHash")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("EmailVerifiedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("ExpiresAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("GrantExpiresAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("GrantHash")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("LastSentAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RecoveryMode")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("RowVersion")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SecurityStamp")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TokenHash")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AdminId");
+
+                    b.HasIndex("UserId")
+                        .IsUnique();
+
+                    b.ToTable("PasskeyRecoveryOperations", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_PasskeyRecoveryOperation_Actor", "((\"RecoveryMode\"='Administrator' AND \"ActorType\"='Administrator' AND \"AdminId\" IS NOT NULL AND \"ActorId\"=\"AdminId\" AND \"BackupId\" IS NULL) OR (\"RecoveryMode\"='HostEmergency' AND \"ActorType\"='HostOperator' AND \"AdminId\" IS NULL AND length(trim(\"ActorId\")) BETWEEN 1 AND 128 AND \"BackupId\" IS NOT NULL AND length(\"BackupId\")=64))");
+
+                            t.HasCheckConstraint("CK_PasskeyRecoveryOperation_Hashes", "length(\"EmailHash\")=64 AND length(\"SecurityStamp\")>0 AND (\"TokenHash\" IS NULL OR length(\"TokenHash\")=64) AND (\"GrantHash\" IS NULL OR length(\"GrantHash\")=64) AND (\"CreationChallengeHash\" IS NULL OR length(\"CreationChallengeHash\")=64)");
+
+                            t.HasCheckConstraint("CK_PasskeyRecoveryOperation_Reason", "length(trim(\"Reason\")) BETWEEN 3 AND 500");
+
+                            t.HasCheckConstraint("CK_PasskeyRecoveryOperation_State", "\"Status\" IN ('Pending','HostPrepared','EmailConfirmed','Completed','Expired','Cancelled','Invalidated') AND \"RowVersion\">0");
+                        });
+                });
+
+            modelBuilder.Entity("Sem.Web.Runtime.PasskeyRecoveryRateState", b =>
+                {
+                    b.Property<string>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Purpose")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EmailFailures")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ProofFailures")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("RowVersion")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SendTimes")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("UserId", "Purpose");
+
+                    b.ToTable("PasskeyRecoveryRateStates", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_PasskeyRecoveryRateState_Version", "\"RowVersion\">0");
                         });
                 });
 
@@ -3248,6 +3736,20 @@ namespace Sem.Web.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Sem.Web.Core.EventThemePreference", b =>
+                {
+                    b.HasOne("Sem.Web.Core.SessionEvent", null)
+                        .WithMany()
+                        .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Sem.Web.Core.ThemeCatalogEntry", null)
+                        .WithMany()
+                        .HasForeignKey("ThemeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
             modelBuilder.Entity("Sem.Web.Core.ManualNotificationOperation", b =>
                 {
                     b.HasOne("Sem.Web.Data.ApplicationUser", null)
@@ -3347,6 +3849,39 @@ namespace Sem.Web.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("Sem.Web.Data.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.ProfileAnswer", b =>
+                {
+                    b.HasOne("Sem.Web.Core.ProfileQuestion", null)
+                        .WithMany()
+                        .HasForeignKey("QuestionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Sem.Web.Data.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.ProfileImage", b =>
+                {
+                    b.HasOne("Sem.Web.Data.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Sem.Web.Core.ProfileQrCredential", b =>
+                {
                     b.HasOne("Sem.Web.Data.ApplicationUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")
@@ -3473,6 +4008,14 @@ namespace Sem.Web.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Sem.Web.Core.SiteThemePreference", b =>
+                {
+                    b.HasOne("Sem.Web.Core.ThemeCatalogEntry", null)
+                        .WithMany()
+                        .HasForeignKey("ThemeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
             modelBuilder.Entity("Sem.Web.Core.Song", b =>
                 {
                     b.HasOne("Sem.Web.Core.SessionEvent", null)
@@ -3525,39 +4068,6 @@ namespace Sem.Web.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict);
                 });
 
-            modelBuilder.Entity("Sem.Web.Core.UserThemePreference", b =>
-                {
-                    b.HasOne("Sem.Web.Data.ApplicationUser", null).WithMany().HasForeignKey("UserId").OnDelete(DeleteBehavior.Restrict).IsRequired();
-                    b.HasOne("Sem.Web.Core.ThemeCatalogEntry", null).WithMany().HasForeignKey("ThemeId").OnDelete(DeleteBehavior.Restrict);
-                });
-
-            modelBuilder.Entity("Sem.Web.Core.EventThemePreference", b =>
-                {
-                    b.HasOne("Sem.Web.Core.SessionEvent", null).WithMany().HasForeignKey("EventId").OnDelete(DeleteBehavior.Restrict).IsRequired();
-                    b.HasOne("Sem.Web.Core.ThemeCatalogEntry", null).WithMany().HasForeignKey("ThemeId").OnDelete(DeleteBehavior.Restrict);
-                });
-
-            modelBuilder.Entity("Sem.Web.Core.SiteThemePreference", b =>
-                {
-                    b.HasOne("Sem.Web.Core.ThemeCatalogEntry", null).WithMany().HasForeignKey("ThemeId").OnDelete(DeleteBehavior.Restrict);
-                });
-
-            modelBuilder.Entity("Sem.Web.Core.ProfileAnswer", b =>
-                {
-                    b.HasOne("Sem.Web.Data.ApplicationUser", null).WithMany().HasForeignKey("UserId").OnDelete(DeleteBehavior.Restrict).IsRequired();
-                    b.HasOne("Sem.Web.Core.ProfileQuestion", null).WithMany().HasForeignKey("QuestionId").OnDelete(DeleteBehavior.Restrict).IsRequired();
-                });
-
-            modelBuilder.Entity("Sem.Web.Core.ProfileImage", b =>
-                {
-                    b.HasOne("Sem.Web.Data.ApplicationUser", null).WithMany().HasForeignKey("UserId").OnDelete(DeleteBehavior.Restrict).IsRequired();
-                });
-
-            modelBuilder.Entity("Sem.Web.Core.ProfileQrCredential", b =>
-                {
-                    b.HasOne("Sem.Web.Data.ApplicationUser", null).WithMany().HasForeignKey("UserId").OnDelete(DeleteBehavior.Restrict).IsRequired();
-                });
-
             modelBuilder.Entity("Sem.Web.Core.UserProfile", b =>
                 {
                     b.HasOne("Sem.Web.Data.ApplicationUser", null)
@@ -3567,174 +4077,18 @@ namespace Sem.Web.Data.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("Sem.Web.Core.SessionEvent", b =>
+            modelBuilder.Entity("Sem.Web.Core.UserThemePreference", b =>
                 {
-                    b.Navigation("Admins");
+                    b.HasOne("Sem.Web.Core.ThemeCatalogEntry", null)
+                        .WithMany()
+                        .HasForeignKey("ThemeId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
-                    b.Navigation("Phases");
-                });
-            modelBuilder.Entity("Sem.Web.Runtime.EmailChangeMail", b =>
-                {
-                    b.Property<string>("Id")
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("Attempts")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("Claim")
-                        .HasColumnType("TEXT");
-
-                    b.Property<long>("Due")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("Error")
-                        .HasColumnType("TEXT");
-
-                    b.Property<long>("ExpiresAt")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("Kind")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<long?>("LeaseUntil")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("OperationId")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("ProtectedPayload")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<long?>("SentAt")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("UserId");
-
-                    b.HasIndex("Status", "Due");
-
-                    b.ToTable("EmailChangeMails", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_EmailChangeMail_Claim", "(\"Status\"='Sending' AND \"Claim\" IS NOT NULL AND \"LeaseUntil\" IS NOT NULL) OR (\"Status\"<>'Sending' AND \"Claim\" IS NULL AND \"LeaseUntil\" IS NULL)");
-
-                            t.HasCheckConstraint("CK_EmailChangeMail_Kind", "\"Kind\" IN ('Verification','OldAddressNotice')");
-
-                            t.HasCheckConstraint("CK_EmailChangeMail_State", "\"Status\" IN ('Pending','Sending','Sent','Failed','Cancelled') AND \"Attempts\" BETWEEN 0 AND 5");
-                        });
-                });
-
-            modelBuilder.Entity("Sem.Web.Runtime.EmailChangeOperation", b =>
-                {
-                    b.Property<string>("Id")
-                        .HasColumnType("TEXT");
-
-                    b.Property<long>("ChallengeExpiresAt")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("ChallengeHash")
-                        .HasColumnType("TEXT");
-
-                    b.Property<long>("CreatedAt")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<long>("ExpiresAt")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<long?>("LastSentAt")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("OriginalEmailHash")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("ProtectedTargetEmail")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<long?>("ReauthenticatedAt")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<long>("RowVersion")
-                        .IsConcurrencyToken()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("SecurityStamp")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("SessionHash")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("TargetEmailHash")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("TokenHash")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("TargetEmailHash")
-                        .IsUnique();
-
-                    b.HasIndex("UserId")
-                        .IsUnique();
-
-                    b.ToTable("EmailChangeOperations", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_EmailChangeOperation_Hashes", "length(\"OriginalEmailHash\")=64 AND length(\"SessionHash\")=64 AND (\"TargetEmailHash\" IS NULL OR length(\"TargetEmailHash\")=64) AND (\"TokenHash\" IS NULL OR length(\"TokenHash\")=64)");
-
-                            t.HasCheckConstraint("CK_EmailChangeOperation_State", "\"Status\" IN ('Pending','Completed','Cancelled','Invalidated') AND \"RowVersion\">0");
-                        });
-                });
-
-            modelBuilder.Entity("Sem.Web.Runtime.EmailChangeRateState", b =>
-                {
-                    b.Property<string>("UserId")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("PasskeyFailures")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<long>("RowVersion")
-                        .IsConcurrencyToken()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("SendTimes")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("VerificationFailures")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("UserId");
-
-                    b.ToTable("EmailChangeRateStates", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_EmailChangeRateState_Version", "\"RowVersion\">0");
-                        });
+                    b.HasOne("Sem.Web.Data.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Sem.Web.Runtime.EmailChangeMail", b =>
@@ -3763,6 +4117,7 @@ namespace Sem.Web.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
+
             modelBuilder.Entity("Sem.Web.Runtime.PasskeyDeletionProof", b =>
                 {
                     b.HasOne("Sem.Web.Data.ApplicationUser", null)
@@ -3774,34 +4129,83 @@ namespace Sem.Web.Data.Migrations
 
             modelBuilder.Entity("Sem.Web.Runtime.PasskeyRecoveryAdminChallenge", b =>
                 {
-                    b.HasOne("Sem.Web.Data.ApplicationUser", null).WithMany().HasForeignKey("AdminId").OnDelete(DeleteBehavior.Restrict).IsRequired();
-                    b.HasOne("Sem.Web.Data.ApplicationUser", null).WithMany().HasForeignKey("TargetUserId").OnDelete(DeleteBehavior.Restrict).IsRequired();
+                    b.HasOne("Sem.Web.Data.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("AdminId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Sem.Web.Data.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("TargetUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Sem.Web.Runtime.PasskeyRecoveryAudit", b =>
                 {
-                    b.HasOne("Sem.Web.Data.ApplicationUser", null).WithMany().HasForeignKey("AdminId").OnDelete(DeleteBehavior.Restrict);
-                    b.HasOne("Sem.Web.Data.ApplicationUser", null).WithMany().HasForeignKey("TargetUserId").OnDelete(DeleteBehavior.Restrict).IsRequired();
-                    b.HasOne("Sem.Web.Runtime.PasskeyRecoveryOperation", null).WithMany().HasForeignKey("OperationId").OnDelete(DeleteBehavior.Restrict).IsRequired();
+                    b.HasOne("Sem.Web.Data.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("AdminId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Sem.Web.Runtime.PasskeyRecoveryOperation", null)
+                        .WithMany()
+                        .HasForeignKey("OperationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Sem.Web.Data.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("TargetUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Sem.Web.Runtime.PasskeyRecoveryMail", b =>
                 {
-                    b.HasOne("Sem.Web.Data.ApplicationUser", null).WithMany().HasForeignKey("UserId").OnDelete(DeleteBehavior.Restrict).IsRequired();
-                    b.HasOne("Sem.Web.Runtime.PasskeyRecoveryOperation", null).WithMany().HasForeignKey("OperationId").OnDelete(DeleteBehavior.Restrict).IsRequired();
+                    b.HasOne("Sem.Web.Runtime.PasskeyRecoveryOperation", null)
+                        .WithMany()
+                        .HasForeignKey("OperationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Sem.Web.Data.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Sem.Web.Runtime.PasskeyRecoveryOperation", b =>
                 {
-                    b.HasOne("Sem.Web.Data.ApplicationUser", null).WithMany().HasForeignKey("AdminId").OnDelete(DeleteBehavior.Restrict);
-                    b.HasOne("Sem.Web.Data.ApplicationUser", null).WithMany().HasForeignKey("UserId").OnDelete(DeleteBehavior.Restrict).IsRequired();
+                    b.HasOne("Sem.Web.Data.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("AdminId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Sem.Web.Data.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Sem.Web.Runtime.PasskeyRecoveryRateState", b =>
                 {
-                    b.HasOne("Sem.Web.Data.ApplicationUser", null).WithMany().HasForeignKey("UserId").OnDelete(DeleteBehavior.Restrict).IsRequired();
+                    b.HasOne("Sem.Web.Data.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
+            modelBuilder.Entity("Sem.Web.Core.SessionEvent", b =>
+                {
+                    b.Navigation("Admins");
+
+                    b.Navigation("Phases");
+                });
 #pragma warning restore 612, 618
         }
     }

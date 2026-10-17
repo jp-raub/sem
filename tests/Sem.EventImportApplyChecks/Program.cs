@@ -56,9 +56,23 @@ try {
         foreach(var uid in new[]{"admin","manager","member","other"}) db.Users.Add(new(){Id=uid,UserName=uid,Email=uid+"@PRIVATE.invalid",DisplayName=uid,Enabled=true,EmailConfirmed=true,SecurityStamp=uid+"-stamp",IsAdmin=uid=="admin"});
         await db.SaveChangesAsync();
     }
-    var id=await NewEvent(); var original=await core.ReadTimetableAsync(Who("manager"),id);
+    // Seed only columns actually present in the historical schema. The current service
+    // intentionally requires the current schema and must not be used before migration.
+    var id="pre-migration-event";
+    await using(var db=await factory.CreateDbContextAsync()){
+        var oldEvent=new SessionEvent{Id=id,Title="Import event",ScheduledDate="2099-01-01T00:00:00.000Z",CreatedAt="2026-10-18T00:00:00.000Z",RowVersion=1,ImportHistoryKnown=true};
+        oldEvent.Phases.Add(new(){EventId=id,Kind="Hidden",Name="非表示",IsActive=true,SortOrder=0});
+        oldEvent.Phases.Add(new(){EventId=id,Kind="View",Name="閲覧",SortOrder=1});
+        oldEvent.Admins.Add(new(){EventId=id,UserId="manager",GrantedAt=oldEvent.CreatedAt});
+        await LegacySessionEventSeed.AddAsync(db,oldEvent);
+        // Match the existing creation contract: snapshot the retained presets into this event.
+        foreach(var preset in await db.PartPresets.Where(x=>x.DeletedAt==null).OrderBy(x=>x.SortOrder).ToArrayAsync())
+            db.EventPartDefinitions.Add(new(){EventId=id,SourcePresetId=preset.Id,Name=preset.Name,NormalizedName=preset.NormalizedName,Category=preset.Category,SortOrder=preset.SortOrder});
+        await db.SaveChangesAsync();
+    }
     await Change(db=>{db.Messages.Add(new(){Id="existing-inbox",UserId="member",Title="old",Body="retained",Created=1});return Task.CompletedTask;});
     await using(var db=await factory.CreateDbContextAsync()) { await db.Database.MigrateAsync();Check(!db.Database.HasPendingModelChanges(),"migration snapshot matches model");Check(await db.Users.CountAsync()==4 && await db.Messages.CountAsync()==1 && await db.SessionEvents.CountAsync()==1,"data-bearing previous schema upgrade preserves users inbox and event");Check(await db.Set<EventImportOperation>().CountAsync()==0,"migration creates empty operation ledger without backfill"); }
+    var original=await core.ReadTimetableAsync(Who("manager"),id);
     var edit=await Edit(id,csv);
     await Deny<ValidationException>(()=>core.ApplyEventImportAsync(Who("manager"),id,edit with{Confirmed=false}),"explicit confirmation required");
     await Deny<ValidationException>(()=>core.ApplyEventImportAsync(Who("manager"),id,edit with{RequestId=edit.RequestId.ToUpperInvariant()}),"canonical lowercase operation ID required");

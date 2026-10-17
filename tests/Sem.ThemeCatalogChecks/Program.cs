@@ -59,7 +59,7 @@ try
             new ApplicationUser { Id = "member", UserName = "member@test", Email = "member@test", DisplayName = "Member", SecurityStamp = "member-stamp", Enabled = true, EmailConfirmed = true },
             new ApplicationUser { Id = "disabled", UserName = "disabled@test", Email = "disabled@test", DisplayName = "Disabled", SecurityStamp = "disabled-stamp", Enabled = false, EmailConfirmed = true });
         db.ServiceSettings.Add(new ServiceSettings { Id = 1, Name = "Legacy setting", Description = "preserve", RowVersion = 7 });
-        db.SessionEvents.Add(new SessionEvent { Id = "legacy-event", Title = "Legacy event", ScheduledDate = "2026-10-01T00:00:00.000Z", CreatedAt = "2026-09-01T00:00:00.000Z", PhaseKind = "Hidden" });
+        await LegacySessionEventSeed.AddAsync(db,new SessionEvent { Id = "legacy-event", Title = "Legacy event", ScheduledDate = "2026-10-01T00:00:00.000Z", CreatedAt = "2026-09-01T00:00:00.000Z", PhaseKind = "Hidden" });
         await db.SaveChangesAsync();
         // Seed only columns present in the historical schema, not the later Icon column.
         Check(!await db.Database.SqlQueryRaw<string>("SELECT name AS Value FROM pragma_table_info('UserProfiles') WHERE name='Icon'").AnyAsync(),

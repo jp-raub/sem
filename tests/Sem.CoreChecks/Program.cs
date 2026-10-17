@@ -302,6 +302,23 @@ try
     await core.SaveEventAsync(admin, event1, Edit("Zero managers allowed", [], 2, "Hidden"));
     Check((await core.ReadAsync(manager)).Events.Length == 0, "Manager removal takes effect on the next operation even with cached authentication");
     await Deny<UnauthorizedAccessException>(() => core.SaveEventAsync(manager, event1, Edit("After removal", ["manager"], 3)), "Removed manager cannot save through an existing identity");
+    Check((await core.ReadAsync(admin)).Events.Single(e=>e.Id==event2).LocationUrl=="", "Legacy event creation defaults venue URL to empty");
+    var venueEdit=Edit("Venue with independent URL", [],1) with {Location="Existing venue text including https://old.example/path",LocationUrl=" https://venue.example/access?q=music&lang=ja#map "};
+    await core.SaveEventAsync(admin,event2,venueEdit);
+    var venue=(await core.ReadAsync(admin)).Events.Single(e=>e.Id==event2);
+    Check(venue.Location==venueEdit.Location&&venue.LocationUrl==venueEdit.LocationUrl.Trim(),"Venue name and URL persist independently with ordinary outer spaces trimmed");
+    Check(!(await core.ReadAsync(member)).Events.Any(e=>e.Id==event2),"Hidden venue link is not disclosed in member workspace");
+    await Deny<UnauthorizedAccessException>(()=>core.ReadEventTabsAsync(member,event2),"Hidden venue link is protected by existing event authorization");
+    foreach(var bad in new[]{"javascript:alert(1)","data:text/html,test","//venue.example/access","https://user:password@venue.example/","https://venue.example/\npath","https://venue.example/\\path","https://venue.example/a b",new string('a',2049)})
+        await Deny<ValidationException>(()=>core.SaveEventAsync(admin,event2,venueEdit with {RowVersion=2,LocationUrl=bad}),"Unsafe venue URL rejected: "+Array.IndexOf(new[]{"javascript:alert(1)","data:text/html,test","//venue.example/access"},bad));
+    Check((await core.ReadAsync(admin)).Events.Single(e=>e.Id==event2).RowVersion==2,"Invalid venue URLs do not mutate event version");
+    await core.SaveEventAsync(admin,event2,Edit("Legacy edit keeps link",[],2,"View"));
+    Check((await core.ReadEventTabsAsync(member,event2)).LocationUrl==venue.LocationUrl,"Legacy omission retains stored URL and public event read returns it");
+    await Deny<CoreConflictException>(()=>core.SaveEventAsync(admin,event2,venueEdit with {RowVersion=2,LocationUrl="https://other.example/"}),"Stale URL write cannot overwrite current event");
+    await Deny<UnauthorizedAccessException>(()=>core.SaveEventAsync(member,event2,venueEdit with {RowVersion=3}),"Member cannot update venue URL");
+    await core.SaveEventAsync(admin,event2,Edit("Explicitly cleared venue link",[],3,"View") with {LocationUrl=""});
+    Check((await core.ReadEventTabsAsync(member,event2)).LocationUrl=="","Explicit empty URL clears the link");
+    Check(EventLocationLink.IsSafe("http://venue.example/map")&&!EventLocationLink.IsSafe("javascript:alert(1)")&&!EventLocationLink.IsSafe(null),"Display guard permits HTTP(S) only and handles missing old URL");
     await using (var db = await factory.CreateDbContextAsync())
     {
         Check(await db.Users.Where(u => u.Id == "manager" || u.Id == "member").AllAsync(u => !u.IsAdmin), "Event assignments never promote global-admin flags");

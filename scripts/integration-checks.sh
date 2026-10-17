@@ -45,6 +45,7 @@ node scripts/field-help-ui-checks.mjs 2>&1 | tee verification/field-help-ui.log
 node --check scripts/participant-profile-checks.cjs
 node --check scripts/acceptance-navigation-checks.cjs
 node --check scripts/admin-search-audit-checks.cjs
+node --check scripts/event-location-checks.cjs
 node --check scripts/acceptance-retention-checks.cjs
 node --check scripts/comment-checks.cjs
 bash -n scripts/acceptance-browser-fixture.sh
