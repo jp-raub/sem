@@ -66,9 +66,16 @@ jobs:
           import json,pathlib,re
           root=pathlib.Path('verification/acceptance-native')
           result=json.loads((root/'e2e-result.json').read_text()) if (root/'e2e-result.json').exists() else {'passed':0,'checks':[]}
-          frames=re.findall(r'scripts/[A-Za-z0-9_-]+\.cjs:[0-9]+:[0-9]+',(root/'e2e-error.txt').read_text()) if (root/'e2e-error.txt').exists() else []
+          error=(root/'e2e-error.txt').read_text() if (root/'e2e-error.txt').exists() else ''
+          frames=re.findall(r'scripts/[A-Za-z0-9_-]+\.cjs:[0-9]+:[0-9]+',error)
           last=result['checks'][-1] if result['checks'] else 'No browser check completed'
           print('::error title=Acceptance failure location::passed='+str(result['passed'])+'; last='+last+'; frames='+','.join(frames))
+          match=re.search(r'Matrix keyboard selection state (\{[^\n]+?\});',error)
+          if match:
+              state=json.loads(match.group(1))
+              allowed={'disabled','pressed','focused','interactive','selections'}
+              if set(state)==allowed and all(type(v) in (bool,int) or v in (None,'true','false') for v in state.values()):
+                  print('::error title=Matrix selection state::'+json.dumps(state,sort_keys=True))
           PYCODE
       - uses: actions/upload-artifact@v4
         if: always()
