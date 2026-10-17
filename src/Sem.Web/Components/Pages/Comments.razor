@@ -25,11 +25,11 @@
  @if(Plan.ClosesAt is not null){<p id="comment-cutoff">一般ユーザーの締切：@JapaneseTime(Plan.ClosesAt) より前</p>}
  @if(Embedded){
   <button id="comment-compose-open" disabled="@(Busy||PendingDelete is not null||!Plan.CanPost)" @onclick="()=>ComposerOpen=true">コメントのみ投稿</button>
-  <dialog @ref="ComposerDialog" class="comment-composer" aria-labelledby="comment-compose-heading" @oncancel="CloseComposer" @oncancel:preventDefault>
+  <dialog @ref="ComposerDialog" class="comment-composer" aria-labelledby="comment-compose-heading">
    <h3 id="comment-compose-heading">コメントのみ投稿</h3>
    <p>参加枠の選択・設問回答は送信しません。</p>
    @CommentForm
-   <button id="comment-compose-close" disabled="@(Busy||Pending is not null)" @onclick="CloseComposer">閉じる（入力は保持）</button>
+   <button id="comment-compose-close" type="button" data-dialog-close disabled="@(Busy||Pending is not null)" @onclick="CloseComposer">閉じる（入力は保持）</button>
   </dialog>
  }else{@CommentForm}
  @if(Pending is not null||PendingDelete is not null){<p>結果が未確認です。入力は変更せず、同じ操作IDで再試行してください。新しいIDで送信すると別の投稿として扱われます。</p>}

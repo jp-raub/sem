@@ -3,9 +3,9 @@
 @implements IAsyncDisposable
 @inject IJSRuntime JS
 @inject AuthenticationStateProvider Authentication
-<dialog @ref="Dialog" class="profile-card" aria-labelledby="profile-card-heading" @oncancel="Close" @oncancel:preventDefault>
+<dialog @ref="Dialog" class="profile-card" aria-labelledby="profile-card-heading">
  <h2 id="profile-card-heading">メンバープロフィール</h2>
- <button id="profile-card-close" type="button" autofocus @onclick="Close">閉じる</button>
+ <button id="profile-card-close" type="button" data-dialog-close autofocus @onclick="Close">閉じる</button>
  <Sem.Web.Components.Pages.MemberProfile UserId="@UserId" Compact="true" @key="UserId" />
 </dialog>
 @code{

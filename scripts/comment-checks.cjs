@@ -26,6 +26,10 @@ module.exports=async({p,g,ok})=>{
   ok(await w.locator('#comment-compose-open').evaluate(e=>e===document.activeElement),'Closing embedded composer restores trigger focus');
   await w.locator('#comment-compose-open').click();
   ok(await w.locator('#comment-body').inputValue()==='Embedded standalone text <img src=x>','Closing composer preserves its unsubmitted body');
+  await w.keyboard.press('Escape');
+  await w.waitForFunction(()=>!document.querySelector('.comment-composer')?.open&&document.activeElement===document.getElementById('comment-compose-open'));
+  ok(await w.locator('#comment-body').inputValue()==='Embedded standalone text <img src=x>'&&await w.locator('[data-event-matrix-slot="'+selectedSlot+'"]').getAttribute('aria-pressed')==='true','Native Escape closes comment composer, restores focus and preserves both drafts');
+  await w.locator('#comment-compose-open').click();await w.locator('.comment-composer[open]').waitFor();
   await w.locator('#comment-post').click();
   await w.waitForFunction(()=>document.getElementById('comments-message').textContent.includes('投稿しました'));
   await w.waitForFunction(()=>!document.querySelector('.comment-composer')?.open);
