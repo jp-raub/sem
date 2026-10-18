@@ -14,6 +14,7 @@ function clearPrivate() {
   closeMenu(); view = null;
   if (el('navigation-controls')) el('navigation-controls').hidden = true;
   if (el('navigation-service')) el('navigation-service').hidden = true;
+  if (el('navigation-audit')) el('navigation-audit').hidden = true;
   if (el('navigation-user')) el('navigation-user').textContent = '';
   if (el('navigation-unread')) el('navigation-unread').textContent = '—';
   if (el('navigation-name')) el('navigation-name').textContent = 'SEM';
@@ -44,6 +45,7 @@ async function refresh() {
     el('navigation-description').textContent = data.description;
     el('navigation-controls').hidden = false;
     el('navigation-service').hidden = !data.isAdmin;
+    el('navigation-audit').hidden = !data.isAdmin;
     el('navigation-user').textContent = data.displayName;
     el('navigation-unread').textContent = String(data.unreadCount);
     el('navigation-inbox').setAttribute('aria-label', `メッセージボックス、未読${data.unreadCount}件`);

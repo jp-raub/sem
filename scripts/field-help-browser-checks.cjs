@@ -7,7 +7,9 @@ const http = require('node:http');
 const root = path.resolve(__dirname, '../src/Sem.Web/wwwroot');
 let checks = 0;
 function ok(value, name) { assert.ok(value, name); checks++; console.log('PASS ' + name); }
-const trigger = (key, label) => `<button type="button" class="field-help-trigger" data-field-help="${key}" data-field-label="${label}" aria-label="${label}の説明" aria-haspopup="dialog" aria-expanded="false">?</button>`;
+const component = fs.readFileSync(path.join(root, '../Components/Shared/FieldHelp.razor'), 'utf8').split('@code')[0].replace(/@\*[\s\S]*?\*@/g, '');
+// Use actual component markup, not a hand-written copy that could miss label association regressions.
+const trigger = (key, label) => component.replaceAll('@HelpKey', key).replaceAll('@(Label + "の説明")', label+'の説明').replaceAll('@Label', label);
 const html = `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><link rel="stylesheet" href="/sem.css"><link rel="stylesheet" href="/theme-appearance.css"><link rel="stylesheet" href="/field-help.css"></head><body><form><label>表示名${trigger('profile.display', '表示名')}<input id="name" value="unchanged"></label><label><input id="check" type="checkbox">必須${trigger('question.required', '必須')}</label><button id="submit">保存</button></form><button id="outside">別の操作</button><button id="open">編集を開く</button><dialog id="editor"><form><label>曲名${trigger('song.title', '曲名')}<input id="song" value="draft"></label></form><button id="close">閉じる</button></dialog><script>window.sends=0;document.querySelector('form').onsubmit=e=>{e.preventDefault();window.sends++};document.querySelector('#open').onclick=()=>editor.showModal();document.querySelector('#close').onclick=()=>editor.close();</script><script type="module" src="/field-help.js"></script></body></html>`;
 const server = http.createServer((req, res) => {
     if (req.url === '/') { res.setHeader('Content-Type', 'text/html; charset=utf-8'); res.end(html); return; }
@@ -25,6 +27,21 @@ const server = http.createServer((req, res) => {
         page.on('pageerror', error => errors.push(error.message));
         await page.goto(`http://127.0.0.1:${server.address().port}/`);
         const help = page.locator('[data-field-help="profile.display"]');
+        ok(await page.locator('label').first().evaluate(el => el.control?.id === 'name'), 'Label is associated with the actual input, not its help icon');
+        await page.locator('label').first().click({position:{x:1,y:1}});
+        ok(await page.locator('#name').evaluate(el => el === document.activeElement) && await page.locator('.field-help-panel').count() === 0, 'Field label click focuses input without opening help');
+        await page.keyboard.press('Tab');
+        ok(await page.locator('#check').evaluate(el => el === document.activeElement), 'Forward Tab skips help and reaches the next real input');
+        await page.keyboard.press('Shift+Tab');
+        ok(await page.locator('#name').evaluate(el => el === document.activeElement), 'Backward Tab skips help and returns to the preceding input');
+        await page.keyboard.press('Alt+F1');
+        await page.locator('.field-help-panel').waitFor();
+        ok(await help.getAttribute('aria-expanded') === 'true', 'Focused input opens its own help with the documented Alt+F1 shortcut');
+        await page.keyboard.press('Escape');
+        await page.keyboard.press('Space');
+        await page.locator('.field-help-panel').waitFor();
+        ok(true, 'Help reached programmatically supports Space without submitting the form');
+        await page.keyboard.press('Escape');
         await help.click();
         await page.locator('.field-help-panel p').filter({ hasText: 'プロフィールや参加枠' }).waitFor();
         ok(await help.getAttribute('aria-expanded') === 'true', 'Expanded help has accessible trigger state');
@@ -78,6 +95,8 @@ const server = http.createServer((req, res) => {
         const mobile = await browser.newContext({viewport:{width:390,height:844},hasTouch:true,isMobile:true});
         const m = await mobile.newPage();
         await m.goto(`http://127.0.0.1:${server.address().port}/`);
+        await m.locator('label').first().tap({position:{x:1,y:1}});
+        ok(await m.locator('.field-help-panel').count() === 0 && await m.locator('#name').evaluate(el => el === document.activeElement), 'Touching field label outside icon does not open help');
         await m.locator('[data-field-help="profile.display"]').tap();
         await m.locator('.field-help-panel').waitFor();
         const box = await m.locator('.field-help-panel').boundingBox();
