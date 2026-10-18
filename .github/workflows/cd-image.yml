@@ -1,0 +1,142 @@
+name: CD verified image
+on:
+  workflow_run:
+    workflows: [Main integration verification]
+    types: [completed]
+    branches: [main]
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/cd-image.yml'
+      - 'scripts/cd/**'
+      - 'deploy/CD*'
+      - 'deploy/cd-policy.json'
+permissions:
+  contents: read
+concurrency:
+  group: cd-image-${{ github.event_name == 'workflow_run' && 'main' || github.ref }}
+  cancel-in-progress: false # Never interrupt candidate publication half-way.
+jobs:
+  contract-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: |
+          python3 scripts/cd/release_gate_checks.py
+          python3 scripts/cd/updater_checks.py
+          bash -n scripts/cd/image-smoke.sh scripts/cd/install.sh scripts/cd/sem-cd
+
+  image-validation:
+    needs: contract-checks
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build PR image without registry permissions
+        run: docker build --platform linux/amd64 -t sem-cd:pr -f deploy/Dockerfile .
+      - name: Check non-root startup and restart
+        run: bash scripts/cd/image-smoke.sh sem-cd:pr
+      - name: Check initial capture, update, backup and restore
+        run: sudo python3 scripts/cd/docker_updater_checks.py --image sem-cd:pr
+
+  gate:
+    needs: contract-checks
+    if: >-
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      eligible: ${{ steps.gate.outputs.eligible }}
+      sha: ${{ steps.gate.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/cd/release_gate.py
+
+  publish:
+    needs: gate
+    if: needs.gate.outputs.eligible == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: write # Append-only candidate prerelease; no deploy credential.
+      packages: write
+      actions: read
+    env:
+      IMAGE: ghcr.io/jp-raub/sem
+      SOURCE_SHA: ${{ needs.gate.outputs.sha }}
+      UPSTREAM_RUN: ${{ github.event.workflow_run.id }}
+      UPSTREAM_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.gate.outputs.sha }}
+          persist-credentials: false
+      - name: Build once and test the same local image
+        run: |
+          docker build --platform linux/amd64 \
+            --label org.opencontainers.image.source=https://github.com/jp-raub/sem \
+            --label org.opencontainers.image.revision="$SOURCE_SHA" \
+            -t sem-cd:tested -f deploy/Dockerfile .
+          bash scripts/cd/image-smoke.sh sem-cd:tested
+      - name: Authenticate to GHCR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+      - name: Push tested image and record digest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="sha-$SOURCE_SHA-run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          docker tag sem-cd:tested "$IMAGE:$tag"
+          docker push "$IMAGE:$tag"
+          digest=$(docker image inspect "$IMAGE:$tag" --format '{{json .RepoDigests}}' | \
+            python3 -c 'import json,sys; a=[x for x in json.load(sys.stdin) if x.startswith("ghcr.io/jp-raub/sem@sha256:")]; assert len(a)==1; print(a[0].split("@",1)[1])')
+          export IMAGE_DIGEST="$digest"
+          # Revalidate immediately before publishing a candidate. Stale images may exist,
+          # but must never become current deploy candidates.
+          python3 scripts/cd/release_gate.py
+          current=$(gh api repos/jp-raub/sem/git/ref/heads/main --jq .object.sha)
+          if [ "$current" != "$SOURCE_SHA" ]; then
+            echo 'Superseded during build; candidate not published.'
+            exit 0
+          fi
+          python3 - <<'PY'
+          import json,os,re
+          digest=os.environ['IMAGE_DIGEST']
+          assert re.fullmatch('sha256:[0-9a-f]{64}',digest)
+          with open('deploy/cd-policy.json') as f: policy=json.load(f)
+          assert set(policy)=={'mode'} and policy['mode'] in ('auto','manual')
+          candidate=dict(deployment_mode=policy['mode'], schema=1, repository='jp-raub/sem', commit=os.environ['SOURCE_SHA'],
+            image=os.environ['IMAGE']+'@'+digest, platform='linux/amd64',
+            integration_run=int(os.environ['UPSTREAM_RUN']), integration_attempt=int(os.environ['UPSTREAM_ATTEMPT']),
+            publication_run=int(os.environ['GITHUB_RUN_ID']), publication_attempt=int(os.environ['GITHUB_RUN_ATTEMPT']))
+          with open('candidate.json','w') as f: json.dump(candidate,f,sort_keys=True,indent=2); f.write('\n')
+          PY
+          release="sem-cd-$SOURCE_SHA-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          # Unique prerelease: never overwrite a candidate or move its tag.
+          gh release create "$release" candidate.json --target "$SOURCE_SHA" --prerelease \
+            --title "SEM CD $SOURCE_SHA" --notes "Verified linux/amd64 image. DXP updater installation is required; this does not deploy to DXP."
+      - name: Logout
+        if: always()
+        run: docker logout ghcr.io >/dev/null 2>&1 || true

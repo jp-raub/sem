@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+# Ignore ambient Python imports and user site packages in this privileged utility.
+exec python3 -I -c 'import runpy,sys; sys.path.insert(0,"/opt/sem-cd"); runpy.run_module("updater",run_name="__main__")' "$@"
