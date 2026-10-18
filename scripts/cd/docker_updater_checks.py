@@ -14,7 +14,7 @@ import tarfile
 import tempfile
 import time
 
-from updater import Docker, Updater, atomic_json, run, hash_file
+from updater import Docker, Updater, CDException, atomic_json, run, hash_file
 from updater_checks import Source
 from initialize import prepare, escape_dollars, runtime_environment
 
@@ -54,6 +54,20 @@ def main():
              'chmod 600 /data/cd-sentinel /data/keys/cd-fixture.bin'])
         stage='hash seeded synthetic data and key-directory files'
         before=run(['docker','exec',current['Id'],'sh','-c','sha256sum /data/cd-sentinel /data/keys/*']).decode()
+        stage='seed unreadable legacy directory without changing application permissions'
+        # A realistic preserved legacy file that the non-root application cannot read.
+        # Only the isolated fixture helper has DAC_OVERRIDE; SEM keeps cap_drop ALL.
+        run(['docker','run','--rm','--network','none','--user','0',
+             '--cap-drop','ALL','--cap-add','DAC_OVERRIDE','--security-opt','no-new-privileges:true',
+             '--entrypoint','sh','-v',volume+':/data',image,'-c',
+             'mkdir -m 700 /data/cd-root-private; printf synthetic-root-private > /data/cd-root-private/fixture.bin; '
+             'chmod 600 /data/cd-root-private/fixture.bin'])
+        try:
+            run(['docker','exec',current['Id'],'du','-sk','/data'])
+        except CDException:
+            pass
+        else:
+            raise AssertionError('Legacy non-root du failure was not reproduced')
         # Exercise actual root-owned initial capture, including literal '$' secrets.
         stage='capture existing configuration'
         prepare([str(compose)],None,project,root/'backups',root/'config',root/'control')
@@ -88,6 +102,10 @@ def main():
             sentinel=next(m for m in archive if m.name.rstrip('/').endswith('cd-sentinel'))
             assert sentinel.mode & 0o777==0o600 and sentinel.uid!=0
             assert archive.extractfile(sentinel).read()==b'synthetic-cd-data'
+            private=next(m for m in archive if m.name.endswith('cd-root-private/fixture.bin'))
+            assert private.uid==0 and private.mode & 0o777==0o600
+            assert archive.extractfile(private).read()==b'synthetic-root-private'
+
         stage='restore backup into separate volume'
         # Restore stopped full data into a distinct empty volume, not back over source.
         run(['docker','run','--rm','--user','0','--network','none','--entrypoint','sh',
@@ -95,6 +113,11 @@ def main():
         restored=run(['docker','run','--rm','--user','0','--network','none','--entrypoint','sh',
              '-v',restore_volume+':/data:ro',image,'-c','sha256sum /data/cd-sentinel /data/keys/*']).decode()
         assert before==restored,'Restored sentinel/keys differ'
+        private_restored=run(['docker','run','--rm','--user','0','--network','none','--entrypoint','sh',
+             '-v',restore_volume+':/data:ro',image,'-c',
+             'test "$(stat -c %u:%a /data/cd-root-private/fixture.bin)" = 0:600 && cat /data/cd-root-private/fixture.bin'])
+        assert private_restored==b'synthetic-root-private','Restored private legacy file differs'
+
         stage='failed-health stop and no replay'
         # Simulated post-start failure must stop and block candidate; never replay on tick.
         class FailedHealth(LocalImageEngine):

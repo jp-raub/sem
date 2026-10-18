@@ -13,6 +13,7 @@ import json
 import os
 from pathlib import Path
 import re
+import selectors
 import shutil
 import stat
 import subprocess
@@ -229,6 +230,43 @@ def hash_file(path):
     return result.hexdigest()
 
 
+def stream_size(args, timeout=900):
+    """Count a Docker copy tar stream without storing or logging private bytes.
+
+    The daemon reads the mount, independent of application UID/tools. This is a
+    live size estimate ONLY; the actual verified backup is still taken stopped.
+    Count tar overhead too, conservatively, with bounded memory and wall time.
+    """
+    process = None
+    try:
+        deadline = time.monotonic() + timeout
+        process = subprocess.Popen(args, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                   stderr=subprocess.DEVNULL, bufsize=0)
+        size = 0
+        with selectors.DefaultSelector() as reader:
+            reader.register(process.stdout, selectors.EVENT_READ)
+            while True:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0 or not reader.select(remaining):
+                    raise subprocess.TimeoutExpired(args, timeout)
+                chunk = os.read(process.stdout.fileno(), 64 * 1024)
+                if not chunk:
+                    break
+                size += len(chunk)
+        remaining = deadline - time.monotonic()
+        if remaining <= 0 or process.wait(timeout=remaining) != 0 or not size:
+            raise CDException('Container data size estimate failed (private output withheld)')
+        return size
+    except (subprocess.SubprocessError, OSError):
+        raise CDException('Container data size estimate failed (private output withheld)') from None
+    finally:
+        if process is not None:
+            if process.poll() is None:
+                process.kill()
+            process.wait()
+            process.stdout.close()
+
+
 class Docker:
     def __init__(self, config, state):
         self.config, self.state = config, state
@@ -291,9 +329,9 @@ class Docker:
     def preflight(self, old, image, backup_root):
         if not old['State']['Running']:
             raise CDException('Existing SEM is not running; inspect before update')
-        # Only estimate application data size; never print paths/files or credentials.
-        usage = run(['docker', 'exec', old['Id'], 'du', '-sk', '/data']).decode().split()[0]
-        size = int(usage) * 1024
+        # Application UID may not read every preserved file (e.g. legacy root-owned
+        # private directories). Do not change its UID/capabilities/file permissions.
+        size = stream_size(['docker', 'cp', old['Id'] + ':/data/.', '-'])
         old_image = json.loads(run(['docker', 'image', 'inspect', old['Image']]))[0]
         need = size * 2 + int(old_image['Size']) * 2 + 512 * 1024 * 1024
         if shutil.disk_usage(backup_root).free < need:
@@ -483,6 +521,8 @@ class Updater:
 
 
 def load_config(path):
+    if not Path(path).exists():
+        raise CDException('CD is not configured; complete initial installation before using this command')
     secure_path(path)
     c = read_json(path, {})
     required = {'project', 'service', 'project_directory', 'compose_files', 'env_file', 'data_type', 'data_source', 'backup_root', 'state_directory'}
