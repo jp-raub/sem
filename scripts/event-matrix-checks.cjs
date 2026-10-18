@@ -299,6 +299,7 @@ module.exports = async ({ p, g, ok }) => {
         }, integrated.query), 'Same account saves an answer in a second document');
         await memberPage.locator('#participation-refresh').click();
         await memberPage.locator('#participation-review-confirm').waitFor();
+        await memberPage.locator('.participation-saved-answers summary').click();
         ok(await memberPage.locator('#participation-submit').isDisabled()
             && await memberPage.locator(`[data-participation-answer="${question.id}"]`).inputValue() === 'NO'
             && (await memberPage.locator('.participation-saved-answers').innerText()).includes('YES'),
