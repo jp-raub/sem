@@ -434,6 +434,33 @@ try
     using (var applyStreamed = await Send("event-import-apply", oversizedBody, "id=" + eventId, chunked: true))
         Check(applyStreamed.StatusCode == HttpStatusCode.RequestEntityTooLarge, "apply chunked oversized request returns 413 no-store");
 
+    // Event icon HTTP compatibility uses the existing production event route and actor-bound CSRF pair.
+    string iconEvent;
+    await using(var iconScope=app.Services.CreateAsyncScope()){
+        iconEvent=await iconScope.ServiceProvider.GetRequiredService<CoreFoundationService>().SaveEventAsync(Who("admin"),null,
+            new("HTTP icon", "", "", DateTimeOffset.Parse("2099-01-01T00:00:00Z"),null,"","Hidden",["manager"],0));
+    }
+    var iconEdit=new EventEdit("HTTP icon","","",DateTimeOffset.Parse("2099-01-01T00:00:00Z"),null,"","Hidden",["manager"],1,Icon:"🎹 HTTP");
+    var iconJsonOptions=new JsonSerializerOptions(JsonSerializerDefaults.Web){DefaultIgnoreCondition=System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull};
+    string IconJson(EventEdit edit)=>JsonSerializer.Serialize(edit,iconJsonOptions);
+    async Task<EventView> IconRead(){await using var scope=app.Services.CreateAsyncScope();return(await scope.ServiceProvider.GetRequiredService<CoreFoundationService>().ReadAsync(Who("manager"))).Events.Single(x=>x.Id==iconEvent);}
+    using(var saved=await Send("event",IconJson(iconEdit),"id="+iconEvent))Check(saved.StatusCode==HttpStatusCode.OK,"HTTP event route accepts bounded icon with existing CSRF and no-store");
+    Check((await IconRead()).Icon=="🎹 HTTP","HTTP icon roundtrip persists exact Unicode");
+    var legacyIconJson=IconJson(iconEdit with {RowVersion=2,Icon=null});Check(!legacyIconJson.Contains("\"icon\""),"Legacy HTTP body actually omits the new icon field");
+    using(var legacy=await Send("event",legacyIconJson,"id="+iconEvent))Check(legacy.StatusCode==HttpStatusCode.OK,"HTTP event route retains pre-icon client compatibility");
+    Check((await IconRead()).Icon=="🎹 HTTP","Omitted icon in HTTP update preserves saved icon");
+    using(var iconStale=await Send("event",IconJson(iconEdit with {Icon="stale"}),"id="+iconEvent))Check(iconStale.StatusCode==HttpStatusCode.Conflict,"HTTP stale icon write returns 409");
+    var invalidIconBody=IconJson(iconEdit with {RowVersion=3,Icon=new string('x',65)});
+    using(var invalid=await Send("event",invalidIconBody,"id="+iconEvent))Check(invalid.StatusCode==HttpStatusCode.BadRequest,"HTTP overlong icon returns 400");
+    using(var control=await Send("event",IconJson(iconEdit with {RowVersion=3,Icon="a\nb"}),"id="+iconEvent))Check(control.StatusCode==HttpStatusCode.BadRequest,"HTTP escaped control icon returns 400");
+    using(var noCsrf=await Send("event",IconJson(iconEdit with {RowVersion=3}),"id="+iconEvent,token:false))Check(noCsrf.StatusCode==HttpStatusCode.BadRequest,"HTTP icon mutation still requires CSRF");
+    using(var noOrigin=await Send("event",IconJson(iconEdit with {RowVersion=3}),"id="+iconEvent,origin:false))Check(noOrigin.StatusCode==HttpStatusCode.Forbidden,"HTTP icon mutation still requires Origin");
+    var iconMemberCsrf=await CsrfFor("member");
+    using(var denied=await Send("event",IconJson(iconEdit with {RowVersion=3}),"id="+iconEvent,cookie:"test-auth=member; "+iconMemberCsrf.Cookie,csrfTokenOverride:iconMemberCsrf.Token))Check(denied.StatusCode==HttpStatusCode.Forbidden,"HTTP ordinary member cannot update event icon");
+    Check((await IconRead()).RowVersion==3&&(await IconRead()).Icon=="🎹 HTTP","Rejected HTTP writes leave icon and row version intact");
+    using(var cleared=await Send("event",IconJson(iconEdit with {RowVersion=3,Icon=""}),"id="+iconEvent))Check(cleared.StatusCode==HttpStatusCode.OK,"HTTP explicit empty icon accepted");
+    Check((await IconRead()).Icon=="","HTTP empty icon clears saved value");
+
     Console.WriteLine($"PASS total={checks}");
 }
 finally

@@ -54,7 +54,7 @@ else
                         {
                             <tr @key="item.Id" data-core-event="@item.Id">
                                 <td class="workspace-event-name">
-                                    <a class="workspace-event-overview" data-event-overview="@item.Id" href="@($"/events/{Uri.EscapeDataString(item.Id)}")">@item.Title</a>
+                                    <a class="workspace-event-overview" data-event-overview="@item.Id" href="@($"/events/{Uri.EscapeDataString(item.Id)}")"><EventIconBadge Value="@item.Icon" />@item.Title</a>
                                     <EventListDescription Source="@item.Description" Format="@item.DescriptionFormat" />
                                     @if (!string.IsNullOrWhiteSpace(item.Location)) { <small>@item.Location</small> }
                                     @if (item.ManagerIds.Length > 0)
@@ -117,6 +117,9 @@ else
                     <label><span>会場名・住所<FieldHelp HelpKey="event.location" Label="会場名・住所" /></span><input id="event-location" @bind="EventLocation" maxlength="500" /></label>
                     <label><span>会場の案内URL（任意）<FieldHelp HelpKey="event.locationUrl" Label="会場の案内URL" /></span><input id="event-location-url" type="url" @bind="EventLocationUrl" maxlength="2048" placeholder="https://" /></label>
                 </div>
+                <label>イベントアイコン（任意・64文字以内）<input id="event-icon" @bind="EventIcon" @bind:event="oninput" maxlength="64" aria-describedby="event-icon-hint" /></label>
+                <p id="event-icon-hint">テキスト・絵文字を指定できます。画像やHTMLにはなりません。空欄で保存するとアイコンを削除します。</p>
+                <div id="event-icon-preview" aria-label="イベントアイコンのプレビュー"><EventIconBadge Value="@EventIcon" />@EventTitle</div>
                 <label>概要の入力形式<FieldHelp HelpKey="event.descriptionFormat" Label="概要の入力形式" /><select id="event-description-format" @bind="EventDescriptionFormat"><option value="text">プレーンテキスト</option><option value="markdown">Markdown</option><option value="html">HTML（安全なタグのみ）</option></select></label>
                 <label>概要<FieldHelp HelpKey="event.description" Label="概要" /><textarea id="event-description-source" @bind="EventDescription" @bind:event="oninput" maxlength="2000"></textarea></label>
                 <section id="event-description-preview" aria-label="概要のプレビュー"><h3>プレビュー</h3><p>危険なタグ・属性・画像は表示しません。外部リンクはHTTP(S)のみです。</p><EventDescriptionContent Source="@EventDescription" Format="@EventDescriptionFormat" /></section>
@@ -128,7 +131,7 @@ else
                     @if (EventHeaderBusy) { <p role="status">画像を確認中です。</p> }
                     <p role="alert">@EventHeaderError</p>
                 </section>
-                <p id="event-editor-availability" class="development-note">イベントのテキスト／絵文字アイコンは未実装です。人数上限は参加管理、配色・明るさは表示設定で変更できます。このフォームへの統合は後続対応です。</p>
+                <p id="event-editor-availability" class="development-note">イベントアイコンはテキスト／絵文字で保存できます。人数上限は参加管理、配色・明るさは表示設定で変更できます。このフォームへの統合は後続対応です。</p>
                 <label>表示<select id="event-phase" @bind="Phase"><option value="Hidden">非表示</option><option value="View">閲覧公開</option></select></label>
                 <fieldset>
                     <legend>担当管理者（0名以上・複数選択可）</legend>
@@ -333,6 +336,7 @@ else
     void RemoveEventHeader() { EventHeaderGeneration++; EventHeaderBusy = false; EventHeaderDraft = EventHeaderPreview = ""; EventHeaderError = ""; }
     void ResetEventHeader() { EventHeaderGeneration++; EventHeaderBusy = false; EventHeaderDraft = EventHeaderPreview = null; EventHeaderError = ""; }
     string EventDescriptionFormat = "text";
+    string EventIcon = "";
     string EventTitle = "", EventDescription = "", EventLocation = "", EventLocationUrl = "", Starts = "", Opens = "", Announcement = "", Phase = "Hidden";
     long Version;
     List<SocialDraft> Social = [];
@@ -467,10 +471,10 @@ else
         Editing = "profile"; var p = View!.Profile; ProfileName = p.DisplayName; Reading = p.Reading; CallName = p.CallName; Version = p.RowVersion;
         Social = p.Social.Select(s => new SocialDraft { Service = s.Service, Url = s.Url }).ToList();
     }
-    async Task NewEvent() { ResetEventHeader(); Editing = "event"; EventId = null; Version = 0; EventDescriptionFormat = "text"; EventTitle = EventDescription = EventLocation = EventLocationUrl = Starts = Opens = Announcement = ""; Phase = "Hidden"; Managers = []; await LoadManagerOptions(); }
+    async Task NewEvent() { ResetEventHeader(); Editing = "event"; EventId = null; Version = 0; EventDescriptionFormat = "text"; EventIcon = ""; EventTitle = EventDescription = EventLocation = EventLocationUrl = Starts = Opens = Announcement = ""; Phase = "Hidden"; Managers = []; await LoadManagerOptions(); }
     async Task EditEvent(EventView e)
     {
-        ResetEventHeader(); Editing = "event"; EventId = e.Id; Version = e.RowVersion; EventTitle = e.Title; EventDescription = e.Description; EventDescriptionFormat = e.DescriptionFormat; EventLocation = e.Location; EventLocationUrl = e.LocationUrl;
+        ResetEventHeader(); Editing = "event"; EventId = e.Id; Version = e.RowVersion; EventTitle = e.Title; EventIcon = e.Icon; EventDescription = e.Description; EventDescriptionFormat = e.DescriptionFormat; EventLocation = e.Location; EventLocationUrl = e.LocationUrl;
         Starts = Local(e.ScheduledDate); Opens = e.OpensAt is null ? "" : Local(e.OpensAt); Announcement = e.AnnouncementMessage; Phase = e.PhaseKind; Managers = e.ManagerIds.ToHashSet();
         var headerGeneration = EventHeaderGeneration;
         var principal = (await Authentication.GetAuthenticationStateAsync()).User;
@@ -483,7 +487,7 @@ else
     void ToggleManager(string id, bool selected) { if (selected) Managers.Add(id); else Managers.Remove(id); }
     async Task SaveService() => await Save(p => Core.SaveServiceAsync(p, new(ServiceName, ServiceDescription, Version)));
     async Task SaveProfile() => await Save(p => Core.SaveProfileAsync(p, new(ProfileName, Reading, CallName, Social.Select(s => new SocialLink(s.Service, s.Url)).ToArray(), Version)));
-    async Task SaveEvent() { if (EventHeaderBusy) return; await Save(async p => { await Core.SaveEventAsync(p, EventId, new(EventTitle, EventDescription, EventLocation, ParseLocal(Starts), string.IsNullOrWhiteSpace(Opens) ? null : ParseLocal(Opens), Announcement, Phase, Managers.ToArray(), Version, EventLocationUrl, EventDescriptionFormat, EventHeaderDraft)); }); }
+    async Task SaveEvent() { if (EventHeaderBusy) return; await Save(async p => { await Core.SaveEventAsync(p, EventId, new(EventTitle, EventDescription, EventLocation, ParseLocal(Starts), string.IsNullOrWhiteSpace(Opens) ? null : ParseLocal(Opens), Announcement, Phase, Managers.ToArray(), Version, EventLocationUrl, EventDescriptionFormat, EventHeaderDraft, EventIcon)); }); }
     async Task Save(Func<System.Security.Claims.ClaimsPrincipal, Task> action)
     {
         FeedbackRevision++; FeedbackUnknown=false; Busy = true; Error = ""; Message = "";

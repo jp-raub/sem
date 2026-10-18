@@ -1962,6 +1962,13 @@ namespace Sem.Web.Data.Migrations
                     b.Property<bool>("HasEverRegistrationPhase")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("Icon")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("");
+
                     b.Property<bool>("ImportHistoryKnown")
                         .HasColumnType("INTEGER");
 

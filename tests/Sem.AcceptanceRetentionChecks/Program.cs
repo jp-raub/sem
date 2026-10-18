@@ -34,12 +34,27 @@ try{
   Check(row.Location=="Legacy venue https://old.example/ unparsed"&&row.LocationUrl==""&&row.RowVersion==7&&row.Description=="<b>Existing description</b>"&&row.DescriptionFormat=="text"&&row.Title=="Existing event","Venue migration preserves existing event values and defaults new URL to empty without parsing legacy text");
   Check(!db.Database.HasPendingModelChanges(),"Venue migration snapshot matches current Identity V3 model");
  }
+ var iconUpgrade=Path.Combine(root,"icon-upgrade");Directory.CreateDirectory(iconUpgrade);
+ using(var provider=Provider(iconUpgrade)){
+  var db=provider.GetRequiredService<ApplicationDbContext>();
+  var all=db.Database.GetMigrations().ToArray();var index=Array.FindIndex(all,x=>x.EndsWith("AddEventIcon"));Check(index>0,"Icon migration follows existing schema");
+  var migrator=db.GetService<IMigrator>();await migrator.MigrateAsync(all[index-1]);
+  // Seed only columns that existed before this migration; never use the current EF entity on an older schema.
+  await db.Database.ExecuteSqlInterpolatedAsync($"""
+   INSERT INTO "SessionEvents" ("Id","Title","Description","DescriptionFormat","Location","LocationUrl","ScheduledDate","OpensAt","AnnouncementMessage","DefaultPrepSeconds","RoundStarts","SongIcon","PhaseKind","ManualPhaseOverride","ImportHistoryKnown","HasEverRegistrationPhase","CreatedAt","RowVersion","ClockFormat","DurationFormat")
+   VALUES ({"pre-icon"},{"Retained iconless event"},{"keep description"},{"markdown"},{"venue"},{"https://venue.example/"},{"2099-01-02T03:00:00Z"},NULL,{"keep announcement"},{600},{true},{"🎵"},{"Hidden"},{false},{true},{false},{"2026-10-18T00:00:00Z"},{12L},{"seconds"},{"units"});
+   """);
+  await migrator.MigrateAsync();var old=await db.SessionEvents.SingleAsync();
+  Check(old.Icon==""&&old.Title=="Retained iconless event"&&old.RowVersion==12&&old.Description=="keep description"&&old.DescriptionFormat=="markdown"&&old.LocationUrl=="https://venue.example/"&&old.SongIcon=="🎵"&&old.AnnouncementMessage=="keep announcement","Icon migration defaults only the new column and preserves prior event values and version");
+  Check(!db.Database.HasPendingModelChanges(),"Icon snapshot matches current Identity V3 model");
+  await SqliteStorageInitializer.InitializeAsync(db);Check((await db.SessionEvents.SingleAsync()).Icon=="","Repeated startup does not invent an icon for old data");
+ }
  string protectedText;
  using(var provider=Provider(original)){
   var db=provider.GetRequiredService<ApplicationDbContext>();await SqliteStorageInitializer.InitializeAsync(db);
   db.Users.Add(new ApplicationUser{Id="member",UserName="fixture@example.test",Email="fixture@example.test",EmailConfirmed=true,Enabled=true,DisplayName="Synthetic member",SecurityStamp="synthetic-stamp"});
   db.SiteStates.Add(new SiteState{Initialized=true,Name="Acceptance synthetic"});
-  var e=new SessionEvent{Id="event",Title="Persistent event",Description="## Retained description",DescriptionFormat="markdown",ScheduledDate="2099-01-02T03:00:00Z",CreatedAt="2026-10-17T00:00:00Z",RowVersion=3,Location="Retained venue text",LocationUrl="https://venue.example/access?map=1#entry",ManualPhaseOverride=true};
+  var e=new SessionEvent{Id="event",Icon="🎻 合奏",Title="Persistent event",Description="## Retained description",DescriptionFormat="markdown",ScheduledDate="2099-01-02T03:00:00Z",CreatedAt="2026-10-17T00:00:00Z",RowVersion=3,Location="Retained venue text",LocationUrl="https://venue.example/access?map=1#entry",ManualPhaseOverride=true};
   e.Phases.Add(new(){Id="phase",EventId="event",Kind="Custom",Name="Open",MaxPicks=-1,IsActive=true});db.SessionEvents.Add(e);
   db.EventHeaderImages.Add(new(){EventId="event",Data=new byte[]{137,80,78,71,13,10,26,10},Width=80,Height=40});
   db.EventPartDefinitions.Add(new(){Id="part",EventId="event",Name="Voice",NormalizedName="VOICE",Category="Sing"});
@@ -67,6 +82,7 @@ try{
   var retainedImage=await db.EventHeaderImages.SingleAsync();
   Check(retainedImage.Data.SequenceEqual(new byte[]{137,80,78,71,13,10,26,10})&&retainedImage.Width==80&&retainedImage.Height==40,"Event header blob and dimensions survive startup and complete directory backup/restore");
   var retainedEvent=await db.SessionEvents.SingleAsync();
+  Check(retainedEvent.Icon=="🎻 合奏","Unicode event icon survives restart and whole-directory restore");
   Check(retainedEvent.Description=="## Retained description"&&retainedEvent.DescriptionFormat=="markdown","Description source and format survive restart and whole-directory restore");
   Check(retainedEvent.Location=="Retained venue text"&&retainedEvent.LocationUrl=="https://venue.example/access?map=1#entry","Separate venue text and URL survive restart and full-directory restore");
   Check(before==await Dump(restored),"Restored application storage preserves all table values and passkey bytes");

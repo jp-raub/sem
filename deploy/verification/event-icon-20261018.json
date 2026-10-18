@@ -1,0 +1,668 @@
+{
+  "baseCommit": "72cef2342f4f43c4ede094765391dcdce43c771f",
+  "scope": "Optional persisted plain-text/emoji event icon; real draft preview/save/cancel, Workspace list and EventOverview; independent from profile, song and image header",
+  "compatibility": {
+    "omittedOrNullIcon": "preserve existing value",
+    "explicitEmptyOrWhitespaceIcon": "clear",
+    "oldRows": "new column defaults to empty; no inferred backfill",
+    "maximum": "64 UTF-16 code units",
+    "rejected": "control characters and malformed Unicode",
+    "rendering": "Razor encoded text, never HTML/image/link"
+  },
+  "migration": {
+    "id": "20261018124439_AddEventIcon",
+    "operations": "Add only non-null TEXT Icon column to SessionEvents, maximum length 64, default empty string",
+    "snapshotEqualsLatestDesignerModel": true,
+    "identityV3PendingModelChanges": 0,
+    "realPreIconSchemaUpgradeRetainsOldValues": true,
+    "normalDowngradeNotRecommended": "Down drops the new icon column and loses icon values"
+  },
+  "localValidation": {
+    "dotnetSuites": {
+      "passed": 77,
+      "failed": 0
+    },
+    "syntheticUiScripts": {
+      "passed": 15,
+      "failed": 0
+    },
+    "nativeBrowser": {
+      "passed": 182,
+      "clientErrors": 0,
+      "newSyntheticDatabase": true,
+      "wholeDirectoryRestoresPassed": 2,
+      "iconSpecificChecks": [
+        "Overview editor DOM order matches title, dates, venue, description and header: [\"event-title\",\"event-opens\",\"event-starts\",\"event-location\",\"event-location-url\",\"event-icon\",\"event-description-format\",\"event-description-source\",\"event-description-preview\",\"event-announcement\",\"event-header-file\"]",
+        "Persisted icon has a real bounded input while pending overview integration stays explicit",
+        "Previously iconless event reopens without fabricated icon",
+        "Icon draft previews immediately without writing saved event",
+        "Cancel leaves saved icon and list unchanged",
+        "Saved Unicode icon appears in real event list",
+        "Saved icon appears in event overview heading",
+        "Authorized ordinary participant reads same persisted event icon",
+        "Reload and reopen retain exact Unicode icon",
+        "Icon preview encodes markup-shaped text instead of creating an image",
+        "Saved icon is encoded in overview, never interpreted as HTML",
+        "Explicit empty saved input removes only event icon",
+        "64-unit icon draft fits 390px light without page overflow or implicit save",
+        "64-unit icon draft fits 390px dark without page overflow or implicit save",
+        "Unicode event icon is present in populated whole-directory retention fixture"
+      ]
+    },
+    "sameFrozenSource": {
+      "files": 688,
+      "changesAfterValidation": 0,
+      "manifestSha256": "d92687b67ec5c7ca9d44df3a26db591a2088e4721bdb2d911bc8edb520677a63"
+    },
+    "focusedChecks": {
+      "core": 144,
+      "eventImportHttpIncludingIcon": 93,
+      "acceptanceRetention": 21
+    },
+    "note": "First native run stopped on a preview assertion reading before Blazor oninput render completed. The assertion was retained and preceded by exact text-content wait; full fresh-DB native and all 77+15 suites were then rerun successfully."
+  },
+  "featureFileSha256": {
+    "deploy/UI-REFINEMENT-STATUS.ja.md": "20824ab5f2d247e85de5f35767fc8aa103929008c762a13aef45c823d71b28a7",
+    "scripts/event-description-checks.cjs": "b3df6309d55541835474165f528d578e6a86e68341d47a0c7de8e247c9ee8ec3",
+    "scripts/event-editor-layout-checks.cjs": "26f51fbdd8fc27b2783a3618ace152d4145cd62bb4a5df177f0396b54e56b686",
+    "scripts/event-icon-checks.cjs": "126ab0d22ee28f0441165ea617cc23bbabac6903e6be70fe9b55984698dae034",
+    "src/Sem.Web/Components/Pages/EventOverview.razor": "af1fd3ba2efd431722840c9ed9031fa085f2e9dddf2c5054cce66294c071e35b",
+    "src/Sem.Web/Components/Pages/Workspace.razor": "dc1e429c1cc461e7b55418675dbc96b3579defd2994a5127348eec7ed6310851",
+    "src/Sem.Web/Components/Shared/EventIconBadge.razor": "8ef5e931cee69eba8dc15d14d85479c558cdb60e7de44d4832f5b22489f37390",
+    "src/Sem.Web/Components/Shared/EventIconBadge.razor.css": "7a876bd29e416f1c1b8f4e6fae57a7b5bc9583581dd9687d7ec3034a3e02a847",
+    "src/Sem.Web/Core/CoreEventTabsService.cs": "dade89f953fd30242f28b4c017c658c5e29597f40a5506688bb1b66d1157552f",
+    "src/Sem.Web/Core/CoreFoundationService.cs": "c74fb11f5dfc5a541e49daaedc5338366011f0d834aecc4e2aff417648b32520",
+    "src/Sem.Web/Core/CoreModels.cs": "ebd311b7419430c0665ffb1b3616a7917b11265f38be46a1c4ff25d7893ed926",
+    "src/Sem.Web/Core/EventIconText.cs": "ba712999f420aec8cf625d2b562df04f63c340efc70f43e83c7acf701f72ca22",
+    "src/Sem.Web/Data/ApplicationDbContext.cs": "7406773435c94e3c081504dbd1ece777715b4a8ca83610f1a77ae572aaa75878",
+    "src/Sem.Web/Data/Migrations/20261018124439_AddEventIcon.Designer.cs": "215fb2880fdbff01ad9765d963779c70c0751dc037cd8c3b8249a7a9c01334af",
+    "src/Sem.Web/Data/Migrations/20261018124439_AddEventIcon.cs": "8a0f5e2edd14bde11e1195222e0ed285fb49bd28dd4011bc61f19232a57102ef",
+    "src/Sem.Web/Data/Migrations/ApplicationDbContextModelSnapshot.cs": "3c2efe55c72086f26be63f03bf261ccb8459cb46b022336a13fcc67bc6ed873a",
+    "tests/Sem.AcceptanceRetentionChecks/Program.cs": "9b25f50240964e51d5602a2d4c46f5658507ea75472c6e2e5bb673f92510039e",
+    "tests/Sem.CoreChecks/Program.cs": "73bcbbcd64196bb6972340d9b5c3f5246841189c722d8dba5bf1e379f7b21215",
+    "tests/Sem.EventImportHttpChecks/Program.cs": "b9f2b860ef14867cc5be06d20791b23975e0665731ce92d461785cf775ba7fd6"
+  },
+  "logs": [
+    {
+      "name": "build",
+      "exit": 0,
+      "seconds": 21.52,
+      "logSha256": "b8f42d4ddedf24a4af4d49986cf8665a9f609f502fe93c657c00b865fadb1ad5"
+    },
+    {
+      "name": "Sem.AcceptanceRetentionChecks",
+      "exit": 0,
+      "seconds": 10.97,
+      "logSha256": "5c7bd7dcc845707de1e80afb02fd904ec0bb1a329d78a696fb5ae7f8d6fe7135"
+    },
+    {
+      "name": "Sem.AccountPasskeyChecks",
+      "exit": 0,
+      "seconds": 5.53,
+      "logSha256": "7c4dc7a6a9934967e04b0a56f796fc2ab83222cc8c9ac39a41fb2c21dbbe2df6"
+    },
+    {
+      "name": "Sem.ApplicationJoinChecks",
+      "exit": 0,
+      "seconds": 5.33,
+      "logSha256": "d407273d95860291afdc78ab2cc86d4d9aad9d6505a94cc2941f9f7c9e5c54a9"
+    },
+    {
+      "name": "Sem.ApplicationLoginHttpChecks",
+      "exit": 0,
+      "seconds": 4.93,
+      "logSha256": "d6ccc13ebce40b487df3f46aefca63dcd4a9edfd83a0e58dfe4953dd0cff2a00"
+    },
+    {
+      "name": "Sem.BusinessNotificationChecks",
+      "exit": 0,
+      "seconds": 6.03,
+      "logSha256": "40dfd376dcedd0d2ee6aa79e54efda01f6862f93b57e12d6182102ee266746e6"
+    },
+    {
+      "name": "Sem.CommentChecks",
+      "exit": 0,
+      "seconds": 7.84,
+      "logSha256": "36ce366c24e9160152c109fd65d402dd05d396607c0d78716fd60193fa4cd74e"
+    },
+    {
+      "name": "Sem.CoreChecks",
+      "exit": 0,
+      "seconds": 7.64,
+      "logSha256": "68c8a046e6d9e109c4fdbae6ed9413612ab5f0d331d2026b09f2a11c143db2a0"
+    },
+    {
+      "name": "Sem.DailyDigestChecks",
+      "exit": 0,
+      "seconds": 7.14,
+      "logSha256": "4a5d0c340e179834aa4818b182f4b237d70f97f76ea69f03ba87a072287b6809"
+    },
+    {
+      "name": "Sem.DefinitionChecks",
+      "exit": 0,
+      "seconds": 6.58,
+      "logSha256": "500b41f19648f093bab91c60c598e75d66ce1906da8c4ea3b0f47799d035e246"
+    },
+    {
+      "name": "Sem.DeviceNotificationChecks",
+      "exit": 0,
+      "seconds": 5.68,
+      "logSha256": "234767245b088641caa93c7ab470759bb31fb9bd2c444b36433298acdba1a9ec"
+    },
+    {
+      "name": "Sem.DigestChecks",
+      "exit": 0,
+      "seconds": 5.88,
+      "logSha256": "2fa6639b1312c4eae7439c47219121e7a6623109a93cb9ece0dedc5e953e9a73"
+    },
+    {
+      "name": "Sem.EmailChangeChecks",
+      "exit": 0,
+      "seconds": 15.49,
+      "logSha256": "4352a76ee6717b435d914e15dbf760f38842dacc47b7104b8781583d911733b3"
+    },
+    {
+      "name": "Sem.EmailChangeHttpChecks",
+      "exit": 0,
+      "seconds": 5.18,
+      "logSha256": "0556036298134664f39fd088d9907c83bd20901561a54812d066bffeec9cff1a"
+    },
+    {
+      "name": "Sem.EventImportApplyChecks",
+      "exit": 0,
+      "seconds": 8.19,
+      "logSha256": "33f26d6ea5ab10ca0371d7e63e553009388b0d7ab927df2dfd0fbc6f4be3a8d4"
+    },
+    {
+      "name": "Sem.EventImportComposerChecks",
+      "exit": 0,
+      "seconds": 0.72,
+      "logSha256": "d88ece0d27268acd53fd40799b3394a65ba3b57263920bc2e762c4d0bf8e0ea1"
+    },
+    {
+      "name": "Sem.EventImportCsvChecks",
+      "exit": 0,
+      "seconds": 0.77,
+      "logSha256": "653a95099052cca747ce3a8e46dcc2659f4dbb76d5e75871dc117f988cba804e"
+    },
+    {
+      "name": "Sem.EventImportEligibilityChecks",
+      "exit": 0,
+      "seconds": 5.12,
+      "logSha256": "6a7e7e76389049439da9614fb0b707447c6bbafdea09601261bfa1ebcb16db1f"
+    },
+    {
+      "name": "Sem.EventImportHttpChecks",
+      "exit": 0,
+      "seconds": 6.29,
+      "logSha256": "6d85d9a760c3800558283f00001d4a624c43c12fc4589060099d3dc9ebb94e83"
+    },
+    {
+      "name": "Sem.EventImportPreviewChecks",
+      "exit": 0,
+      "seconds": 5.33,
+      "logSha256": "c832c467693c87b703f5cf7d12fd9c1834c3fc05d57cc63f6fe8265ddc657276"
+    },
+    {
+      "name": "Sem.EventMatrixChecks",
+      "exit": 0,
+      "seconds": 0.82,
+      "logSha256": "72d981ba5eb50689c23649bbe1317807c82a32a3a11caaf55e9c0d8f31daa25a"
+    },
+    {
+      "name": "Sem.EventPushDeliveryChecks",
+      "exit": 0,
+      "seconds": 7.78,
+      "logSha256": "8d169e29588eb2d08f9a5294d4d22f9146dd9a893e84d3cfa9090d715dd09856"
+    },
+    {
+      "name": "Sem.EventPushRuleChecks",
+      "exit": 0,
+      "seconds": 5.33,
+      "logSha256": "771e5ff1ab1d015b1f35ece581766e1d7bdc6f13ae3164dde9471f8c269bc646"
+    },
+    {
+      "name": "Sem.EventQrChecks",
+      "exit": 0,
+      "seconds": 7.04,
+      "logSha256": "f8af7bb5acc842927479b8545887d995975b06940f8bacb3d44c2ac683f10079"
+    },
+    {
+      "name": "Sem.EventQrImageChecks",
+      "exit": 0,
+      "seconds": 0.97,
+      "logSha256": "4d3ed99992fc87851ea4e320b570e8e7c8a279124d0830be7562bbb39dd28fa6"
+    },
+    {
+      "name": "Sem.EventTabsChecks",
+      "exit": 0,
+      "seconds": 6.63,
+      "logSha256": "c591dbde67e4d4fce48c56bbdd8a2672e813470c3cff939fa347d63bad47cdb7"
+    },
+    {
+      "name": "Sem.InboxChecks",
+      "exit": 0,
+      "seconds": 5.53,
+      "logSha256": "541bcec2837aef499f702a4f442861c325cfe53bf90c61c677ffb5947ad39a62"
+    },
+    {
+      "name": "Sem.InvitationIssuanceChecks",
+      "exit": 0,
+      "seconds": 6.83,
+      "logSha256": "757e81fb18888b7dfd760c475a8c6fa36ed3693bc3c38ba43e13c2fa099a4f94"
+    },
+    {
+      "name": "Sem.InvitationManagementChecks",
+      "exit": 0,
+      "seconds": 5.33,
+      "logSha256": "436aecf659f4fd7d8aeae9fcb14121f13038675f79f548a98ee48b0285795e1f"
+    },
+    {
+      "name": "Sem.LegacyResetChecks",
+      "exit": 0,
+      "seconds": 4.18,
+      "logSha256": "be61e03eb72f791518df0b37431ddf339f78fa93fab80ccc82883db793bb19d3"
+    },
+    {
+      "name": "Sem.LiveSessionRenewalChecks",
+      "exit": 0,
+      "seconds": 2.82,
+      "logSha256": "9665f2792aee3a0c5d12ee05a36ea650eb721eec8a595173353cbfaca167674e"
+    },
+    {
+      "name": "Sem.ManualNotificationAcceptanceChecks",
+      "exit": 0,
+      "seconds": 11.8,
+      "logSha256": "e6af06559c69985f1c8cefc69dcd8405059ad7cce8335a0de6c0df32755f531b"
+    },
+    {
+      "name": "Sem.ManualNotificationComposerChecks",
+      "exit": 0,
+      "seconds": 0.67,
+      "logSha256": "fb4943150596db8b6698cb5462925d30121de6a45324cdf9fbeb4007ae5abe36"
+    },
+    {
+      "name": "Sem.ManualNotificationDevicePreflightChecks",
+      "exit": 0,
+      "seconds": 5.83,
+      "logSha256": "937df496787942e030924a1c1081b53d7525ac7520fffa206d674827f8885ba6"
+    },
+    {
+      "name": "Sem.ManualNotificationHistoryChecks",
+      "exit": 0,
+      "seconds": 5.53,
+      "logSha256": "34511db85a1963255602ca28d8c7f6b4a48f094a366ae6f9b893b4d5a4ac43ae"
+    },
+    {
+      "name": "Sem.ManualNotificationPreviewChecks",
+      "exit": 0,
+      "seconds": 6.38,
+      "logSha256": "9769a58bb93e14a8456b56c8cdd8f5bc644a130c0c0358e480d157806c70f660"
+    },
+    {
+      "name": "Sem.ManualNotificationPushActivationChecks",
+      "exit": 0,
+      "seconds": 6.03,
+      "logSha256": "bbc2d08463757a9ac3695f8632461e3b946a7b17f8afaa2c589609841fb5d8e4"
+    },
+    {
+      "name": "Sem.ManualNotificationPushDispatchChecks",
+      "exit": 0,
+      "seconds": 8.68,
+      "logSha256": "0f5798414aa5793b3530b146d05f1e6874d6aae27faf5e1bc9dbb6c5a97c4245"
+    },
+    {
+      "name": "Sem.ManualNotificationPushEngineChecks",
+      "exit": 0,
+      "seconds": 11.0,
+      "logSha256": "19141d63b137591a9eae64e32704f38000e11af1457d2247688c12fa51228828"
+    },
+    {
+      "name": "Sem.ManualNotificationPushPolicyChecks",
+      "exit": 0,
+      "seconds": 5.53,
+      "logSha256": "0b75056de94f3f76932b6bb1ee5268eb0db1715294177152c0c30ac3c251ba06"
+    },
+    {
+      "name": "Sem.ManualNotificationPushQueueChecks",
+      "exit": 0,
+      "seconds": 8.23,
+      "logSha256": "6c5248c8e3627c116c1b444c1083296d2b9f8408e0278d0eed576cd1aff8af0a"
+    },
+    {
+      "name": "Sem.ManualNotificationPushStatusChecks",
+      "exit": 0,
+      "seconds": 5.08,
+      "logSha256": "c19711c0d4d7cf4b9346e5be635768625c8f99611bf1144cdd3955e026eaed3f"
+    },
+    {
+      "name": "Sem.ManualPushCompositionChecks",
+      "exit": 0,
+      "seconds": 41.81,
+      "logSha256": "678044c9e4c7d059907b12ca8c906028ca4f1194dba1f8f32a676f724d60beff"
+    },
+    {
+      "name": "Sem.ManualPushControlStateChecks",
+      "exit": 0,
+      "seconds": 0.72,
+      "logSha256": "6752e2252e51ee3fd757861c952cdcb2f11f78fcd062c10ed00ebb7608ecdf19"
+    },
+    {
+      "name": "Sem.ManualPushStatusViewStateChecks",
+      "exit": 0,
+      "seconds": 0.67,
+      "logSha256": "8661c3fd416ea8d465771be3e2d00978c8c86b8f0a76e1f1a167f9e36e70b85b"
+    },
+    {
+      "name": "Sem.ManualReceptionChecks",
+      "exit": 0,
+      "seconds": 8.08,
+      "logSha256": "953cc29c61598f45a4d1ca317455f4ff9da151208458a215e964a95210bbb0d4"
+    },
+    {
+      "name": "Sem.NotificationPlanChecks",
+      "exit": 0,
+      "seconds": 5.53,
+      "logSha256": "428486932eea89d141edb757cd3861400f0aae0140c9d0da4a760ed87fa47c84"
+    },
+    {
+      "name": "Sem.PartStartDeliveryChecks",
+      "exit": 0,
+      "seconds": 6.03,
+      "logSha256": "7225908ee3fec7d569072b37cc5fbcee7f018ef1ce9c1680f21312cb79f50f50"
+    },
+    {
+      "name": "Sem.PartStartPreferenceChecks",
+      "exit": 0,
+      "seconds": 5.27,
+      "logSha256": "1726a14b7b2b731847702bd9ef2fd6cc572cb339c1902233a5f6ddc9fff931bc"
+    },
+    {
+      "name": "Sem.ParticipationChecks",
+      "exit": 0,
+      "seconds": 7.69,
+      "logSha256": "6b1bc187ab518d790f2b9e053cba97cbcaddb5bcd19328ea7d88eac72c9b1553"
+    },
+    {
+      "name": "Sem.PasskeyEmergencyMaintenanceChecks",
+      "exit": 0,
+      "seconds": 15.45,
+      "logSha256": "77eeb711aa96c196609a4b6fc91297390c16a7cfbe145115fbb028981eb9e73c"
+    },
+    {
+      "name": "Sem.PasskeyEmergencyRecoveryChecks",
+      "exit": 0,
+      "seconds": 14.49,
+      "logSha256": "0ad4e9af0035b0d1c8011a827a939ccdf2fe3000fa39f629c3d4ed1892630e41"
+    },
+    {
+      "name": "Sem.PasskeyProofChecks",
+      "exit": 0,
+      "seconds": 21.44,
+      "logSha256": "ae0455cea5816bbbbd319680df1684c7e726ce01a230cc7673ae7958fe4e5894"
+    },
+    {
+      "name": "Sem.PasskeyRecoveryChecks",
+      "exit": 0,
+      "seconds": 9.9,
+      "logSha256": "caa69214a06fbf83b29ae0c5942643c799ef568f6d6dd9c4aaa78989bd38d840"
+    },
+    {
+      "name": "Sem.PasskeyRecoveryHttpChecks",
+      "exit": 0,
+      "seconds": 5.53,
+      "logSha256": "3f9ee8c7dca01b4a235664e9cfe0f99943ded2118e4723a5e67d70494272e754"
+    },
+    {
+      "name": "Sem.PhaseChecks",
+      "exit": 0,
+      "seconds": 6.64,
+      "logSha256": "2344598aa13b8c0eda9ad10cb7bb91878288bcb8823859d07d3090d9e70f2219"
+    },
+    {
+      "name": "Sem.ProfileExtensionChecks",
+      "exit": 0,
+      "seconds": 4.77,
+      "logSha256": "825508e8754c100314cc57c8d2890751e99a00b299e462bb56ea830046da2f4f"
+    },
+    {
+      "name": "Sem.ProfileExtensionHttpChecks",
+      "exit": 0,
+      "seconds": 5.33,
+      "logSha256": "32ba1c4f571c92fdb7a00ad2e7884dc4abde70601f8ae5791f7c53c69ebe502b"
+    },
+    {
+      "name": "Sem.ProfileImageChecks",
+      "exit": 0,
+      "seconds": 1.72,
+      "logSha256": "c1731ce763f3d6d88f789916970361c1c681aa6ada47bed1f90024193d80bdb6"
+    },
+    {
+      "name": "Sem.ProfileImageHttpChecks",
+      "exit": 0,
+      "seconds": 5.48,
+      "logSha256": "da435b4b4517a8a97d4fc966465c73ebd2529b6f458d1c044bb6b25276acf0f4"
+    },
+    {
+      "name": "Sem.ProfileRegistrationHistoryChecks",
+      "exit": 0,
+      "seconds": 6.53,
+      "logSha256": "ab85cdf1ce4fc7cbe1e55ea0994cee9a87d6ea5cdd827168707333f440470e0e"
+    },
+    {
+      "name": "Sem.ProfileRegistrationHistoryHttpChecks",
+      "exit": 0,
+      "seconds": 5.28,
+      "logSha256": "6de618a1f5221473d2d9eae9784de36cd5229cbf18e2956d09dc630007500d59"
+    },
+    {
+      "name": "Sem.ProgressChecks",
+      "exit": 0,
+      "seconds": 7.18,
+      "logSha256": "a7a3e991bab005744a130676c27444bd2d65f4e7978defc872569d9b3b7dfb37"
+    },
+    {
+      "name": "Sem.PublicAnswerChecks",
+      "exit": 0,
+      "seconds": 6.43,
+      "logSha256": "740042536c453713c0967054585e5d1c14f3b9b98ec1d0921b16a27c5f039be8"
+    },
+    {
+      "name": "Sem.QrReceptionChecks",
+      "exit": 0,
+      "seconds": 9.0,
+      "logSha256": "73140588966228cdfebe3c8823e3f65cde32794de834d0a905e8e0ebe8dcf3c4"
+    },
+    {
+      "name": "Sem.QuestionChecks",
+      "exit": 0,
+      "seconds": 6.64,
+      "logSha256": "e130c8a0ba6b90bfcdcd23c9aad92825e001de8c59460a1676825a82ac09659b"
+    },
+    {
+      "name": "Sem.ReceptionRosterChecks",
+      "exit": 0,
+      "seconds": 6.84,
+      "logSha256": "c928b49c5d00c40723179eac4f689ec9e62906bb645b93d60a26a1e2a7c8b2b8"
+    },
+    {
+      "name": "Sem.ReservationChecks",
+      "exit": 0,
+      "seconds": 6.43,
+      "logSha256": "067f07fcb711a5373448c70d58ee0cb0bc44e8506dfba62dc62026fb6f40c4eb"
+    },
+    {
+      "name": "Sem.ShorteningChecks",
+      "exit": 0,
+      "seconds": 0.77,
+      "logSha256": "fec819fc10231c90f6a4c668ae4c285a921d7e19ed85edec24062db8842ac237"
+    },
+    {
+      "name": "Sem.ShorteningIntegrationChecks",
+      "exit": 0,
+      "seconds": 7.24,
+      "logSha256": "9f545492f0d847a6ee0436560e7dce6bff0fd16d59af847e8c43285771a435cc"
+    },
+    {
+      "name": "Sem.SongChecks",
+      "exit": 0,
+      "seconds": 7.08,
+      "logSha256": "b3c1e8d81a0c15a7eca87bbe7aaa16f818bdf0383018b6ab0b794fe21a4a3f93"
+    },
+    {
+      "name": "Sem.StorageChecks",
+      "exit": 0,
+      "seconds": 11.42,
+      "logSha256": "86cc3837d1b9cfcd6f7543e5d2a60ab8d33c9cc5bbb57387e2367769dd8fc884"
+    },
+    {
+      "name": "Sem.ThemeAppearanceHttpChecks",
+      "exit": 0,
+      "seconds": 5.63,
+      "logSha256": "b01de3201099b4a2622f4f92be62b52257f927e590180a0391667b3455188d52"
+    },
+    {
+      "name": "Sem.ThemeCatalogChecks",
+      "exit": 0,
+      "seconds": 5.02,
+      "logSha256": "2d4999eec191b0d07aaa95ce8670464bc4b2a74a6631b19741920ac708b241d4"
+    },
+    {
+      "name": "Sem.ThemeSelectionChecks",
+      "exit": 0,
+      "seconds": 6.78,
+      "logSha256": "3b51f55c4ab6c76f252a39b57a6ff62a7bd27e2dc04f03f799086f8f192e8d0c"
+    },
+    {
+      "name": "Sem.ThemeValueChecks",
+      "exit": 0,
+      "seconds": 0.68,
+      "logSha256": "3854a4e92fce1f7d4920e26e10f15711b454cca52f5042f741dac08a7ffc21b3"
+    },
+    {
+      "name": "Sem.TimetableChecks",
+      "exit": 0,
+      "seconds": 7.13,
+      "logSha256": "29af1b154a2fd2000ee4adbd0cac37c58ae7bdd962df0fbb368a1b1f2edc256f"
+    },
+    {
+      "name": "Sem.UiFeedbackChecks",
+      "exit": 0,
+      "seconds": 1.12,
+      "logSha256": "fee1635ffafad7e2d55017be6b2c398ded84e8dff5bf527f67c455813688b081"
+    },
+    {
+      "name": "passkey-recovery-ui-checks",
+      "exit": 0,
+      "seconds": 1.22,
+      "logSha256": "87446ca3c0fe9c93e2b97d8c76bf244219f9665470ef21840058a26838e88534"
+    },
+    {
+      "name": "application-auth-checks",
+      "exit": 0,
+      "seconds": 0.21,
+      "logSha256": "beb85c7a5efb032405ef949b8b15891d4e58f24a49dc46bd98d2e73578a9218b"
+    },
+    {
+      "name": "device-notification-ui-checks",
+      "exit": 0,
+      "seconds": 0.21,
+      "logSha256": "ee4752962d61c492bb0fb26f6b46b6c4d178f1a9062c55264beeb6dd5401b0cf"
+    },
+    {
+      "name": "invitation-management-ui-checks",
+      "exit": 0,
+      "seconds": 0.32,
+      "logSha256": "13781df3449e4a080b32b8fbab72368241fd0ab020405c461cbf51ea69dce94f"
+    },
+    {
+      "name": "admin-accounts-ui-checks",
+      "exit": 0,
+      "seconds": 0.11,
+      "logSha256": "fd2399181b7dbad10a4eb3d4fed207bac92f4f351ae2f2aca28567ba19bd5fe8"
+    },
+    {
+      "name": "account-passkeys-ui-checks",
+      "exit": 0,
+      "seconds": 0.06,
+      "logSha256": "66e7c499fb79d97fdfae9733dcab715477f8f2369f14b3034416c2df183fa91a"
+    },
+    {
+      "name": "legacy-passkey-url-checks",
+      "exit": 0,
+      "seconds": 0.06,
+      "logSha256": "e0aeaf2caddc9bf5221ea0159fad3e0de58f7c22179185af4279602907e2e73e"
+    },
+    {
+      "name": "dialog-lifecycle-checks",
+      "exit": 0,
+      "seconds": 0.06,
+      "logSha256": "105ae027dc62c407c34709a414e781964f4dfbe4521f321843756bfc4dae4265"
+    },
+    {
+      "name": "operation-result-presenter-checks",
+      "exit": 0,
+      "seconds": 0.03,
+      "logSha256": "a3dd22fbc2a8aff48c2d26faa70fcf5a8ed787980ba091300a666fe658a0e252"
+    },
+    {
+      "name": "profile-result-boundary-checks",
+      "exit": 0,
+      "seconds": 0.11,
+      "logSha256": "720628f2a9c8e1f3db47e24496edc19c9f88941dd7e87097f391e2b586e38ce0"
+    },
+    {
+      "name": "profile-image-transport-checks",
+      "exit": 0,
+      "seconds": 0.11,
+      "logSha256": "f53d8e94615ce5c04c5b80438067630192edc9d14b9c676e94bdd530de7d8499"
+    },
+    {
+      "name": "profile-history-transport-checks",
+      "exit": 0,
+      "seconds": 0.11,
+      "logSha256": "4004bf9f63715c42e649c59ee16168f6ed5fae29d5b974b9d94227091edab2fa"
+    },
+    {
+      "name": "field-help-ui-checks",
+      "exit": 0,
+      "seconds": 0.11,
+      "logSha256": "bfb57bc83a738c0e905851544c27c627fecbee7723ec47abc3e4ded656c312cb"
+    },
+    {
+      "name": "application-join-ui-checks",
+      "exit": 0,
+      "seconds": 0.11,
+      "logSha256": "b84c3ab6244a269f93af560493c4ef13f7096925f078953800db7622d3f271d5"
+    },
+    {
+      "name": "application-inbox-ui-checks",
+      "exit": 0,
+      "seconds": 0.22,
+      "logSha256": "ac5b720202a26040125555a0e3f9420b6d363aa3a3b0f91b044d46a198274d5d"
+    },
+    {
+      "name": "nativeBrowser",
+      "exit": 0,
+      "logSha256": "5cfb7a56680b51337a9126767580a3bda477a36e7be802d2c0db0c1b2945977a",
+      "resultSha256": "a0914f2b2d1296568710737023fc7e293ce52dbf31dc3571c4dc0304c9ce0099"
+    }
+  ],
+  "excludedFromPublication": [
+    "database",
+    "emails",
+    "keys",
+    "cookies",
+    "credentials",
+    "proof material",
+    "certificates",
+    "raw logs",
+    "runtime verification directory"
+  ],
+  "notClaimed": [
+    "DXP deployment",
+    "physical device acceptance of this new UI",
+    "complete mock parity",
+    "capacity/theme integration into overview"
+  ]
+}
