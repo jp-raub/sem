@@ -193,38 +193,27 @@ module.exports = async ({ p, g, ok }) => {
             && await memberPage.locator(`[data-participation-answer="${question.id}"]`).inputValue() === 'YES',
         'Timetable rows callback preserves unsaved participation selection and answer');
 
-        await memberPage.locator('#participation-submit').click();
-        const conflictText = 'ほかの画面で更新されています。最新状態を取得し、変更内容を確認してから保存してください。';
-        await memberPage.waitForFunction(text => document.getElementById('participation-error').textContent.trim() === text,
-            conflictText);
+        // Latest-state refresh now preserves the draft and explicitly gates changed versions.
+        await memberPage.locator('#participation-refresh').click();
+        await memberPage.locator('#participation-review-confirm').waitFor();
         ok(await memberPage.locator('.participation-selection-chip').count() === 1
             && await memberPage.locator(`[data-participation-answer="${question.id}"]`).inputValue() === 'YES',
-        'Participation conflict keeps the unsaved selection and answer for explicit review');
-        let afterConflict = await readParticipation(g, integrated.query);
-        ok(afterConflict.ownPhaseSongCount === 0
-            && afterConflict.slots.find(slot => slot.id === memberVoiceSlot.id)?.assignedUserId == null,
-        'Stale participation RowVersion conflicts without registering the selected slot');
-
-        await memberPage.locator('.operation-result-dialog').waitFor();
-        ok((await memberPage.locator('.operation-result-dialog').innerText()).includes(conflictText),
-            'Conflict dialog retains exact error and does not silently refresh the draft');
-        await memberPage.locator('.operation-result-dialog button').click();
-        await memberPage.locator('#participation-refresh').click();
-        await memberPage.waitForFunction(() => document.getElementById('participation-error').textContent.trim() === '');
-        ok(await memberPage.locator('.participation-selection-chip').count() === 0
-            && await memberPage.locator(`[data-participation-answer="${question.id}"]`).inputValue() === '',
-        'Explicit latest-state refresh replaces stale unsaved selection and answer with current data');
-        await memberPage.locator(`[data-event-matrix-slot="${memberVoiceSlot.id}"]`).evaluate(e=>e.scrollIntoView({block:"center",inline:"end"}));
-        await memberPage.locator(`[data-event-matrix-slot="${memberVoiceSlot.id}"]`).click();
-        await memberPage.waitForFunction(() => document.querySelectorAll('.participation-selection-chip').length === 1);
-        await memberPage.locator(`[data-participation-answer="${question.id}"]`).selectOption('YES');
+        'Manual latest-state refresh preserves the selected slot and unsent answer');
+        ok(await memberPage.locator('#participation-submit').isDisabled()
+            && (await memberPage.locator('#participation-refresh-notice').innerText()).includes('入力は保持'),
+        'Structural version changes require explicit review before the retained draft can submit');
+        const beforeReview = await readParticipation(g, integrated.query);
+        ok(beforeReview.ownPhaseSongCount === 0
+            && beforeReview.slots.find(slot => slot.id === memberVoiceSlot.id)?.assignedUserId == null,
+        'Refreshing and reviewing a draft perform no registration write');
+        await memberPage.locator('#participation-review-confirm').click();
         await memberPage.locator('#participation-submit').click();
         await memberPage.waitForFunction(() => document.getElementById('participation-message').textContent.includes('1 件成功'));
         const afterRetry = await readParticipation(g, integrated.query);
         ok(afterRetry.ownPhaseSongCount === 1
             && afterRetry.slots.find(slot => slot.id === memberVoiceSlot.id)?.assignedUserId === afterRetry.ownUserId
             && afterRetry.questions.find(item => item.id === question.id)?.ownValue === 'YES',
-        'Reselected slot and answer submit successfully after explicit latest-state refresh');
+        'Retained slot and answer submit successfully only after explicit changed-version review');
         let managerPlan = await readParticipation(p, integrated.query);
         const assignedMemberSlot = managerPlan.slots.find(slot => slot.id === memberVoiceSlot.id);
         if (!assignedMemberSlot?.assignedName) throw new Error('Expected public assigned name in manager participation plan');
@@ -272,6 +261,54 @@ module.exports = async ({ p, g, ok }) => {
             && (await ownButton.getAttribute('aria-label')).endsWith(' / ' + assignedManagerSlot.assignedName)
             && await ownButton.getAttribute('aria-description') === 'ログイン中のアカウントの登録枠',
             'Own slot keeps visual and accessible ownership context separately from the assigned name');
+
+        // Select two still-free instrument slots, then let another participant claim just one.
+        const currentMemberPlan = await readParticipation(g, integrated.query);
+        const instrumentA = slotFor(currentMemberPlan, songs[0].id, guitar.name);
+        const instrumentB = slotFor(currentMemberPlan, songs[1].id, guitar.name);
+        for (const slot of [instrumentA, instrumentB]) {
+            const cell = memberPage.locator(`[data-event-matrix-slot="${slot.id}"]`);
+            await cell.evaluate(e=>e.scrollIntoView({block:'center',inline:'end'}));
+            await cell.click();
+        }
+        await memberPage.locator(`[data-participation-answer="${question.id}"]`).selectOption('NO');
+        const managerBeforeClaim = await readParticipation(p, integrated.query);
+        requireOk(await api(p, 'participation', {
+            requestId: random(), rowVersion: managerBeforeClaim.rowVersion,
+            participantVersion: managerBeforeClaim.participantVersion, phaseId: managerBeforeClaim.phaseId,
+            kind: 'Register', slots: [{id: instrumentB.id, rowVersion: managerBeforeClaim.slots.find(s=>s.id===instrumentB.id).rowVersion}],
+            answers: [{questionId: question.id, value: 'NO'}],
+        }, integrated.query), 'Other participant claims one selected instrument slot');
+        await memberPage.waitForFunction(id => {
+            const cell = document.querySelector(`[data-event-matrix-slot="${id}"]`);
+            return cell && cell.getAttribute('aria-pressed') === 'false' && cell.classList.contains('event-matrix-occupied');
+        }, instrumentB.id, {timeout: 25000});
+        ok(await memberPage.locator('.participation-selection-chip').count() === 1
+            && await memberPage.locator(`[data-event-matrix-slot="${instrumentA.id}"]`).getAttribute('aria-pressed') === 'true'
+            && await memberPage.locator(`[data-participation-answer="${question.id}"]`).inputValue() === 'NO',
+        'Automatic polling removes only the occupied selection and retains other selection and unsent answer');
+        ok((await memberPage.locator('#participation-refresh-notice').innerText()).includes('その枠だけ選択を解除'),
+            'Automatic occupation update announces the removed selection');
+        const afterPoll = await readParticipation(g, integrated.query);
+        ok(afterPoll.slots.find(slot=>slot.id===instrumentA.id).assignedUserId == null
+            && afterPoll.questions.find(item=>item.id===question.id).ownValue === 'YES',
+            'Automatic polling never submits the remaining selection or unsent answer');
+        requireOk(await api(g, 'participation', {
+            requestId: random(), rowVersion: afterPoll.rowVersion, participantVersion: afterPoll.participantVersion,
+            phaseId: afterPoll.phaseId, kind: 'Answers', slots: [], answers: [{questionId: question.id, value: 'YES'}],
+        }, integrated.query), 'Same account saves an answer in a second document');
+        await memberPage.locator('#participation-refresh').click();
+        await memberPage.locator('#participation-review-confirm').waitFor();
+        await memberPage.locator('.participation-saved-answers summary').click();
+        ok(await memberPage.locator('#participation-submit').isDisabled()
+            && await memberPage.locator(`[data-participation-answer="${question.id}"]`).inputValue() === 'NO'
+            && (await memberPage.locator('.participation-saved-answers').innerText()).includes('YES'),
+            'Same-account external save preserves unsent answer and exposes saved-answer comparison before explicit review');
+        ok((await readParticipation(g, integrated.query)).questions.find(item=>item.id===question.id).ownValue === 'YES',
+            'External own-answer change is not silently overwritten by refresh');
+        await memberPage.locator('#participation-review-confirm').click();
+        const stillSelected = memberPage.locator(`[data-event-matrix-slot="${instrumentA.id}"]`);
+        await stillSelected.evaluate(e=>e.scrollIntoView({block:'center',inline:'end'})); await stillSelected.click();
 
         const duplicateIds = await duplicates(memberPage);
         ok(duplicateIds.length === 0, 'Integrated event has no duplicate DOM ids: ' + duplicateIds.join(', '));
