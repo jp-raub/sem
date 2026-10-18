@@ -235,8 +235,13 @@ module.exports = async ({ p, g, ok }) => {
         await adminPage.locator('[data-participation-interactive="true"]').waitFor();
         await adminPage.locator(`[data-event-matrix-slot="${memberVoiceSlot.id}"]`).waitFor();
         const otherText = await adminPage.locator(`[data-event-matrix-slot="${memberVoiceSlot.id}"]`).innerText();
-        ok(otherText.includes('他人:') && otherText.includes(assignedMemberSlot.assignedName),
-            'Assigned matrix cell visibly identifies another participant and shows their assigned name');
+        const otherButton = adminPage.locator(`[data-event-matrix-slot="${memberVoiceSlot.id}"]`);
+        ok(otherText.trim() === assignedMemberSlot.assignedName,
+            'Other assigned matrix cell displays the exact assigned name without an ownership prefix');
+        ok(await otherButton.evaluate(e => e.classList.contains('event-matrix-occupied'))
+            && (await otherButton.getAttribute('aria-label')).endsWith(' / ' + assignedMemberSlot.assignedName)
+            && await otherButton.getAttribute('aria-description') === '他の参加者の登録枠',
+            'Other slot keeps visual and accessible ownership context separately from the assigned name');
 
         const adminAnswer = adminPage.locator(`[data-participation-answer="${question.id}"]`);
         await adminAnswer.selectOption('NO');
@@ -260,8 +265,13 @@ module.exports = async ({ p, g, ok }) => {
         const assignedManagerSlot = managerPlan.slots.find(slot => slot.id === managerVoiceSlot.id);
         if (!assignedManagerSlot?.assignedName) throw new Error('Expected own assigned name in manager participation plan');
         const ownText = await adminPage.locator(`[data-event-matrix-slot="${managerVoiceSlot.id}"]`).innerText();
-        ok(ownText.includes('自分:') && ownText.includes(assignedManagerSlot.assignedName),
-            'Assigned matrix cell visibly identifies self and shows the assigned name');
+        const ownButton = adminPage.locator(`[data-event-matrix-slot="${managerVoiceSlot.id}"]`);
+        ok(ownText.trim() === assignedManagerSlot.assignedName,
+            'Own assigned matrix cell displays the exact assigned name without an ownership prefix');
+        ok(await ownButton.evaluate(e => e.classList.contains('event-matrix-own'))
+            && (await ownButton.getAttribute('aria-label')).endsWith(' / ' + assignedManagerSlot.assignedName)
+            && await ownButton.getAttribute('aria-description') === 'ログイン中のアカウントの登録枠',
+            'Own slot keeps visual and accessible ownership context separately from the assigned name');
 
         const duplicateIds = await duplicates(memberPage);
         ok(duplicateIds.length === 0, 'Integrated event has no duplicate DOM ids: ' + duplicateIds.join(', '));

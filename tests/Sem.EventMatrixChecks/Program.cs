@@ -72,16 +72,33 @@ Check(Regex.Matches(html, "<th\\b(?=[^>]*\\bscope=\"col\")[^>]*>Guitar</th>").Co
 Check(html.IndexOf(">Guitar</th>", StringComparison.Ordinal) < html.IndexOf(">Drums</th>", StringComparison.Ordinal), "Part order follows the existing slot order");
 Check(html.Contains("aria-pressed=\"true\""), "Selected state is exposed to assistive technology");
 Check(Regex.Matches(html, "aria-pressed=\"false\"").Count == 2, "Unselected buttons explicitly expose a false pressed state");
-Check(html.Contains("自分: 本人 <Alice>") && html.Contains("他人: 相手 & Bob"), "Visible owner labels include self/other and the assigned name");
-Check(html.Contains("aria-label=\"合奏 <song> / Guitar 2 / 2 / 自分: 本人 <Alice>\""), "Accessible name includes self and the assigned name");
-Check(html.Contains("aria-label=\"合奏 <song> / Drums / 他人: 相手 & Bob\""), "Accessible name includes other and the assigned name");
+var rawSlotsHtml = await Render([song, transition], slots, new HashSet<string> { "free" }, decode: false);
+string SlotButton(string markup, string id) => Regex.Match(markup,
+    "<button\\b[^>]*data-event-matrix-slot=\"" + Regex.Escape(id) + "\"[^>]*>.*?</button>",
+    RegexOptions.Singleline).Value;
+string ButtonText(string markup) => System.Net.WebUtility.HtmlDecode(Regex.Replace(
+    Regex.Replace(markup, "<small\\b[^>]*>.*?</small>", "", RegexOptions.Singleline),
+    "^<button\\b[^>]*>|</button>$", "", RegexOptions.Singleline)).Trim();
+Check(ButtonText(SlotButton(rawSlotsHtml, "own")) == "本人 <Alice>" && ButtonText(SlotButton(rawSlotsHtml, "other")) == "相手 & Bob",
+    "Assigned button text is the exact assigned name without ownership prefixes");
+Check(html.Contains("aria-label=\"合奏 <song> / Guitar 2 / 2 / 本人 <Alice>\""), "Accessible name retains the assigned name without a self prefix");
+Check(html.Contains("aria-label=\"合奏 <song> / Drums / 相手 & Bob\""), "Accessible name retains the assigned name without an other prefix");
+Check(SlotButton(rawSlotsHtml, "own").Contains("event-matrix-own") && SlotButton(rawSlotsHtml, "other").Contains("event-matrix-occupied"),
+    "Own and other slots retain their distinct visual classes");
+Check(SlotButton(html, "own").Contains("aria-description=\"ログイン中のアカウントの登録枠\"")
+    && SlotButton(html, "other").Contains("aria-description=\"他の参加者の登録枠\"")
+    && !SlotButton(rawSlotsHtml, "free").Contains("aria-description"),
+    "Ownership context is a separate accessible description, absent for empty slots");
 Check(html.Contains("colspan=\"2\""), "Progress spans only existing part columns");
 Check(html.Contains("tabindex=\"0\"") && html.Contains("横スクロールできます"), "Scrollable region is keyboard reachable and named");
 Check(!html.Contains("id=\""), "Matrix does not introduce global DOM ids");
 
+var unnamedHtml = await Render([song], [Slot("unnamed", "s1", "Guitar", "me")], decode: false);
+Check(ButtonText(SlotButton(unnamedHtml, "unnamed")) == "登録済み", "Missing public name retains the existing neutral fallback without an ownership prefix");
+
 html = await Render([song], slots, new HashSet<string> { "own" }, release: true, disabled: true);
-Check(html.Contains("解除選択中・自分: 本人 <Alice>"), "Release selection preserves the visible owner");
-Check(html.Contains("自分: 本人 <Alice> / 解除選択中"), "Release selection preserves the accessible owner");
+Check(ButtonText(SlotButton(await Render([song], slots, new HashSet<string> { "own" }, release: true, disabled: true, decode: false), "own")) == "解除選択中・本人 <Alice>", "Release selection preserves the exact name and selection status without an ownership prefix");
+Check(html.Contains("本人 <Alice> / 解除選択中"), "Release selection preserves the accessible name and status");
 var disabledHtml = await Render([song], slots, new HashSet<string> { "own" }, release: true, disabled: true, decode: false);
 Check(Regex.Matches(disabledHtml, "<button[^>]*\\sdisabled(?=\\s|>)", RegexOptions.Singleline).Count == 3, "Parent-supplied disabling is honored for every slot");
 html = await renderer.Dispatcher.InvokeAsync(async () =>
