@@ -16,7 +16,7 @@ import time
 
 from updater import Docker, Updater, atomic_json, run, hash_file
 from updater_checks import Source
-from initialize import prepare, escape_dollars
+from initialize import prepare, escape_dollars, runtime_environment
 
 
 def main():
@@ -60,7 +60,7 @@ def main():
         config=json.loads((root/'config'/'config.json').read_text())
         control=root/'control'
         captured=json.loads(Docker(config,control).compose('config','--format','json'))
-        assert captured['services']['sem']['environment']['Smtp__Password']=='synthetic$literal${NOT_AN_ENV}'
+        assert runtime_environment(captured['services']['sem']['environment'])['Smtp__Password']=='synthetic$literal${NOT_AN_ENV}'
         initial=json.loads((control/'status.json').read_text())
         assert initial['paused'] and not initial['blocked']
         engine=Docker(config,control)

@@ -10,7 +10,8 @@ from updater import CDException, Docker, atomic_json, run, secure_path
 
 
 def escape_dollars(value):
-    # Compose interpolates JSON too. Freeze literal secrets containing '$'.
+    # Raw fixture/input values need escaping. `compose config` output ALREADY
+    # escapes dollars for a round trip and must not be escaped a second time.
     if isinstance(value, str):
         return value.replace('$', '$$')
     if isinstance(value, list):
@@ -18,6 +19,13 @@ def escape_dollars(value):
     if isinstance(value, dict):
         return {k: escape_dollars(v) for k, v in value.items()}
     return value
+
+
+def runtime_environment(environment):
+    # `docker compose config --format json` serializes $$ for literal $.
+    # Decode ONE serialization layer only when comparing to Docker Config.Env.
+    return {key: value.replace('$$', '$') if isinstance(value, str) else value
+            for key, value in environment.items()}
 
 
 def prepare(compose_files, env_file, project, backup_root, config_root=Path('/etc/sem-cd'),
@@ -45,7 +53,7 @@ def prepare(compose_files, env_file, project, backup_root, config_root=Path('/et
     service=effective['services']['sem']
     image=json.loads(run(['docker','image','inspect',current['Image']]))[0]
     env=dict(v.split('=',1) for v in image['Config'].get('Env',[]))
-    for key,value in service.get('environment',{}).items():
+    for key,value in runtime_environment(service.get('environment',{})).items():
         if value is None:env.pop(key,None)
         else:env[key]=str(value)
     actual=dict(v.split('=',1) for v in current['Config'].get('Env',[]))
@@ -63,7 +71,8 @@ def prepare(compose_files, env_file, project, backup_root, config_root=Path('/et
         raise CDException('Backup cannot be inside data mount')
     project_dir=labels.get('com.docker.compose.project.working_dir') or str(Path(compose_files[0]).parent)
     baseline=config_root/'deployment.private.json'
-    atomic_json(baseline,escape_dollars(effective))
+    # Compose's own serialized output is already safe to read back unchanged.
+    atomic_json(baseline,effective)
     c=dict(project=project,service='sem',project_directory=project_dir,
            compose_files=[str(baseline)],env_file=None,data_type=mount['Type'],data_source=data_source,
            backup_root=str(backup_root),state_directory=str(state_root))

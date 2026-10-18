@@ -54,7 +54,7 @@ Dockerを操作する権限はホスト管理相当になり得る。更新サ�
 
 ## 初回設定の役割
 
-AIはコード、ローカル・GitHub検証、main統合、対象版を固定した導入／停止／再開／復旧手順を用意する。環境所有者はDXP側の初回設定と、具体的に依頼された端末確認を行う。その後の毎回のpull／ビルド／再起動／ログ転記をユーザー作業にしない。初回は既存Composeの解決済み設定と稼働コンテナの環境値・/dataを照合して、root所有の非公開JSONへ固定する。`$`を含む設定値はComposeの再展開で変わらないようescapeし、再読取して一致を検査する。既存環境との差異があれば初回設定を失敗させ、アプリは変更しない。
+AIはコード、ローカル・GitHub検証、main統合、対象版を固定した導入／停止／再開／復旧手順を用意する。環境所有者はDXP側の初回設定と、具体的に依頼された端末確認を行う。その後の毎回のpull／ビルド／再起動／ログ転記をユーザー作業にしない。初回は既存Composeの解決済み設定と稼働コンテナの環境値・/dataを照合して、root所有の非公開JSONへ固定する。`$`を含む設定値はCompose自身が出力時に行うescapeを二重適用せず、そのまま保存する。Dockerの実環境との照合時だけ出力escapeを1段戻し、固定ファイルの再読取結果も一致を検査する。既存環境との差異があれば初回設定を失敗させ、アプリは変更しない。
 
 GHCR packageは初回にprivateで作成される。今回の配布物は既存公開ソース由来で秘密を含めないため、匿名pullできるpublic packageを推奨する。必要な最初の可視性設定は初回導入手順に含める。privateのまま運用する場合のみDXPにread:packagesの認証が必要。秘密はNotionやチャットで受け取らず、DXP上で設定する。未確認のpublic化や認証設定を済みと扱わない。
 
@@ -72,7 +72,7 @@ GHCR packageは初回にprivateで作成される。今回の配布物は既存�
 
 ## 検証と制限
 
-`python3 scripts/cd/release_gate_checks.py`と`python3 scripts/cd/updater_checks.py`はネットワーク・Docker・秘密不要の契約／状態遷移／保全／API照合試験。`bash -n scripts/cd/image-smoke.sh`で構文確認する。PRの`image-validation`はGitHubのLinux runnerで実際のDockerを検証する。`docker_updater_checks.py`は独立した合成Compose project／volumeだけを作成し、コンテナ再生成・既存volume／鍵の保持・停止tarのhash／所有権・別volumeへの復元・ヘルス失敗時の停止／再適用禁止を確認する。GHCR未公開のPRでも動くよう、テストアダプターだけがローカルイメージを使う。運用CLIにそのバイパスはない。
+`python3 scripts/cd/release_gate_checks.py`と`python3 scripts/cd/updater_checks.py`はネットワーク・Docker・秘密不要の契約／状態遷移／保全／API照合試験。`bash -n scripts/cd/image-smoke.sh`で構文確認する。PRの`image-validation`はGitHubのLinux runnerで実際のDockerを検証する。`docker_updater_checks.py`は独立した合成Compose project／volumeだけを作成し、コンテナ再生成・既存volume／鍵ディレクトリ内の合成ファイルの保持・停止tarのhash／所有権・別volumeへの復元・ヘルス失敗時の停止／再適用禁止を確認する。保持用ファイルは認証に使用できる鍵ではなく、合成データのbyte保持検査である。実端末の認証確認の代替ではない。GHCR未公開のPRでも動くよう、テストアダプターだけがローカルイメージを使う。運用CLIにそのバイパスはない。
 
 DockerのないAIローカル環境でDocker動作やGHCR公開の成功を主張しない。GitHubのCI結果、main公開結果、DXP更新、ユーザー受入を段階別に追跡する。本書だけで自動配備が稼働するわけではない。
 

@@ -344,11 +344,14 @@ class ApiChecks(unittest.TestCase):
         self.assertFalse(self.api.verify(self.c,self.release))
 
     def test_install_interpolation(self):
-        from initialize import escape_dollars
+        from initialize import escape_dollars, runtime_environment
         value={'environment':{'SMTP_PASSWORD':'synthetic$literal${NOT_AN_ENV}'},'ports':['8080']}
         result=escape_dollars(value)
         self.assertEqual(result['environment']['SMTP_PASSWORD'],'synthetic$$literal$${NOT_AN_ENV}')
         self.assertEqual(value['environment']['SMTP_PASSWORD'],'synthetic$literal${NOT_AN_ENV}')
+        self.assertEqual(runtime_environment(result['environment']),value['environment'])
+        for literal in ('plain','$','$$','${NAME}','$NAME','x$$$y',None):
+            self.assertEqual(runtime_environment(escape_dollars({'v':literal})),{'v':literal})
 
 
 class SmokePortChecks(unittest.TestCase):
