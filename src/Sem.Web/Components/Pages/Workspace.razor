@@ -107,8 +107,20 @@ else
         @if (Editing == "event")
         {
             <p class="development-note">概要は選んだ形式で保存し、安全なタグだけを表示します。ヘッダー画像は登録・変更・削除できます。会場名と案内URLはそれぞれ保存できます。</p>
-            <form id="event-core-form" @onsubmit="SaveEvent" @onsubmit:preventDefault>
+            <form class="event-core-editor" id="event-core-form" @onsubmit="SaveEvent" @onsubmit:preventDefault>
                 <label>イベント名<FieldHelp HelpKey="event.title" Label="イベント名" /><input id="event-title" @bind="EventTitle" maxlength="100" required /></label>
+                <div class="event-editor-pair" data-event-editor-pair="dates">
+                    <label><span>開場（日本時間・任意）<FieldHelp HelpKey="event.opens" Label="開場日時" /></span><input id="event-opens" type="datetime-local" step="1" value="@Opens" @onchange="e => Opens = e.Value?.ToString() ?? string.Empty" /></label>
+                    <label><span>開始（日本時間）<FieldHelp HelpKey="event.date" Label="開催日時" /></span><input id="event-starts" type="datetime-local" step="1" value="@Starts" @onchange="e => Starts = e.Value?.ToString() ?? string.Empty" required /></label>
+                </div>
+                <div class="event-editor-pair" data-event-editor-pair="venue">
+                    <label><span>会場名・住所<FieldHelp HelpKey="event.location" Label="会場名・住所" /></span><input id="event-location" @bind="EventLocation" maxlength="500" /></label>
+                    <label><span>会場の案内URL（任意）<FieldHelp HelpKey="event.locationUrl" Label="会場の案内URL" /></span><input id="event-location-url" type="url" @bind="EventLocationUrl" maxlength="2048" placeholder="https://" /></label>
+                </div>
+                <label>概要の入力形式<FieldHelp HelpKey="event.descriptionFormat" Label="概要の入力形式" /><select id="event-description-format" @bind="EventDescriptionFormat"><option value="text">プレーンテキスト</option><option value="markdown">Markdown</option><option value="html">HTML（安全なタグのみ）</option></select></label>
+                <label>概要<FieldHelp HelpKey="event.description" Label="概要" /><textarea id="event-description-source" @bind="EventDescription" @bind:event="oninput" maxlength="2000"></textarea></label>
+                <section id="event-description-preview" aria-label="概要のプレビュー"><h3>プレビュー</h3><p>危険なタグ・属性・画像は表示しません。外部リンクはHTTP(S)のみです。</p><EventDescriptionContent Source="@EventDescription" Format="@EventDescriptionFormat" /></section>
+                <label>お知らせ<FieldHelp HelpKey="event.announcement" Label="お知らせ" /><textarea id="event-announcement" @bind="Announcement" maxlength="2000"></textarea></label>
                 <section class="event-header-editor" aria-label="イベントのヘッダー画像">
                     <label>ヘッダー画像<FieldHelp HelpKey="event.headerImage" Label="ヘッダー画像" /><InputFile id="event-header-file" OnChange="ChooseEventHeader" accept="image/png,image/jpeg,image/webp" disabled="@(Busy || EventHeaderBusy)" /></label>
                     <p>PNG・JPEG・WebP、1MiB以内。画像は再変換し、位置情報などのメタデータを除去します。</p>
@@ -116,14 +128,7 @@ else
                     @if (EventHeaderBusy) { <p role="status">画像を確認中です。</p> }
                     <p role="alert">@EventHeaderError</p>
                 </section>
-                <label>概要の入力形式<FieldHelp HelpKey="event.descriptionFormat" Label="概要の入力形式" /><select id="event-description-format" @bind="EventDescriptionFormat"><option value="text">プレーンテキスト</option><option value="markdown">Markdown</option><option value="html">HTML（安全なタグのみ）</option></select></label>
-                <label>概要<FieldHelp HelpKey="event.description" Label="概要" /><textarea id="event-description-source" @bind="EventDescription" @bind:event="oninput" maxlength="2000"></textarea></label>
-                <section id="event-description-preview" aria-label="概要のプレビュー"><h3>プレビュー</h3><p>危険なタグ・属性・画像は表示しません。外部リンクはHTTP(S)のみです。</p><EventDescriptionContent Source="@EventDescription" Format="@EventDescriptionFormat" /></section>
-                <label>会場名・住所<FieldHelp HelpKey="event.location" Label="会場名・住所" /><input id="event-location" @bind="EventLocation" maxlength="500" /></label>
-                <label>会場の案内URL（任意）<FieldHelp HelpKey="event.locationUrl" Label="会場の案内URL" /><input id="event-location-url" type="url" @bind="EventLocationUrl" maxlength="2048" placeholder="https://" /></label>
-                <label>開始（日本時間）<FieldHelp HelpKey="event.date" Label="開催日時" /><input id="event-starts" type="datetime-local" step="1" value="@Starts" @onchange="e => Starts = e.Value?.ToString() ?? string.Empty" required /></label>
-                <label>開場（日本時間・任意）<FieldHelp HelpKey="event.opens" Label="開場日時" /><input id="event-opens" type="datetime-local" step="1" value="@Opens" @onchange="e => Opens = e.Value?.ToString() ?? string.Empty" /></label>
-                <label>お知らせ<FieldHelp HelpKey="event.announcement" Label="お知らせ" /><textarea @bind="Announcement" maxlength="2000"></textarea></label>
+                <p id="event-editor-availability" class="development-note">イベントのテキスト／絵文字アイコンは未実装です。人数上限は参加管理、配色・明るさは表示設定で変更できます。このフォームへの統合は後続対応です。</p>
                 <label>表示<select id="event-phase" @bind="Phase"><option value="Hidden">非表示</option><option value="View">閲覧公開</option></select></label>
                 <fieldset>
                     <legend>担当管理者（0名以上・複数選択可）</legend>
@@ -132,7 +137,7 @@ else
                     @if(!View.IsAdmin){<p>イベント限定管理者には表示名だけを表示します。メール一覧は公開しません。</p>}
                 </fieldset>
                 <p>閲覧公開は参加受付ではありません。参加受付は各イベントのフェーズ管理で設定してください。</p>
-                <button id="event-core-save" disabled="@(Busy || EventHeaderBusy)">保存</button><button type="button" disabled="@Busy" @onclick="Cancel">取消</button>
+                <div class="event-core-editor-actions"><button id="event-core-save" disabled="@(Busy || EventHeaderBusy)">保存</button><button type="button" id="event-core-cancel" disabled="@Busy" @onclick="Cancel">取消</button></div>
             </form>
         }
     </section>

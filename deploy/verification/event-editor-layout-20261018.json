@@ -1,0 +1,192 @@
+{
+  "baseCommit": "bd47d354e204ae1617d1200b252e3b8e70eb2387",
+  "scope": "Event overview editor DOM order and two-column date/venue layout; no service, API, migration or persistence changes",
+  "workspaceCodeBlockByteIdenticalToBase": true,
+  "featureFileSha256": {
+    "src/Sem.Web/Components/Pages/Workspace.razor": "fd2476f5d7976b1ec8079deae3268f95b9633d8563de5e64a244ee0fd724888c",
+    "src/Sem.Web/Components/Pages/Workspace.razor.css": "617e2c4ded2f3a70e20e2aecee5b5eb54daa4836f920c12cbea31451fbaf675a",
+    "scripts/event-description-checks.cjs": "ab80e56ec367c0ac38babe1bacbeba8888735eb9c96fda776f87b617a4640d6d",
+    "scripts/event-editor-layout-checks.cjs": "72c44ae036c9eec4a5d253294df07f1b52b616f25c5e15fbb010f224254e3ae9",
+    "deploy/UI-REFINEMENT-STATUS.ja.md": "7231dd343217210739a30abdf3ca43e65543371a36fe9a33ae89836a23251d6f"
+  },
+  "localValidation": {
+    "dotnetSuites": {
+      "passed": 77,
+      "failed": 0
+    },
+    "syntheticUiScripts": {
+      "passed": 15,
+      "failed": 0
+    },
+    "nativeBrowser": {
+      "passed": 169,
+      "clientErrors": 0,
+      "newSyntheticDatabase": true,
+      "wholeDirectoryRestoresPassed": 2
+    },
+    "realEditorLayoutCases": [
+      {
+        "width": 390,
+        "mode": "light",
+        "pairedFieldsAligned": true,
+        "controlsInsideForm": true,
+        "documentHorizontalOverflow": false
+      },
+      {
+        "width": 390,
+        "mode": "dark",
+        "pairedFieldsAligned": true,
+        "controlsInsideForm": true,
+        "documentHorizontalOverflow": false
+      },
+      {
+        "width": 768,
+        "mode": "light",
+        "pairedFieldsAligned": true,
+        "controlsInsideForm": true,
+        "documentHorizontalOverflow": false
+      },
+      {
+        "width": 768,
+        "mode": "dark",
+        "pairedFieldsAligned": true,
+        "controlsInsideForm": true,
+        "documentHorizontalOverflow": false
+      },
+      {
+        "width": 1440,
+        "mode": "light",
+        "pairedFieldsAligned": true,
+        "controlsInsideForm": true,
+        "documentHorizontalOverflow": false
+      },
+      {
+        "width": 1440,
+        "mode": "dark",
+        "pairedFieldsAligned": true,
+        "controlsInsideForm": true,
+        "documentHorizontalOverflow": false
+      }
+    ],
+    "allSrcTestsScriptsHashesUnchanged": true,
+    "applicationForcedBuild": {
+      "warnings": 0,
+      "errors": 0
+    },
+    "allProjectsBuild": {
+      "projects": 78,
+      "errors": 0,
+      "warnings": 3,
+      "warningContext": "Existing unchanged fixture warnings: EF1003 twice and ASP0000 once."
+    }
+  },
+  "nonsecretLogDigests": {
+    "Sem.AcceptanceRetentionChecks.log": "acbc8652ed3ec05f8d526bc7a7bd7ee48297be1580fa97d56b22fe92af135dfd",
+    "Sem.AccountPasskeyChecks.log": "7c4dc7a6a9934967e04b0a56f796fc2ab83222cc8c9ac39a41fb2c21dbbe2df6",
+    "Sem.ApplicationJoinChecks.log": "d407273d95860291afdc78ab2cc86d4d9aad9d6505a94cc2941f9f7c9e5c54a9",
+    "Sem.ApplicationLoginHttpChecks.log": "d6ccc13ebce40b487df3f46aefca63dcd4a9edfd83a0e58dfe4953dd0cff2a00",
+    "Sem.BusinessNotificationChecks.log": "40dfd376dcedd0d2ee6aa79e54efda01f6862f93b57e12d6182102ee266746e6",
+    "Sem.CommentChecks.log": "36ce366c24e9160152c109fd65d402dd05d396607c0d78716fd60193fa4cd74e",
+    "Sem.CoreChecks.log": "210eebb62fa149a697d6d2edbb2de8f09f2a672ed8ef48654b79bb2d1671aa79",
+    "Sem.DailyDigestChecks.log": "4a5d0c340e179834aa4818b182f4b237d70f97f76ea69f03ba87a072287b6809",
+    "Sem.DefinitionChecks.log": "500b41f19648f093bab91c60c598e75d66ce1906da8c4ea3b0f47799d035e246",
+    "Sem.DeviceNotificationChecks.log": "234767245b088641caa93c7ab470759bb31fb9bd2c444b36433298acdba1a9ec",
+    "Sem.DigestChecks.log": "2fa6639b1312c4eae7439c47219121e7a6623109a93cb9ece0dedc5e953e9a73",
+    "Sem.EmailChangeChecks.log": "4352a76ee6717b435d914e15dbf760f38842dacc47b7104b8781583d911733b3",
+    "Sem.EmailChangeHttpChecks.log": "0556036298134664f39fd088d9907c83bd20901561a54812d066bffeec9cff1a",
+    "Sem.EventImportApplyChecks.log": "33f26d6ea5ab10ca0371d7e63e553009388b0d7ab927df2dfd0fbc6f4be3a8d4",
+    "Sem.EventImportComposerChecks.log": "d88ece0d27268acd53fd40799b3394a65ba3b57263920bc2e762c4d0bf8e0ea1",
+    "Sem.EventImportCsvChecks.log": "653a95099052cca747ce3a8e46dcc2659f4dbb76d5e75871dc117f988cba804e",
+    "Sem.EventImportEligibilityChecks.log": "6a7e7e76389049439da9614fb0b707447c6bbafdea09601261bfa1ebcb16db1f",
+    "Sem.EventImportHttpChecks.log": "fb88a4756d6662e9ec3d4c2bd5c91fb2473d7f5047b92e4816964fd5176b0835",
+    "Sem.EventImportPreviewChecks.log": "c832c467693c87b703f5cf7d12fd9c1834c3fc05d57cc63f6fe8265ddc657276",
+    "Sem.EventMatrixChecks.log": "72d981ba5eb50689c23649bbe1317807c82a32a3a11caaf55e9c0d8f31daa25a",
+    "Sem.EventPushDeliveryChecks.log": "8d169e29588eb2d08f9a5294d4d22f9146dd9a893e84d3cfa9090d715dd09856",
+    "Sem.EventPushRuleChecks.log": "771e5ff1ab1d015b1f35ece581766e1d7bdc6f13ae3164dde9471f8c269bc646",
+    "Sem.EventQrChecks.log": "f8af7bb5acc842927479b8545887d995975b06940f8bacb3d44c2ac683f10079",
+    "Sem.EventQrImageChecks.log": "4d3ed99992fc87851ea4e320b570e8e7c8a279124d0830be7562bbb39dd28fa6",
+    "Sem.EventTabsChecks.log": "c591dbde67e4d4fce48c56bbdd8a2672e813470c3cff939fa347d63bad47cdb7",
+    "Sem.InboxChecks.log": "541bcec2837aef499f702a4f442861c325cfe53bf90c61c677ffb5947ad39a62",
+    "Sem.InvitationIssuanceChecks.log": "757e81fb18888b7dfd760c475a8c6fa36ed3693bc3c38ba43e13c2fa099a4f94",
+    "Sem.InvitationManagementChecks.log": "436aecf659f4fd7d8aeae9fcb14121f13038675f79f548a98ee48b0285795e1f",
+    "Sem.LegacyResetChecks.log": "7358686506f4c9db4502494f402a99d72a57f4375a6597537d3388e204d23dbf",
+    "Sem.LiveSessionRenewalChecks.log": "9665f2792aee3a0c5d12ee05a36ea650eb721eec8a595173353cbfaca167674e",
+    "Sem.ManualNotificationAcceptanceChecks.log": "e6af06559c69985f1c8cefc69dcd8405059ad7cce8335a0de6c0df32755f531b",
+    "Sem.ManualNotificationComposerChecks.log": "fb4943150596db8b6698cb5462925d30121de6a45324cdf9fbeb4007ae5abe36",
+    "Sem.ManualNotificationDevicePreflightChecks.log": "937df496787942e030924a1c1081b53d7525ac7520fffa206d674827f8885ba6",
+    "Sem.ManualNotificationHistoryChecks.log": "34511db85a1963255602ca28d8c7f6b4a48f094a366ae6f9b893b4d5a4ac43ae",
+    "Sem.ManualNotificationPreviewChecks.log": "9769a58bb93e14a8456b56c8cdd8f5bc644a130c0c0358e480d157806c70f660",
+    "Sem.ManualNotificationPushActivationChecks.log": "bbc2d08463757a9ac3695f8632461e3b946a7b17f8afaa2c589609841fb5d8e4",
+    "Sem.ManualNotificationPushDispatchChecks.log": "0f5798414aa5793b3530b146d05f1e6874d6aae27faf5e1bc9dbb6c5a97c4245",
+    "Sem.ManualNotificationPushEngineChecks.log": "19141d63b137591a9eae64e32704f38000e11af1457d2247688c12fa51228828",
+    "Sem.ManualNotificationPushPolicyChecks.log": "0b75056de94f3f76932b6bb1ee5268eb0db1715294177152c0c30ac3c251ba06",
+    "Sem.ManualNotificationPushQueueChecks.log": "6c5248c8e3627c116c1b444c1083296d2b9f8408e0278d0eed576cd1aff8af0a",
+    "Sem.ManualNotificationPushStatusChecks.log": "c19711c0d4d7cf4b9346e5be635768625c8f99611bf1144cdd3955e026eaed3f",
+    "Sem.ManualPushCompositionChecks.log": "678044c9e4c7d059907b12ca8c906028ca4f1194dba1f8f32a676f724d60beff",
+    "Sem.ManualPushControlStateChecks.log": "6752e2252e51ee3fd757861c952cdcb2f11f78fcd062c10ed00ebb7608ecdf19",
+    "Sem.ManualPushStatusViewStateChecks.log": "8661c3fd416ea8d465771be3e2d00978c8c86b8f0a76e1f1a167f9e36e70b85b",
+    "Sem.ManualReceptionChecks.log": "953cc29c61598f45a4d1ca317455f4ff9da151208458a215e964a95210bbb0d4",
+    "Sem.NotificationPlanChecks.log": "428486932eea89d141edb757cd3861400f0aae0140c9d0da4a760ed87fa47c84",
+    "Sem.PartStartDeliveryChecks.log": "7225908ee3fec7d569072b37cc5fbcee7f018ef1ce9c1680f21312cb79f50f50",
+    "Sem.PartStartPreferenceChecks.log": "1726a14b7b2b731847702bd9ef2fd6cc572cb339c1902233a5f6ddc9fff931bc",
+    "Sem.ParticipationChecks.log": "6b1bc187ab518d790f2b9e053cba97cbcaddb5bcd19328ea7d88eac72c9b1553",
+    "Sem.PasskeyEmergencyMaintenanceChecks.log": "77eeb711aa96c196609a4b6fc91297390c16a7cfbe145115fbb028981eb9e73c",
+    "Sem.PasskeyEmergencyRecoveryChecks.log": "0ad4e9af0035b0d1c8011a827a939ccdf2fe3000fa39f629c3d4ed1892630e41",
+    "Sem.PasskeyProofChecks.log": "ae0455cea5816bbbbd319680df1684c7e726ce01a230cc7673ae7958fe4e5894",
+    "Sem.PasskeyRecoveryChecks.log": "caa69214a06fbf83b29ae0c5942643c799ef568f6d6dd9c4aaa78989bd38d840",
+    "Sem.PasskeyRecoveryHttpChecks.log": "3f9ee8c7dca01b4a235664e9cfe0f99943ded2118e4723a5e67d70494272e754",
+    "Sem.PhaseChecks.log": "2344598aa13b8c0eda9ad10cb7bb91878288bcb8823859d07d3090d9e70f2219",
+    "Sem.ProfileExtensionChecks.log": "825508e8754c100314cc57c8d2890751e99a00b299e462bb56ea830046da2f4f",
+    "Sem.ProfileExtensionHttpChecks.log": "32ba1c4f571c92fdb7a00ad2e7884dc4abde70601f8ae5791f7c53c69ebe502b",
+    "Sem.ProfileImageChecks.log": "c1731ce763f3d6d88f789916970361c1c681aa6ada47bed1f90024193d80bdb6",
+    "Sem.ProfileImageHttpChecks.log": "da435b4b4517a8a97d4fc966465c73ebd2529b6f458d1c044bb6b25276acf0f4",
+    "Sem.ProfileRegistrationHistoryChecks.log": "ab85cdf1ce4fc7cbe1e55ea0994cee9a87d6ea5cdd827168707333f440470e0e",
+    "Sem.ProfileRegistrationHistoryHttpChecks.log": "6de618a1f5221473d2d9eae9784de36cd5229cbf18e2956d09dc630007500d59",
+    "Sem.ProgressChecks.log": "a7a3e991bab005744a130676c27444bd2d65f4e7978defc872569d9b3b7dfb37",
+    "Sem.PublicAnswerChecks.log": "740042536c453713c0967054585e5d1c14f3b9b98ec1d0921b16a27c5f039be8",
+    "Sem.QrReceptionChecks.log": "73140588966228cdfebe3c8823e3f65cde32794de834d0a905e8e0ebe8dcf3c4",
+    "Sem.QuestionChecks.log": "e130c8a0ba6b90bfcdcd23c9aad92825e001de8c59460a1676825a82ac09659b",
+    "Sem.ReceptionRosterChecks.log": "c928b49c5d00c40723179eac4f689ec9e62906bb645b93d60a26a1e2a7c8b2b8",
+    "Sem.ReservationChecks.log": "067f07fcb711a5373448c70d58ee0cb0bc44e8506dfba62dc62026fb6f40c4eb",
+    "Sem.ShorteningChecks.log": "fec819fc10231c90f6a4c668ae4c285a921d7e19ed85edec24062db8842ac237",
+    "Sem.ShorteningIntegrationChecks.log": "9f545492f0d847a6ee0436560e7dce6bff0fd16d59af847e8c43285771a435cc",
+    "Sem.SongChecks.log": "b3c1e8d81a0c15a7eca87bbe7aaa16f818bdf0383018b6ab0b794fe21a4a3f93",
+    "Sem.StorageChecks.log": "86cc3837d1b9cfcd6f7543e5d2a60ab8d33c9cc5bbb57387e2367769dd8fc884",
+    "Sem.ThemeAppearanceHttpChecks.log": "4a34216e27a892a47ac12db800b73fa82b008e86ecb23848e39ebeaec7da66f2",
+    "Sem.ThemeCatalogChecks.log": "2d4999eec191b0d07aaa95ce8670464bc4b2a74a6631b19741920ac708b241d4",
+    "Sem.ThemeSelectionChecks.log": "3b51f55c4ab6c76f252a39b57a6ff62a7bd27e2dc04f03f799086f8f192e8d0c",
+    "Sem.ThemeValueChecks.log": "3854a4e92fce1f7d4920e26e10f15711b454cca52f5042f741dac08a7ffc21b3",
+    "Sem.TimetableChecks.log": "29af1b154a2fd2000ee4adbd0cac37c58ae7bdd962df0fbb368a1b1f2edc256f",
+    "Sem.UiFeedbackChecks.log": "fee1635ffafad7e2d55017be6b2c398ded84e8dff5bf527f67c455813688b081",
+    "account-passkeys-ui-checks.log": "66e7c499fb79d97fdfae9733dcab715477f8f2369f14b3034416c2df183fa91a",
+    "admin-accounts-ui-checks.log": "fd2399181b7dbad10a4eb3d4fed207bac92f4f351ae2f2aca28567ba19bd5fe8",
+    "application-auth-checks.log": "beb85c7a5efb032405ef949b8b15891d4e58f24a49dc46bd98d2e73578a9218b",
+    "application-inbox-ui-checks.log": "ac5b720202a26040125555a0e3f9420b6d363aa3a3b0f91b044d46a198274d5d",
+    "application-join-ui-checks.log": "b84c3ab6244a269f93af560493c4ef13f7096925f078953800db7622d3f271d5",
+    "build.log": "da30a2933751e3d6bc548f23580f37cd7d9d0bf0af0bce7a7f3b9029e34db124",
+    "device-notification-ui-checks.log": "ee4752962d61c492bb0fb26f6b46b6c4d178f1a9062c55264beeb6dd5401b0cf",
+    "dialog-lifecycle-checks.log": "105ae027dc62c407c34709a414e781964f4dfbe4521f321843756bfc4dae4265",
+    "field-help-ui-checks.log": "bfb57bc83a738c0e905851544c27c627fecbee7723ec47abc3e4ded656c312cb",
+    "invitation-management-ui-checks.log": "13781df3449e4a080b32b8fbab72368241fd0ab020405c461cbf51ea69dce94f",
+    "legacy-passkey-url-checks.log": "e0aeaf2caddc9bf5221ea0159fad3e0de58f7c22179185af4279602907e2e73e",
+    "operation-result-presenter-checks.log": "a3dd22fbc2a8aff48c2d26faa70fcf5a8ed787980ba091300a666fe658a0e252",
+    "passkey-recovery-ui-checks.log": "87446ca3c0fe9c93e2b97d8c76bf244219f9665470ef21840058a26838e88534",
+    "profile-history-transport-checks.log": "4004bf9f63715c42e649c59ee16168f6ed5fae29d5b974b9d94227091edab2fa",
+    "profile-image-transport-checks.log": "f53d8e94615ce5c04c5b80438067630192edc9d14b9c676e94bdd530de7d8499",
+    "profile-result-boundary-checks.log": "720628f2a9c8e1f3db47e24496edc19c9f88941dd7e87097f391e2b586e38ce0"
+  },
+  "otherDigests": {
+    "nativeResult": "3add77617ffc31082b75636d4e6225d73a3030156707b08c289df8503394aee3",
+    "forcedApplicationBuild": "30e3191afa2b9755da393e8b94b109730326c83279f12265471f50371eed249e"
+  },
+  "resolvedLocalFailures": [
+    "Initial stale incremental Razor output lacked a newly added announcement ID; a forced rebuild included the current source and the unchanged assertion passed.",
+    "390px actual browser geometry detected the InputFile child outside the editor; scoped ::deep file-input sizing fixed the product CSS. No layout assertion was weakened."
+  ],
+  "remainingWork": [
+    "Event text/emoji icon persistence and rendering are not implemented and are explicitly noted in the editor.",
+    "Capacity and event appearance work in their existing pages; integration into this overview editor is a separate task.",
+    "This is not full mock parity or user acceptance. DXP deployment and physical-device checks were not performed."
+  ],
+  "privacy": "Only test counts, scope, source hashes and log hashes are published; no database, email, credential, cookie, proof, key, certificate or raw log is included."
+}

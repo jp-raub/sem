@@ -5,10 +5,11 @@ module.exports=async({p,g,ok})=>{
  try{
   await page.goto('https://localhost:18443/workspace');await page.locator('[data-workspace-interactive="true"]').waitFor();
   await page.locator('#event-new').click();await page.locator('#event-title').fill('Rich description browser fixture');await page.locator('#event-starts').fill('2099-01-03T12:00');
+  await require('./event-editor-layout-checks.cjs')({page,ok});
   await page.locator('#event-title').locator('..').click({position:{x:1,y:1}});
   ok(await page.locator('#event-title').evaluate(e=>e===document.activeElement)&&await page.locator('.field-help-panel').count()===0,'Real event label focuses title without triggering field help');
   await page.keyboard.press('Tab');
-  ok(await page.locator('#event-header-file').evaluate(e=>e===document.activeElement),'Real editor Tab moves directly to the next input, skipping help');
+  ok(await page.locator('#event-opens').evaluate(e=>e===document.activeElement),'Real editor Tab moves directly to the next input, skipping help');
   await page.locator('#event-title').focus();await page.keyboard.press('Alt+F1');await page.locator('.field-help-panel').waitFor();
   ok(await page.locator('[data-field-help="event.title"]').getAttribute('aria-expanded')==='true','Real editor keyboard shortcut opens the focused title help');
   await page.keyboard.press('Escape');
@@ -20,6 +21,9 @@ module.exports=async({p,g,ok})=>{
   let saved=await page.evaluate(async()=> (await(await fetch('/api/core/workspace')).json()).events.find(e=>e.title==='Rich description browser fixture'));
   ok(await page.locator(`[data-core-event="${saved.id}"] .workspace-event-description`).count()===0,'Saved Markdown source is absent from the event list');
   await page.locator(`[data-core-event="${saved.id}"] summary`).click();
+  await page.locator(`[data-core-event="${saved.id}"]`).getByRole('button',{name:'概要・管理者を編集',exact:true}).click();await page.locator('#event-description-source').waitFor();
+  await page.locator('#event-title').fill('Cancelled layout draft');await page.locator('#event-core-cancel').click();await page.waitForFunction(()=>!document.querySelector('#event-core-form'));
+  ok((await page.locator(`[data-core-event="${saved.id}"]`).innerText()).includes('Rich description browser fixture')&&!(await page.locator(`[data-core-event="${saved.id}"]`).innerText()).includes('Cancelled layout draft'),'Reordered editor cancellation does not save draft changes');
   await page.locator(`[data-core-event="${saved.id}"]`).getByRole('button',{name:'概要・管理者を編集',exact:true}).click();await page.locator('#event-description-source').waitFor();
   ok(await page.locator('#event-description-source').inputValue()==='## Music\n**Preview** and `code`'&&await page.locator('#event-description-format').inputValue()==='markdown','Hiding list summary does not discard Markdown source or editor format');
   const source='<h2>Music</h2><p><strong>safe</strong><img src="https://untrusted-description.example/image" onerror="window.__descriptionExecuted=true"><script>window.__descriptionExecuted=true</script><a href="javascript:alert(1)" onclick="alert(1)">unsafe</a><a href="https://venue.example/">map</a></p>';

@@ -185,3 +185,47 @@
 }
 .event-header-editor { margin-block: 1rem; }
 .event-header-editor img { display:block; max-width:100%; max-height:240px; object-fit:contain; border-radius:12px; margin-block:12px; }
+
+/* Match DOM/keyboard order; the two approved pairs stay paired on narrow screens. */
+.event-core-editor {
+    display: grid;
+    gap: 1rem;
+    min-width: 0;
+}
+.event-core-editor > label,
+.event-editor-pair > label {
+    display: block;
+    min-width: 0;
+}
+.event-editor-pair {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+    gap: 1rem;
+    min-width: 0;
+}
+.event-editor-pair > label { display: flex; flex-direction: column; gap: 0.35rem; }
+.event-editor-pair > label > input { margin-top: auto; }
+.event-core-editor input,
+.event-core-editor select,
+.event-core-editor textarea {
+    display: block;
+    margin-top: 0.35rem;
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+}
+.event-core-editor textarea { min-height: 6rem; }
+@media (max-width: 700px) {
+    .event-editor-pair { gap: 0.5rem; }
+}
+
+.event-core-editor-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+/* InputFile renders a child-component input without this page's scope attribute. */
+.event-header-editor ::deep input[type="file"] {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+}
