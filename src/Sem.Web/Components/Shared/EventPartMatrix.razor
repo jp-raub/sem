@@ -71,6 +71,7 @@
                                                         data-event-profile="@(CanViewProfile(slot)?slot.AssignedUserId:null)"
                                                         aria-pressed="@(pressed ? "true" : "false")"
                                                         aria-label="@SlotLabel(timed.Title, column, slot, index, cellSlots.Length)"
+                                                        aria-description="@SlotDescription(slot)"
                                                         disabled="@(!CanViewProfile(slot)&&IsDisabled(slot))"
                                                         @onclick="() => CanViewProfile(slot) ? OnViewProfile.InvokeAsync(slot.AssignedUserId!) : OnToggle.InvokeAsync(slot.Id)">
                                                     @SlotText(slot, pressed)
@@ -161,10 +162,9 @@
     {
         if (slot.AssignedUserId is not null)
         {
-            var owner = slot.AssignedUserId == OwnUserId ? "自分" : "他人";
             var name = slot.AssignedName ?? "登録済み";
             var selection = pressed ? (ReleaseMode ? "解除選択中・" : "選択中・") : "";
-            return $"{selection}{owner}: {name}";
+            return $"{selection}{name}";
         }
         if (pressed)
         {
@@ -178,9 +178,15 @@
         var selected = SelectedIds.Contains(slot.Id);
         var state = slot.AssignedUserId is null
             ? (selected ? "選択中" : "空き枠")
-            : $"{(slot.AssignedUserId == OwnUserId ? "自分" : "他人")}: {slot.AssignedName ?? "登録済み"}" +
+            : (slot.AssignedName ?? "登録済み") +
               (selected ? (ReleaseMode ? " / 解除選択中" : " / 選択中") : "");
         var suffix = count > 1 ? $" {index + 1} / {count}" : "";
         return $"{title} / {partName}{suffix} / {state}";
     }
+
+    string? SlotDescription(ParticipationSlot slot) => slot.AssignedUserId is null
+        ? null
+        : slot.AssignedUserId == OwnUserId
+            ? "ログイン中のアカウントの登録枠"
+            : "他の参加者の登録枠";
 }
