@@ -10,6 +10,7 @@ on:
       - '.github/workflows/cd-image.yml'
       - 'scripts/cd/**'
       - 'deploy/CD*'
+      - 'deploy/cd-policy.json'
 permissions:
   contents: read
 concurrency:
@@ -25,7 +26,8 @@ jobs:
           persist-credentials: false
       - run: |
           python3 scripts/cd/release_gate_checks.py
-          bash -n scripts/cd/image-smoke.sh
+          python3 scripts/cd/updater_checks.py
+          bash -n scripts/cd/image-smoke.sh scripts/cd/install.sh scripts/cd/sem-cd
 
   image-validation:
     needs: contract-checks
@@ -42,6 +44,7 @@ jobs:
         run: |
           docker build --platform linux/amd64 -t sem-cd:pr -f deploy/Dockerfile .
           bash scripts/cd/image-smoke.sh sem-cd:pr
+          sudo python3 scripts/cd/docker_updater_checks.py --image sem-cd:pr
 
   gate:
     needs: contract-checks
@@ -121,7 +124,9 @@ jobs:
           import json,os,re
           digest=os.environ['IMAGE_DIGEST']
           assert re.fullmatch('sha256:[0-9a-f]{64}',digest)
-          candidate=dict(schema=1, repository='jp-raub/sem', commit=os.environ['SOURCE_SHA'],
+          with open('deploy/cd-policy.json') as f: policy=json.load(f)
+          assert set(policy)=={'mode'} and policy['mode'] in ('auto','manual')
+          candidate=dict(deployment_mode=policy['mode'], schema=1, repository='jp-raub/sem', commit=os.environ['SOURCE_SHA'],
             image=os.environ['IMAGE']+'@'+digest, platform='linux/amd64',
             integration_run=int(os.environ['UPSTREAM_RUN']), integration_attempt=int(os.environ['UPSTREAM_ATTEMPT']),
             publication_run=int(os.environ['GITHUB_RUN_ID']), publication_attempt=int(os.environ['GITHUB_RUN_ATTEMPT']))
