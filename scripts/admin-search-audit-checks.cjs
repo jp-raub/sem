@@ -30,9 +30,23 @@ module.exports=async({p,g,ok})=>{
   await adminPage.locator('#event-core-form').getByRole('button',{name:'取消',exact:true}).click();adminPage.off('request',watch);
   const deniedAudit=await g.evaluate(async()=> (await fetch('/api/core/admin-audit')).status);
   ok(deniedAudit===403,'Ordinary member cannot obtain global audit over HTTP');
-  await adminPage.goto('https://localhost:18443/service/audit');await adminPage.locator('#admin-audit-summary').waitFor();
+  await adminPage.locator('#navigation-toggle').click();await adminPage.locator('#navigation-panel:not([hidden])').waitFor();
+  ok(await adminPage.locator('#navigation-audit').isVisible(),'Administrator can discover audit directly in the common menu');
+  await adminPage.locator('#navigation-audit').click();await adminPage.locator('#admin-audit-summary').waitFor();
+  // A user click can commit the new document before its stylesheets finish.
+  // Unlike goto's default, locator.click does not wait for the load event.
+  await adminPage.waitForLoadState('load');
+  ok(new URL(adminPage.url()).pathname==='/service/audit','Visible menu link opens the authorized audit page without typing its URL');
   ok(await adminPage.locator('.audit-table thead th').count()===5,'Audit has the five approved columns');
   ok(await adminPage.locator('[data-admin-audit]').count()<=100,'Audit UI remains bounded to latest hundred entries');
-  ok(await adminPage.locator('.audit-scroll').evaluate(e=>getComputedStyle(e).overflowY==='auto'&&e.clientHeight<=322),'Audit stays within approximately five-row scroll viewport');
+  const auditLayout=await adminPage.locator('.audit-scroll').evaluate(e=>({overflow:getComputedStyle(e).overflowY,height:e.clientHeight,maxHeight:getComputedStyle(e).maxHeight}));
+  ok(auditLayout.overflow==='auto'&&auditLayout.height<=322,'Audit stays within approximately five-row scroll viewport: '+JSON.stringify(auditLayout));
+  const memberPage=await g.context().newPage();try{
+   await memberPage.goto('https://localhost:18443/workspace');await memberPage.locator('#navigation-controls:not([hidden])').waitFor();
+   await memberPage.locator('#navigation-toggle').click();await memberPage.locator('#navigation-panel:not([hidden])').waitFor();
+   ok(await memberPage.locator('#navigation-audit').isHidden(),'Ordinary member menu does not expose audit navigation');
+   await memberPage.goto('https://localhost:18443/service/audit');await memberPage.locator('#admin-audit-error').filter({hasText:'全体管理者'}).waitFor();
+   ok(await memberPage.locator('[data-admin-audit],#admin-audit-summary').count()===0,'Direct member navigation renders no private audit entries');
+  }finally{await memberPage.close();}
   }finally{await adminPage.close();}
 };

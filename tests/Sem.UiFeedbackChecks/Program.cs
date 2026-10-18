@@ -92,6 +92,20 @@ html=Sem.Web.Core.EventDescription.Render("<strong>untrusted</strong>","unknown"
 Check(!html.Contains("<strong>"),"Unknown persisted description format fails closed to text");
 var renderedDescription=await renderer.Dispatcher.InvokeAsync(async()=>{var result=await renderer.RenderComponentAsync<EventDescriptionContent>(ParameterView.FromDictionary(new Dictionary<string,object?>{["Source"]="<b>music</b><script>bad()</script>",["Format"]="html"}));return result.ToHtmlString();});
 Check(renderedDescription.Contains("<b>music</b>")&&new AngleSharp.Html.Parser.HtmlParser().ParseDocument(renderedDescription).QuerySelectorAll("script").Length==0&&!renderedDescription.Contains("bad()"),"Real preview component uses sanitized markup without active content");
+foreach(var format in new[]{"markdown","html"})
+{
+ var listHtml=await renderer.Dispatcher.InvokeAsync(async()=>{
+  var result=await renderer.RenderComponentAsync<EventListDescription>(ParameterView.FromDictionary(new Dictionary<string,object?>{["Source"]="<b>raw</b> **raw**",["Format"]=format}));return result.ToHtmlString();});
+ Check(string.IsNullOrWhiteSpace(listHtml), "Event list omits rich source entirely: "+format);
+}
+var textList=await renderer.Dispatcher.InvokeAsync(async()=>{
+ var result=await renderer.RenderComponentAsync<EventListDescription>(ParameterView.FromDictionary(new Dictionary<string,object?>{["Source"]="<b>legacy text</b>"}));return result.ToHtmlString();});
+Check(textList.Contains("workspace-event-description")&&textList.Contains("&lt;b&gt;legacy text&lt;/b&gt;")&&!textList.Contains("<b>"),"Legacy text list description stays visible and encoded");
+var helpHtml=await renderer.Dispatcher.InvokeAsync(async()=>{
+ var result=await renderer.RenderComponentAsync<FieldHelp>(ParameterView.FromDictionary(new Dictionary<string,object?>{["HelpKey"]="event.title",["Label"]="Event"}));return result.ToHtmlString();});
+var helpElement=new AngleSharp.Html.Parser.HtmlParser().ParseDocument(helpHtml).QuerySelector("[data-field-help]")!;
+Check(helpElement.TagName=="SPAN"&&helpElement.GetAttribute("role")=="button"&&helpElement.GetAttribute("tabindex")=="-1","Real help component is non-labelable and excluded from sequential form focus");
+Check(helpElement.GetAttribute("aria-keyshortcuts")=="Alt+F1"&&helpElement.GetAttribute("title")!.Contains("Alt+F1"),"Real help component documents the alternative keyboard action");
 Console.WriteLine($"UI feedback, sort and admin picker checks passed: {checks}");
 
 sealed class FakeJs : IJSRuntime

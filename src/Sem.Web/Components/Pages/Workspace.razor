@@ -55,7 +55,7 @@ else
                             <tr @key="item.Id" data-core-event="@item.Id">
                                 <td class="workspace-event-name">
                                     <a class="workspace-event-overview" data-event-overview="@item.Id" href="@($"/events/{Uri.EscapeDataString(item.Id)}")">@item.Title</a>
-                                    @if (!string.IsNullOrWhiteSpace(item.Description)) { <p>@item.Description</p> }
+                                    <EventListDescription Source="@item.Description" Format="@item.DescriptionFormat" />
                                     @if (!string.IsNullOrWhiteSpace(item.Location)) { <small>@item.Location</small> }
                                     @if (item.ManagerIds.Length > 0)
                                     {

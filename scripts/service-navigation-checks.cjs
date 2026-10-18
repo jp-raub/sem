@@ -11,7 +11,7 @@ module.exports = async ({p,g,ok}) => {
   ok(post===405,'Header endpoint rejects mutation');
   await p.locator('#navigation-toggle').click();await p.waitForSelector('#navigation-panel:visible');
   const labels=await p.locator('#navigation-panel a').allTextContents();
-  ok(labels.join('|')==='サービス管理|イベント一覧|プロフィール管理|アカウント管理|通知管理|表示設定|招待管理','Shared menu keeps approved service/own-management order');
+  ok(labels.join('|')==='サービス管理|監査ログ|イベント一覧|プロフィール管理|アカウント管理|通知管理|表示設定|招待管理','Shared menu keeps service/own-management order with an explicit admin audit link');
   ok(await p.locator('#navigation-panel a').first().evaluate(e=>e===document.activeElement),'Opening menu focuses first permitted link');
   await p.keyboard.press('Escape');
   ok(await p.locator('#navigation-panel').isHidden()&&await p.locator('#navigation-toggle').evaluate(e=>e===document.activeElement),'Escape closes menu and returns focus');
@@ -25,6 +25,7 @@ module.exports = async ({p,g,ok}) => {
   await p.screenshot({path:'verification/navigation-mobile.png',fullPage:false});await p.keyboard.press('Escape');
   await g.goto(origin+'/workspace');await g.waitForSelector('#navigation-controls:visible');await g.locator('#navigation-toggle').click();await g.waitForSelector('#navigation-panel:visible');
   ok(await g.locator('#navigation-service').isHidden(),'Member cannot see global service administration');
+  ok(await g.locator('#navigation-audit').isHidden(),'Member cannot see global audit navigation');
   await g.keyboard.press('Escape');
   await p.locator('#service-edit').click();await p.waitForSelector('#service-name');
   const prior=await p.locator('#navigation-name').innerText();await p.locator('#service-name').fill('Preview <script> harmless');

@@ -76,6 +76,19 @@ if (typeof document !== 'undefined') {
     document.addEventListener('keydown', event => {
         if (active && event.key === 'Escape') {
             event.preventDefault(); event.stopImmediatePropagation(); closeHelp();
+            return;
+        }
+        const target = event.target;
+        // Help stays outside ordinary form Tab order. It remains available to
+        // keyboard users from the focused field, and to screen-reader button navigation.
+        const explicit = target.closest?.('[data-field-help]');
+        const fromField = event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey &&
+            event.key === 'F1' && target.matches?.('input,select,textarea');
+        const trigger = fromField ? target.closest('label')?.querySelector('[data-field-help]') :
+            (!event.altKey && !event.ctrlKey && !event.metaKey && (event.key === 'Enter' || event.key === ' ') ? explicit : null);
+        if (trigger && !trigger.hasAttribute('disabled')) {
+            event.preventDefault(); event.stopImmediatePropagation();
+            if (!event.repeat) void openHelp(trigger);
         }
     }, true);
     document.addEventListener('focusin', event => {

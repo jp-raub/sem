@@ -1,6 +1,9 @@
-<button type="button" class="field-help-trigger" data-field-help="@HelpKey"
+@* A native button inside a label becomes its first labelable control.
+   Use a non-labelable explicit target so label/whitespace clicks focus the input. *@
+<span role="button" tabindex="-1" class="field-help-trigger" data-field-help="@HelpKey"
         data-field-label="@Label" aria-label="@(Label + "の説明")"
-        aria-haspopup="dialog" aria-expanded="false">?</button>
+        aria-keyshortcuts="Alt+F1" title="説明を開く（入力欄でAlt+F1）"
+        aria-haspopup="dialog" aria-expanded="false">?</span>
 
 @code {
     [Parameter, EditorRequired] public string HelpKey { get; set; } = "";
