@@ -49,9 +49,9 @@ def main():
         stage='seed synthetic data and key-directory file'
         # Health-only startup need not materialize a Data Protection key ring.
         # This non-key-*.xml fixture is deliberately not a usable authentication key.
-        run(['docker','exec','--user','0',current['Id'],'sh','-c',
+        run(['docker','exec',current['Id'],'sh','-c',
              'printf synthetic-cd-data > /data/cd-sentinel; printf synthetic-key-file > /data/keys/cd-fixture.bin; '
-             'chown app:app /data/cd-sentinel /data/keys/cd-fixture.bin; chmod 600 /data/cd-sentinel /data/keys/cd-fixture.bin'])
+             'chmod 600 /data/cd-sentinel /data/keys/cd-fixture.bin'])
         stage='hash seeded synthetic data and key-directory files'
         before=run(['docker','exec',current['Id'],'sh','-c','sha256sum /data/cd-sentinel /data/keys/*']).decode()
         # Exercise actual root-owned initial capture, including literal '$' secrets.
