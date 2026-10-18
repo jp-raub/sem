@@ -3,6 +3,8 @@
 import copy
 import io
 import json
+import os
+import subprocess
 from pathlib import Path
 import tarfile
 import tempfile
@@ -347,6 +349,38 @@ class ApiChecks(unittest.TestCase):
         result=escape_dollars(value)
         self.assertEqual(result['environment']['SMTP_PASSWORD'],'synthetic$$literal$${NOT_AN_ENV}')
         self.assertEqual(value['environment']['SMTP_PASSWORD'],'synthetic$literal${NOT_AN_ENV}')
+
+
+class SmokePortChecks(unittest.TestCase):
+    def test_random_port_changes_on_restart(self):
+        # Execute the real shell check against local command doubles, never Docker.
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary)
+            scripts={
+                'docker': r'''#!/usr/bin/env bash
+set -eu
+case "$1 $2" in
+ 'image inspect')
+   if [[ "$*" == *'.Os'* ]]; then echo linux/amd64; else echo app; fi;;
+ 'port '*)
+   if [ -f "$CD_SMOKE_STATE" ]; then echo 127.0.0.1:32002; else echo 127.0.0.1:32001; fi;;
+ 'restart '*) touch "$CD_SMOKE_STATE";;
+esac
+''',
+                'curl': r'''#!/usr/bin/env bash
+set -eu
+expected=32001
+if [ -f "$CD_SMOKE_STATE" ]; then expected=32002; fi
+[[ "$*" == *"127.0.0.1:$expected/health/"* ]]
+''',
+                'sleep': '#!/bin/sh\nexit 0\n'}
+            for name,content in scripts.items():
+                (root/name).write_text(content);(root/name).chmod(0o700)
+            result=subprocess.run(['bash',str(Path(__file__).with_name('image-smoke.sh')),'synthetic'],
+                env={**os.environ,'PATH':str(root)+':'+os.environ['PATH'],
+                     'CD_SMOKE_STATE':str(root/'restarted')},capture_output=True,text=True,timeout=10)
+            self.assertEqual(result.returncode,0,result.stderr)
+            self.assertIn('host port changed on restart; refreshed',result.stdout)
 
 
 if __name__=='__main__': unittest.main()

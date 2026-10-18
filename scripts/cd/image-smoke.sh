@@ -19,8 +19,11 @@ stage="new-volume startup"
 docker volume create "$volume" >/dev/null
 docker run -d --name "$container" --cap-drop ALL --security-opt no-new-privileges \
   -p 127.0.0.1::8080 -v "$volume:/data" "$image" >/dev/null
-port=$(docker port "$container" 8080/tcp | sed -n 's/^127\.0\.0\.1://p')
-[[ "$port" =~ ^[0-9]+$ ]]
+resolve_port() {
+  port=$(docker port "$container" 8080/tcp | sed -n 's/^127\.0\.0\.1://p')
+  [[ "$port" =~ ^[0-9]+$ ]]
+}
+resolve_port
 ready() {
   local n ok
   ok=0
@@ -37,5 +40,9 @@ ready() {
 ready
 stage="same-volume restart"
 docker restart "$container" >/dev/null
+# Docker may allocate a new host port when restarting a random-port binding.
+old_port=$port
+resolve_port
+if [ "$old_port" != "$port" ]; then echo 'Synthetic host port changed on restart; refreshed.'; fi
 ready
 echo 'linux/amd64, non-root reads, empty storage, restart health: passed'
