@@ -40,11 +40,19 @@ def main():
                     env_file=None,data_type='volume',data_source=volume,backup_root=str(root/'backups'),state_directory=str(root))
         (root/'backups').mkdir()
         engine=Docker(config,root)
+        stage='start synthetic Compose service'
         run(command+['up','-d','--no-build'])
+        stage='inspect synthetic Compose service'
         current=engine.container()
+        stage='initial synthetic health'
         assert engine.healthy(current),'Initial synthetic application not ready'
+        stage='seed synthetic data and key-directory file'
+        # Health-only startup need not materialize a Data Protection key ring.
+        # This non-key-*.xml fixture is deliberately not a usable authentication key.
         run(['docker','exec','--user','0',current['Id'],'sh','-c',
-             'printf synthetic-cd-data > /data/cd-sentinel; chown app:app /data/cd-sentinel; chmod 600 /data/cd-sentinel'])
+             'printf synthetic-cd-data > /data/cd-sentinel; printf synthetic-key-file > /data/keys/cd-fixture.bin; '
+             'chown app:app /data/cd-sentinel /data/keys/cd-fixture.bin; chmod 600 /data/cd-sentinel /data/keys/cd-fixture.bin'])
+        stage='hash seeded synthetic data and key-directory files'
         before=run(['docker','exec',current['Id'],'sh','-c','sha256sum /data/cd-sentinel /data/keys/*']).decode()
         # Exercise actual root-owned initial capture, including literal '$' secrets.
         stage='capture existing configuration'
@@ -104,7 +112,7 @@ def main():
         print('Real Docker: container regeneration, volume/key retention, archive hashes/ownership, isolated restore, failed-health stop/block, no replay: passed')
     except Exception as error:
         # Fixed stage and exception type only; no environment, logs or config.
-        print('::error::Synthetic Docker fixture failed at '+stage+' ('+type(error).__name__+')',flush=True)
+        print('::error::Synthetic Docker fixture failed at '+stage+' ('+type(error).__name__+')'+(': '+str(error) if isinstance(error, __import__('updater').CDException) else ''),flush=True)
         raise
     finally:
         # Only this fixture project/volumes; production updater never runs down -v.
