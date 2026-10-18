@@ -40,11 +40,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Test image build and restart without registry permissions
-        run: |
-          docker build --platform linux/amd64 -t sem-cd:pr -f deploy/Dockerfile .
-          bash scripts/cd/image-smoke.sh sem-cd:pr
-          sudo python3 scripts/cd/docker_updater_checks.py --image sem-cd:pr
+      - name: Build PR image without registry permissions
+        run: docker build --platform linux/amd64 -t sem-cd:pr -f deploy/Dockerfile .
+      - name: Check non-root startup and restart
+        run: bash scripts/cd/image-smoke.sh sem-cd:pr
+      - name: Check initial capture, update, backup and restore
+        run: sudo python3 scripts/cd/docker_updater_checks.py --image sem-cd:pr
 
   gate:
     needs: contract-checks

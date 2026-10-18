@@ -9,10 +9,13 @@ cleanup() {
   docker volume rm "$volume" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
+stage='image metadata'
+trap 'echo "::error::Synthetic image check failed at: $stage" >&2' ERR
 [ "$(docker image inspect "$image" --format '{{.Os}}/{{.Architecture}}')" = linux/amd64 ]
 [ "$(docker image inspect "$image" --format '{{.Config.User}}')" = app ]
 docker run --rm --network none --entrypoint sh "$image" -c \
   'test "$(id -u)" != 0 && test -r /app/Sem.Web.dll && test -r /app/appsettings.json'
+stage="new-volume startup"
 docker volume create "$volume" >/dev/null
 docker run -d --name "$container" --cap-drop ALL --security-opt no-new-privileges \
   -p 127.0.0.1::8080 -v "$volume:/data" "$image" >/dev/null
@@ -32,6 +35,7 @@ ready() {
   return 1
 }
 ready
+stage="same-volume restart"
 docker restart "$container" >/dev/null
 ready
 echo 'linux/amd64, non-root reads, empty storage, restart health: passed'
