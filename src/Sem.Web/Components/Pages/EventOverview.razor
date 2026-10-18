@@ -20,7 +20,7 @@
                 <span class="event-overview-eyebrow">SESSION EVENT</span>
                 <span class="event-overview-phase">@View.PhaseName</span>
             </div>
-            <h1 id="event-overview-title">@View.Title</h1>
+            <h1 id="event-overview-title"><EventIconBadge Value="@View.Icon" />@View.Title</h1>
             <p class="event-overview-datetime">
                 @DateTimeOffset.Parse(View.ScheduledDate).ToOffset(TimeSpan.FromHours(9)).ToString("yyyy/MM/dd HH:mm")（日本時間）
                 <span aria-hidden="true"> · </span>@View.Location

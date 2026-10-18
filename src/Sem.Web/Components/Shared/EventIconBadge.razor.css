@@ -1,0 +1,8 @@
+.event-icon {
+    display: inline-block;
+    max-inline-size: 8em;
+    margin-inline-end: .35em;
+    overflow-wrap: anywhere;
+    vertical-align: middle;
+    white-space: pre-wrap;
+}

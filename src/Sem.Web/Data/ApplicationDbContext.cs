@@ -369,6 +369,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             t.HasCheckConstraint("CK_EventHeaderImages_Size", "\"Width\" BETWEEN 1 AND 1600 AND \"Height\" BETWEEN 1 AND 1600");
         });
         b.Entity<SessionEvent>().Property(x => x.RowVersion).IsConcurrencyToken();
+        b.Entity<SessionEvent>().Property(x => x.Icon).HasMaxLength(64).HasDefaultValue("");
         b.Entity<SessionEvent>().Property(x => x.DescriptionFormat).HasMaxLength(16).HasDefaultValue("text");
         b.Entity<SessionEvent>().Property(x => x.LocationUrl).HasMaxLength(2048).HasDefaultValue("");
         b.Entity<SessionEvent>().Property(x=>x.DefaultPrepSeconds).HasDefaultValue(600).HasSentinel(-1);

@@ -4,10 +4,10 @@ module.exports=async({page,ok})=>{
  const viewport=page.viewportSize();
  const previousMode=await page.evaluate(()=>document.documentElement.getAttribute('data-appearance-mode'));
  try{
-  const ids=['event-title','event-opens','event-starts','event-location','event-location-url','event-description-format','event-description-source','event-description-preview','event-announcement','event-header-file'];
+  const ids=['event-title','event-opens','event-starts','event-location','event-location-url','event-icon','event-description-format','event-description-source','event-description-preview','event-announcement','event-header-file'];
   const order=await page.locator('#event-core-form').evaluate((form,ids)=>Array.from(form.querySelectorAll('[id]')).map(e=>e.id).filter(id=>ids.includes(id)),ids);
   ok(JSON.stringify(order)===JSON.stringify(ids),'Overview editor DOM order matches title, dates, venue, description and header: '+JSON.stringify(order));
-  ok((await page.locator('#event-editor-availability').innerText()).includes('アイコンは未実装'),'Unavailable event icon is explicitly identified, not a fake editable control');
+  ok((await page.locator('#event-editor-availability').innerText()).includes('統合は後続対応')&&await page.locator('#event-icon').getAttribute('maxlength')==='64','Persisted icon has a real bounded input while pending overview integration stays explicit');
   for(const width of [390,768,1440])for(const mode of ['light','dark']){
    await page.setViewportSize({width,height:950});
    await page.evaluate(mode=>document.documentElement.dataset.appearanceMode=mode,mode);

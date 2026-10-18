@@ -37,5 +37,6 @@ module.exports=async({p,g,ok})=>{
   await page.goto('https://localhost:18443/events/'+event.id);const rendered=page.locator('.event-overview-hero .event-description-content');await rendered.locator('strong').waitFor();
   ok(await rendered.locator('img,script,[onclick]').count()===0&&await rendered.locator('a[href]').count()===1&&external===0,'Saved description uses the same sanitizer and never loads removed external image');
   const member=await g.context().newPage();try{await member.goto('https://localhost:18443/events/'+event.id);await member.locator('.event-overview-hero .event-description-content strong').waitFor();ok(await member.locator('.event-overview-hero .event-description-content script,.event-overview-hero .event-description-content img').count()===0,'Ordinary authorized participant receives sanitized saved description');}finally{await member.close();}
+  await require('./event-icon-checks.cjs')({p,g,ok,eventId:event.id});
  }finally{await page.close();}
 };

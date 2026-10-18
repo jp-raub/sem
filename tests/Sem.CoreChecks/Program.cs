@@ -346,6 +346,30 @@ try
     await Deny<ValidationException>(()=>core.SaveEventAsync(admin,event2,Edit("Invalid format",[],descriptionEvent.RowVersion+2,"View") with {DescriptionFormat="javascript"}),"Unknown description write format is rejected");
     await Deny<CoreConflictException>(()=>core.SaveEventAsync(admin,event2,Edit("Stale format",[],descriptionEvent.RowVersion,"View") with {DescriptionFormat="html"}),"Stale description format update cannot overwrite current event");
 
+    Check((await core.ReadAsync(admin)).Events.All(e=>e.Icon==""),"Existing events default to an empty event icon without invented backfill");
+    var iconEdit=Edit("Event icon",["manager"],3,"Hidden") with {Icon="  👩‍🎤 音楽  "};
+    await core.SaveEventAsync(manager,headerEvent,iconEdit);
+    Check((await core.ReadAsync(manager)).Events.Single(e=>e.Id==headerEvent).Icon=="👩‍🎤 音楽","Manager persists trimmed Unicode event icon independently from profile and song icons");
+    await Deny<UnauthorizedAccessException>(()=>core.ReadEventTabsAsync(member,headerEvent),"Hidden event icon does not bypass event read authorization");
+    await core.SaveEventAsync(manager,headerEvent,iconEdit with {RowVersion=4,PhaseKind="View",Icon=null});
+    Check((await core.ReadEventTabsAsync(member,headerEvent)).Icon=="👩‍🎤 音楽","Legacy omitted icon retains saved text and authorized overview exposes it");
+    var omittedIcon=JsonSerializer.Deserialize<EventEdit>(JsonSerializer.Serialize(iconEdit with {Icon=null},new JsonSerializerOptions{DefaultIgnoreCondition=System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull}));
+    Check(omittedIcon!.Icon is null,"Nullable icon DTO preserves omitted legacy update semantics");
+    foreach(var bad in new[]{new string('x',65),"a\nb","a\rb","a\tb","a\0b","a\u007fb","a\u0085b","\ud800"})
+        await Deny<ValidationException>(()=>core.SaveEventAsync(manager,headerEvent,iconEdit with {RowVersion=5,Icon=bad}),"Overlong, control or malformed Unicode icon rejected before any write");
+    Check((await core.ReadAsync(admin)).Events.Single(e=>e.Id==headerEvent).RowVersion==5&&(await core.ReadEventTabsAsync(member,headerEvent)).Icon=="👩‍🎤 音楽","Invalid icon leaves saved icon and event version unchanged");
+    await Deny<UnauthorizedAccessException>(()=>core.SaveEventAsync(member,headerEvent,iconEdit with {RowVersion=5,Icon="attack"}),"Ordinary member cannot update event icon");
+    await Deny<UnauthorizedAccessException>(()=>core.SaveEventAsync(manager,event2,iconEdit with {RowVersion=descriptionEvent.RowVersion+2,Icon="attack"}),"Event manager cannot write another event icon");
+    await Deny<CoreConflictException>(()=>core.SaveEventAsync(manager,headerEvent,iconEdit with {RowVersion=4,Icon="stale"}),"Stale icon edit cannot overwrite newer event");
+    await core.SaveEventAsync(manager,headerEvent,iconEdit with {RowVersion=5,PhaseKind="View",Icon=new string('x',64)});
+    Check((await core.ReadEventTabsAsync(member,headerEvent)).Icon.Length==64,"64 UTF-16 code units accepted at documented icon boundary");
+    await core.SaveEventAsync(manager,headerEvent,iconEdit with {RowVersion=6,PhaseKind="View",Icon="<img src=x onerror=alert(1)>"});
+    Check((await core.ReadEventTabsAsync(member,headerEvent)).Icon=="<img src=x onerror=alert(1)>","Markup-shaped icon remains plain source text for encoded rendering");
+    await core.SaveEventAsync(manager,headerEvent,iconEdit with {RowVersion=7,PhaseKind="View",Icon=""});
+    Check((await core.ReadEventTabsAsync(member,headerEvent)).Icon=="","Explicit empty icon clears it without deleting event");
+    await core.SaveEventAsync(manager,headerEvent,iconEdit with {RowVersion=8,PhaseKind="View",Icon="   "});
+    Check((await core.ReadEventTabsAsync(member,headerEvent)).Icon=="","Whitespace-only icon is an explicit clear");
+
     await using (var db = await factory.CreateDbContextAsync())
     {
         Check(await db.Users.Where(u => u.Id == "manager" || u.Id == "member").AllAsync(u => !u.IsAdmin), "Event assignments never promote global-admin flags");
