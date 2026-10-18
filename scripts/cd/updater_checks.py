@@ -5,6 +5,7 @@ import io
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
 import tarfile
 import tempfile
@@ -244,7 +245,7 @@ class PreflightChecks(unittest.TestCase):
             old={'State':{'Running':True},'Id':'c','Image':'old'}
             def execute(args,output=None,timeout=900):
                 return b'1 /data' if args[1]=='exec' else json.dumps([dict(Size=100)]).encode()
-            with patch('updater.run',execute):
+            with patch('updater.run',execute), patch('updater.stream_size', return_value=10240):
                 with patch('updater.shutil.disk_usage',return_value=type('Usage',(),{'free':0})()):
                     with self.assertRaises(CDException):engine.preflight(old,{},root)
                 with patch('updater.shutil.disk_usage',return_value=type('Usage',(),{'free':10**12})()):
@@ -254,6 +255,48 @@ class PreflightChecks(unittest.TestCase):
                     effective['volumes']['data']['name']='existing'
                     effective['services']['sem']['volumes'][0]['read_only']=True
                     with self.assertRaises(CDException):engine.preflight(old,{},root)
+
+
+class DataEstimateChecks(unittest.TestCase):
+    def test_stream_counts_without_retaining_or_printing_payload(self):
+        from updater import stream_size
+        count = stream_size([sys.executable, '-c',
+            'import sys; sys.stdout.buffer.write(b"synthetic-private" * 524288)'])
+        self.assertEqual(count, len(b'synthetic-private') * 524288)
+
+    def test_failed_or_empty_stream_rejected_without_private_output(self):
+        from updater import stream_size
+        for code in ['import sys; print("private"); sys.exit(1)',
+                     'import sys; sys.stderr.write("private"); sys.exit(1)', 'pass']:
+            with self.subTest(code=code), self.assertRaises(CDException) as caught:
+                stream_size([sys.executable, '-c', code])
+            self.assertNotIn('private', str(caught.exception).replace('private output withheld', ''))
+
+    def test_timeout_rejected_even_after_stdout_closes(self):
+        from updater import stream_size
+        for code in ['import time; time.sleep(10)',
+                     'import os,time; os.close(1); time.sleep(10)']:
+            with self.subTest(code=code), self.assertRaises(CDException):
+                stream_size([sys.executable, '-c', code], timeout=0.1)
+
+    def test_preflight_does_not_exec_in_application_container(self):
+        with tempfile.TemporaryDirectory() as root:
+            engine = Docker(dict(service='sem', data_type='volume', data_source='existing'), Path(root))
+            effective = {'services': {'sem': {'volumes': [dict(target='/data', type='volume', source='data')]}},
+                         'volumes': {'data': {'name': 'existing'}}}
+            engine.compose = lambda *a: json.dumps(effective).encode()
+            def execute(args, output=None, timeout=900):
+                self.assertEqual(args[:3], ['docker', 'image', 'inspect'])
+                return json.dumps([dict(Size=100)]).encode()
+            with patch('updater.stream_size', return_value=10240) as size, patch('updater.run', execute):
+                engine.preflight({'State': {'Running': True}, 'Id': 'container', 'Image': 'old'}, {}, Path(root))
+            size.assert_called_once_with(['docker', 'cp', 'container:/data/.', '-'])
+
+    def test_missing_config_is_a_fixed_diagnostic(self):
+        from updater import load_config
+        with tempfile.TemporaryDirectory() as root, self.assertRaises(CDException) as caught:
+            load_config(Path(root) / 'missing.json')
+        self.assertIn('not configured', str(caught.exception))
 
 
 class BackupChecks(unittest.TestCase):
