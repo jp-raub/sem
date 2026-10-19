@@ -1,0 +1,242 @@
+@using Sem.Web.Core
+@using Sem.Web.Runtime
+@using System.Globalization
+@using System.Security.Claims
+@implements IDisposable
+@inject AuthenticationStateProvider Authentication
+@inject CoreFoundationService Core
+@inject IJSRuntime JS
+@inject Microsoft.Extensions.Options.IOptions<Microsoft.AspNetCore.Identity.IdentityOptions> IdentityOptions
+
+<OperationFeedback Revision="FeedbackRevision" Busy="Busy" Success="@Message" Error="@Error" Unknown="FeedbackUnknown" />
+<p id="event-editor-error" role="alert">@Error</p><p id="event-core-message" role="status">@Message</p>
+<NavigationLock ConfirmExternalNavigation="@(Editing == "event")" OnBeforeInternalNavigation="ConfirmNavigation" />
+@if (View is not null && Editing == "event")
+{
+            <p class="development-note">概要は選んだ形式で保存し、安全なタグだけを表示します。ヘッダー画像は登録・変更・削除できます。会場名と案内URLはそれぞれ保存できます。</p>
+            <form class="event-core-editor" id="event-core-form" @onsubmit="SaveEvent" @onsubmit:preventDefault>
+                <label>イベント名<FieldHelp HelpKey="event.title" Label="イベント名" /><input id="event-title" @bind="EventTitle" maxlength="100" required /></label>
+                <div class="event-editor-pair" data-event-editor-pair="dates">
+                    <label><span>開場（日本時間・任意）<FieldHelp HelpKey="event.opens" Label="開場日時" /></span><input id="event-opens" type="datetime-local" step="1" value="@Opens" @onchange="e => Opens = e.Value?.ToString() ?? string.Empty" /></label>
+                    <label><span>開始（日本時間）<FieldHelp HelpKey="event.date" Label="開催日時" /></span><input id="event-starts" type="datetime-local" step="1" value="@Starts" @onchange="e => Starts = e.Value?.ToString() ?? string.Empty" required /></label>
+                </div>
+                <div class="event-editor-pair" data-event-editor-pair="venue">
+                    <label><span>会場名・住所<FieldHelp HelpKey="event.location" Label="会場名・住所" /></span><input id="event-location" @bind="EventLocation" maxlength="500" /></label>
+                    <label><span>会場の案内URL（任意）<FieldHelp HelpKey="event.locationUrl" Label="会場の案内URL" /></span><input id="event-location-url" type="url" @bind="EventLocationUrl" maxlength="2048" placeholder="https://" /></label>
+                </div>
+                <div class="event-editor-pair" data-event-editor-pair="icon-capacity">
+                    <label>イベントアイコン（任意・64文字以内）<input id="event-icon" @bind="EventIcon" @bind:event="oninput" maxlength="64" aria-describedby="event-icon-hint" /></label>
+                    <label>参加人数上限（空欄は制限なし）<input id="event-capacity" type="number" min="0" step="1" @bind="EventCapacity" disabled="@(Busy || EventSettingsLoading)" aria-describedby="event-settings-hint" /></label>
+                </div>
+                <p id="event-icon-hint">テキスト・絵文字を指定できます。画像やHTMLにはなりません。空欄で保存するとアイコンを削除します。</p>
+                <div id="event-icon-preview" aria-label="イベントアイコンのプレビュー"><EventIconBadge Value="@EventIcon" />@EventTitle</div>
+                <label>概要の入力形式<FieldHelp HelpKey="event.descriptionFormat" Label="概要の入力形式" /><select id="event-description-format" @bind="EventDescriptionFormat"><option value="text">プレーンテキスト</option><option value="markdown">Markdown</option><option value="html">HTML（安全なタグのみ）</option></select></label>
+                <label>概要<FieldHelp HelpKey="event.description" Label="概要" /><textarea id="event-description-source" @bind="EventDescription" @bind:event="oninput" maxlength="2000"></textarea></label>
+                <section id="event-description-preview" aria-label="概要のプレビュー"><h3>プレビュー</h3><p>危険なタグ・属性・画像は表示しません。外部リンクはHTTP(S)のみです。</p><EventDescriptionContent Source="@EventDescription" Format="@EventDescriptionFormat" /></section>
+                <label>お知らせ<FieldHelp HelpKey="event.announcement" Label="お知らせ" /><textarea id="event-announcement" @bind="Announcement" maxlength="2000"></textarea></label>
+                <section class="event-header-editor" aria-label="イベントのヘッダー画像">
+                    <label>ヘッダー画像<FieldHelp HelpKey="event.headerImage" Label="ヘッダー画像" /><InputFile id="event-header-file" OnChange="ChooseEventHeader" accept="image/png,image/jpeg,image/webp" disabled="@(Busy || EventHeaderBusy)" /></label>
+                    <p>PNG・JPEG・WebP、1MiB以内。画像は再変換し、位置情報などのメタデータを除去します。</p>
+                    @if (!string.IsNullOrEmpty(EventHeaderPreview)) { <img id="event-header-preview" src="@EventHeaderPreview" alt="選択したイベントヘッダー画像" /><button type="button" id="event-header-remove" disabled="@(Busy || EventHeaderBusy)" @onclick="RemoveEventHeader">画像を削除</button> }
+                    @if (EventHeaderBusy) { <p role="status">画像を確認中です。</p> }
+                    <p role="alert">@EventHeaderError</p>
+                </section>
+                <fieldset id="event-settings-editor" disabled="@(Busy || EventSettingsLoading || EventSettingsError.Length > 0)">
+                    <legend>イベントの配色・表示モード</legend>
+                    <label>イベント配色<select id="event-theme" @bind="EventTheme"><option value="">サイト設定を継承</option>@foreach (var theme in EventThemeCatalog) { <option value="@theme.Id">@theme.Name</option> }</select></label>
+                    <label>表示モード<select id="event-theme-mode" @bind="EventThemeMode"><option value="">サイト設定を継承</option><option value="0">端末設定に従う</option><option value="1">ライト</option><option value="2">ダーク</option></select></label>
+                    <p id="event-settings-hint">人数は観覧を含むユニーク人数です。現在の参加人数より小さい上限にはできません。配色・表示モードは個人設定が優先されます。変更は概要と一緒に「保存」するまで反映されません。</p>
+                </fieldset>
+                @if (EventSettingsLoading) { <p role="status">表示設定を読み込んでいます。</p> }
+                @if (EventSettingsError.Length > 0) { <p role="alert">@EventSettingsError 取消後に編集を開き直してください。</p> }
+                <p id="event-editor-availability" class="development-note">人数上限・配色・表示モードもこのフォームで保存できます。参加管理・表示設定の専用画面からも同じ設定を変更できます。</p>
+                <label>表示<select id="event-phase" @bind="Phase"><option value="Hidden">非表示</option><option value="View">閲覧公開</option></select></label>
+                <fieldset>
+                    <legend>担当管理者（0名以上・複数選択可）</legend>
+                    <AdminCandidatePicker Options="ManagerOptions" SelectedIds="Managers" ShowEmail="@(View.IsAdmin && ManagerEmailsLoaded)" Disabled="Busy" Add="id=>ToggleManager(id,true)" Remove="id=>ToggleManager(id,false)" />
+                    @if(View.IsAdmin && !ManagerEmailsLoaded){<p>メール候補は未取得です。表示名で選択できます。</p>}
+                    @if(!View.IsAdmin){<p>イベント限定管理者には表示名だけを表示します。メール一覧は公開しません。</p>}
+                </fieldset>
+                <p>閲覧公開は参加受付ではありません。参加受付は各イベントのフェーズ管理で設定してください。</p>
+                <div class="event-core-editor-actions"><button id="event-core-save" disabled="@(Busy || EventHeaderBusy || EventSettingsLoading || EventSettingsError.Length > 0)">保存</button><button type="button" id="event-core-cancel" disabled="@Busy" @onclick="Cancel">取消</button></div>
+            </form>
+}
+
+@code {
+
+    [Parameter] public string? TargetEventId { get; set; }
+    [Parameter] public EventCallback Saved { get; set; }
+    [Parameter] public EventCallback Cancelled { get; set; }
+    WorkspaceView? View;
+    string? Editing, EventId;
+    string Error = "", Message = "";
+    bool Busy, Disposed, FeedbackUnknown;
+    long FeedbackRevision, Version, ContextGeneration;
+    string? BoundEventId, BoundIdentity;
+    bool HasContext;
+    bool ManagerEmailsLoaded;
+    int ManagerLoadGeneration;
+    AdminCandidateOption[] ManagerOptions = [];
+    HashSet<string> Managers = [];
+
+    protected override void OnInitialized() => Authentication.AuthenticationStateChanged += AuthenticationChanged;
+    string? IdentityKey(ClaimsPrincipal principal)
+    {
+        var claims = IdentityOptions.Value.ClaimsIdentity;
+        var actor = principal.FindAll(claims.UserIdClaimType).ToArray();
+        var stamp = principal.FindAll(claims.SecurityStampClaimType).ToArray();
+        var session = principal.FindAll(PasskeyAdditionService.SessionClaim).ToArray();
+        if (principal.Identity?.IsAuthenticated != true || actor.Length != 1 || stamp.Length != 1 || session.Length != 1 ||
+            string.IsNullOrWhiteSpace(actor[0].Value) || string.IsNullOrWhiteSpace(stamp[0].Value) || string.IsNullOrWhiteSpace(session[0].Value)) return null;
+        return SemEndpoints.Hash($"{actor[0].Value}\u001f{stamp[0].Value}\u001f{session[0].Value}");
+    }
+    protected override async Task OnParametersSetAsync()
+    {
+        var principal = (await Authentication.GetAuthenticationStateAsync()).User;
+        var identity = IdentityKey(principal);
+        if (HasContext && BoundEventId == TargetEventId && BoundIdentity == identity) return;
+        HasContext = true; BoundEventId = TargetEventId; BoundIdentity = identity;
+        var generation = ++ContextGeneration;
+        ResetEventHeader(); Editing = null; View = null; Error = Message = "";
+        ManagerLoadGeneration++; ManagerOptions = []; Managers = [];
+        try
+        {
+            if (identity is null) throw new UnauthorizedAccessException();
+            var view = await Core.ReadAsync(principal);
+            if (Disposed || generation != ContextGeneration) return;
+            var item = TargetEventId is null ? null : view.Events.SingleOrDefault(x => x.Id == TargetEventId && x.CanManage);
+            if (TargetEventId is null ? !view.IsAdmin : item is null) throw new UnauthorizedAccessException();
+            View = view;
+            if (item is null) await NewEvent(); else await EditEvent(item);
+        }
+        catch (UnauthorizedAccessException) { if (!Disposed && generation == ContextGeneration) { ResetEventHeader(); Editing = null; View = null; Error = "ログイン状態とイベントの管理権限を確認してください。"; } }
+        catch { if (!Disposed && generation == ContextGeneration) { ResetEventHeader(); Editing = null; View = null; Error = "編集内容を取得できません。閉じてから開き直してください。"; } }
+    }
+    void AuthenticationChanged(Task<AuthenticationState> state) => _ = InvokeAsync(async () =>
+    {
+        if (Disposed) return;
+        ClaimsPrincipal principal;
+        try { principal = (await state).User; } catch { principal = new(new ClaimsIdentity()); }
+        if (IdentityKey(principal) == BoundIdentity) return;
+        ContextGeneration++; ResetEventHeader(); ManagerLoadGeneration++;
+        Editing = null; View = null; Managers = []; ManagerOptions = [];
+        Error = "ログイン状態が変わりました。下書きを破棄しました。画面を開き直してください。";
+        StateHasChanged();
+    });
+    async Task Save(Func<ClaimsPrincipal, Task> action)
+    {
+        if (Busy || Disposed || Editing != "event") return;
+        var generation = ContextGeneration;
+        FeedbackRevision++; FeedbackUnknown = false; Busy = true; Error = Message = "";
+        try
+        {
+            var principal = (await Authentication.GetAuthenticationStateAsync()).User;
+            if (Disposed || generation != ContextGeneration || IdentityKey(principal) != BoundIdentity || BoundEventId != TargetEventId) throw new UnauthorizedAccessException();
+            await action(principal);
+            if (Disposed || generation != ContextGeneration) return;
+            ResetEventHeader(); Editing = null; Message = "保存しました。";
+            await Saved.InvokeAsync();
+        }
+        catch (UnauthorizedAccessException) { if (!Disposed && generation == ContextGeneration) { ResetEventHeader(); Editing = null; View = null; Error = "ログイン状態と権限を確認し、再ログインしてください。"; } }
+        catch (Exception e) when (e is System.ComponentModel.DataAnnotations.ValidationException or CoreConflictException) { if (!Disposed && generation == ContextGeneration) Error = e.Message; }
+        catch { if (!Disposed && generation == ContextGeneration) { FeedbackUnknown = true; Error = "保存結果を確認できませんでした。下書きを確認し、再送前に最新状態を取得してください。"; } }
+        finally { if (!Disposed && generation == ContextGeneration) Busy = false; }
+    }
+    async Task Cancel()
+    {
+        if (Busy) return;
+        ContextGeneration++; ResetEventHeader(); ManagerLoadGeneration++; Editing = null;
+        await Cancelled.InvokeAsync();
+    }
+    async Task ConfirmNavigation(LocationChangingContext context)
+    {
+        if (Busy) { context.PreventNavigation(); return; }
+        if (Editing != "event") return;
+        // The browser's external navigation prompt is handled by NavigationLock.
+        if (!await JS.InvokeAsync<bool>("confirm", "編集中の内容を破棄して移動しますか？")) context.PreventNavigation();
+    }
+    public void Dispose()
+    {
+        Disposed = true; ContextGeneration++; ResetEventHeader(); ManagerLoadGeneration++;
+        Authentication.AuthenticationStateChanged -= AuthenticationChanged;
+    }
+    string? EventHeaderDraft, EventHeaderPreview;
+    string EventHeaderError = "";
+    bool EventHeaderBusy;
+    long EventHeaderGeneration;
+    async Task ChooseEventHeader(InputFileChangeEventArgs args)
+    {
+        var generation = ++EventHeaderGeneration; var eventId = EventId;
+        EventHeaderBusy = true; EventHeaderError = "";
+        try {
+            var file = args.File;
+            if (file.Size > EventHeaderImageNormalizer.MaxInputBytes || !ProfileImageNormalizer.IsAllowedMime(file.ContentType))
+                throw new System.ComponentModel.DataAnnotations.ValidationException("PNG・JPEG・WebPを1MiB以内で選択してください。");
+            await using var stream = file.OpenReadStream(EventHeaderImageNormalizer.MaxInputBytes);
+            using var buffer = new MemoryStream(); await stream.CopyToAsync(buffer);
+            var normalized = await EventHeaderImageNormalizer.NormalizeAsync("data:" + file.ContentType + ";base64," + Convert.ToBase64String(buffer.ToArray()));
+            if (Disposed || generation != EventHeaderGeneration || Editing != "event" || EventId != eventId) return;
+            EventHeaderDraft = EventHeaderPreview = "data:image/png;base64," + Convert.ToBase64String(normalized.Png);
+        } catch (Exception e) when (e is System.ComponentModel.DataAnnotations.ValidationException or IOException or ProfileImageBusyException) {
+            if (!Disposed && generation == EventHeaderGeneration) EventHeaderError = e.Message;
+        } finally { if (!Disposed && generation == EventHeaderGeneration) EventHeaderBusy = false; }
+    }
+    void RemoveEventHeader() { EventHeaderGeneration++; EventHeaderBusy = false; EventHeaderDraft = EventHeaderPreview = ""; EventHeaderError = ""; }
+    void ResetEventHeader() { EventEditorGeneration++; EventSettingsLoading = false; EventSettingsError = ""; EventHeaderGeneration++; EventHeaderBusy = false; EventHeaderDraft = EventHeaderPreview = null; EventHeaderError = ""; }
+    string EventDescriptionFormat = "text";
+    string EventIcon = "";
+    int? EventCapacity;
+    string EventTheme = "", EventThemeMode = "", EventSettingsError = "";
+    long EventThemeVersion;
+    bool EventSettingsLoading;
+    long EventEditorGeneration;
+    ThemeCatalogEntryView[] EventThemeCatalog = [];
+    async Task LoadEventThemeCatalog()
+    {
+        var generation = EventEditorGeneration; var eventId = EventId;
+        EventSettingsLoading = true; EventSettingsError = ""; EventThemeCatalog = [];
+        try {
+            var catalog = await Core.ReadThemeCatalogAsync((await Authentication.GetAuthenticationStateAsync()).User);
+            if (!Disposed && generation == EventEditorGeneration && Editing == "event" && EventId == eventId) EventThemeCatalog = catalog;
+        } catch {
+            if (!Disposed && generation == EventEditorGeneration && Editing == "event" && EventId == eventId)
+                EventSettingsError = "表示設定を取得できないため保存できません。";
+        } finally { if (!Disposed && generation == EventEditorGeneration) EventSettingsLoading = false; }
+    }
+    string EventTitle = "", EventDescription = "", EventLocation = "", EventLocationUrl = "", Starts = "", Opens = "", Announcement = "", Phase = "Hidden";
+    static TimeZoneInfo JapanZone => TimeZoneInfo.FindSystemTimeZoneById("Asia/Tokyo");
+    static string Japan(string value) => TimeZoneInfo.ConvertTime(DateTimeOffset.Parse(value, CultureInfo.InvariantCulture), JapanZone).ToString("yyyy/MM/dd HH:mm:ss");
+    static string Local(string value) => TimeZoneInfo.ConvertTime(DateTimeOffset.Parse(value, CultureInfo.InvariantCulture), JapanZone).ToString("yyyy-MM-ddTHH:mm:ss");
+    static DateTimeOffset ParseLocal(string value)
+    {
+        if (!DateTime.TryParseExact(value, ["yyyy-MM-ddTHH:mm", "yyyy-MM-ddTHH:mm:ss"], CultureInfo.InvariantCulture, DateTimeStyles.None, out var result))
+            throw new System.ComponentModel.DataAnnotations.ValidationException("日時を入力してください。");
+        return new(DateTime.SpecifyKind(result, DateTimeKind.Unspecified), JapanZone.GetUtcOffset(result));
+    }
+    async Task LoadManagerOptions(){
+        var generation=++ManagerLoadGeneration;var id=EventId;ManagerEmailsLoaded=false;ManagerOptions=View!.Members.Select(x=>new AdminCandidateOption(x.UserId,x.DisplayName)).ToArray();
+        if(!View.IsAdmin)return;
+        try{var accounts=await Core.ReadGlobalAdminAccountsAsync((await Authentication.GetAuthenticationStateAsync()).User);if(Disposed||generation!=ManagerLoadGeneration||Editing!="event"||EventId!=id)return;ManagerOptions=accounts.Accounts.Where(x=>x.Enabled&&x.EmailConfirmed).Select(x=>new AdminCandidateOption(x.UserId,x.DisplayName,x.Email)).ToArray();ManagerEmailsLoaded=true;}catch(UnauthorizedAccessException){ManagerEmailsLoaded=false;}catch{ManagerEmailsLoaded=false;}
+    }
+    async Task NewEvent() { ResetEventHeader(); Editing = "event"; EventId = null; Version = 0; EventDescriptionFormat = "text"; EventIcon = ""; EventTitle = EventDescription = EventLocation = EventLocationUrl = Starts = Opens = Announcement = ""; Phase = "Hidden"; Managers = []; EventCapacity = null; EventTheme = EventThemeMode = ""; EventThemeVersion = 0; var generation = EventEditorGeneration; await LoadEventThemeCatalog(); if (generation == EventEditorGeneration && Editing == "event" && EventId is null) await LoadManagerOptions(); }
+    async Task EditEvent(EventView e)
+    {
+        ResetEventHeader(); Editing = "event"; EventId = e.Id; Version = e.RowVersion; EventTitle = e.Title; EventIcon = e.Icon; EventDescription = e.Description; EventDescriptionFormat = e.DescriptionFormat; EventLocation = e.Location; EventLocationUrl = e.LocationUrl;
+        Starts = Local(e.ScheduledDate); Opens = e.OpensAt is null ? "" : Local(e.OpensAt); Announcement = e.AnnouncementMessage; Phase = e.PhaseKind; Managers = e.ManagerIds.ToHashSet();
+        EventCapacity = e.Capacity; EventTheme = e.Appearance?.ThemeId ?? "";
+        EventThemeMode = e.Appearance?.Mode is { } mode ? ((int)mode).ToString(CultureInfo.InvariantCulture) : "";
+        EventThemeVersion = e.Appearance?.RowVersion ?? 0;
+        var editorGeneration = EventEditorGeneration;
+        var headerGeneration = EventHeaderGeneration;
+        await LoadEventThemeCatalog();
+        if (Disposed || editorGeneration != EventEditorGeneration || Editing != "event" || EventId != e.Id) return;
+        var principal = (await Authentication.GetAuthenticationStateAsync()).User;
+        try {
+            var image = await Core.ReadEventHeaderImageForEditAsync(principal, e.Id);
+            if (!Disposed && headerGeneration == EventHeaderGeneration && Editing == "event" && EventId == e.Id) EventHeaderPreview = image;
+        } catch (UnauthorizedAccessException) { if (!Disposed && headerGeneration == EventHeaderGeneration) EventHeaderError = "ログイン状態と操作権限を確認してください。"; }
+        await LoadManagerOptions();
+    }
+    void ToggleManager(string id, bool selected) { if (selected) Managers.Add(id); else Managers.Remove(id); }
+    async Task SaveEvent() { if (EventHeaderBusy || EventSettingsLoading || EventSettingsError.Length > 0) return; await Save(async p => { await Core.SaveEventAsync(p, EventId, new(EventTitle, EventDescription, EventLocation, ParseLocal(Starts), string.IsNullOrWhiteSpace(Opens) ? null : ParseLocal(Opens), Announcement, Phase, Managers.ToArray(), Version, EventLocationUrl, EventDescriptionFormat, EventHeaderDraft, EventIcon, new(EventCapacity, new(string.IsNullOrEmpty(EventTheme) ? null : EventTheme, string.IsNullOrEmpty(EventThemeMode) ? null : (ThemeMode)int.Parse(EventThemeMode, CultureInfo.InvariantCulture), EventThemeVersion)))); }); }
+}
