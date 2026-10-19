@@ -4,10 +4,10 @@ module.exports=async({page,ok})=>{
  const viewport=page.viewportSize();
  const previousMode=await page.evaluate(()=>document.documentElement.getAttribute('data-appearance-mode'));
  try{
-  const ids=['event-title','event-opens','event-starts','event-location','event-location-url','event-icon','event-description-format','event-description-source','event-description-preview','event-announcement','event-header-file'];
+  const ids=['event-title','event-opens','event-starts','event-location','event-location-url','event-icon','event-capacity','event-description-format','event-description-source','event-description-preview','event-announcement','event-header-file'];
   const order=await page.locator('#event-core-form').evaluate((form,ids)=>Array.from(form.querySelectorAll('[id]')).map(e=>e.id).filter(id=>ids.includes(id)),ids);
   ok(JSON.stringify(order)===JSON.stringify(ids),'Overview editor DOM order matches title, dates, venue, description and header: '+JSON.stringify(order));
-  ok((await page.locator('#event-editor-availability').innerText()).includes('統合は後続対応')&&await page.locator('#event-icon').getAttribute('maxlength')==='64','Persisted icon has a real bounded input while pending overview integration stays explicit');
+  ok((await page.locator('#event-editor-availability').innerText()).includes('このフォームで保存できます')&&await page.locator('#event-capacity').count()===1&&await page.locator('#event-theme').count()===1&&await page.locator('#event-theme-mode').count()===1&&await page.locator('#event-icon').getAttribute('maxlength')==='64','Persisted icon stays bounded and overview settings have real controls instead of an unimplemented note');
   for(const width of [390,768,1440])for(const mode of ['light','dark']){
    await page.setViewportSize({width,height:950});
    await page.evaluate(mode=>document.documentElement.dataset.appearanceMode=mode,mode);
@@ -21,7 +21,7 @@ module.exports=async({page,ok})=>{
     const controls=Array.from(form.querySelectorAll('input,select,textarea')).filter(e=>e.getClientRects().length).every(e=>{const b=e.getBoundingClientRect();return b.left>=bounds.left-1&&b.right<=bounds.right+1;});
     return {pairs,controls,overflow:document.documentElement.scrollWidth>window.innerWidth+1, width:bounds.width, documentWidth:document.documentElement.scrollWidth, outside:Array.from(form.querySelectorAll('input,select,textarea')).filter(e=>{const b=e.getBoundingClientRect();return b.width&& (b.left<bounds.left-1||b.right>bounds.right+1);}).map(e=>e.id)};
    });
-   ok(state.pairs.length===2&&state.pairs.every(Boolean)&&state.controls&&!state.overflow,`Real overview pairs and controls fit ${width}px ${mode} without page overflow: ${JSON.stringify(state)}`);
+   ok(state.pairs.length===3&&state.pairs.every(Boolean)&&state.controls&&!state.overflow,`Real overview date, venue and icon/capacity pairs and controls fit ${width}px ${mode} without page overflow: ${JSON.stringify(state)}`);
   }
   await page.locator('#event-title').focus();await page.keyboard.press('Tab');
   ok(await page.locator('#event-opens').evaluate(e=>e===document.activeElement),'DOM order and forward Tab both reach opening before start');

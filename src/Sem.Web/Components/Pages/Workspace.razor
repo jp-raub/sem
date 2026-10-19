@@ -117,7 +117,10 @@ else
                     <label><span>会場名・住所<FieldHelp HelpKey="event.location" Label="会場名・住所" /></span><input id="event-location" @bind="EventLocation" maxlength="500" /></label>
                     <label><span>会場の案内URL（任意）<FieldHelp HelpKey="event.locationUrl" Label="会場の案内URL" /></span><input id="event-location-url" type="url" @bind="EventLocationUrl" maxlength="2048" placeholder="https://" /></label>
                 </div>
-                <label>イベントアイコン（任意・64文字以内）<input id="event-icon" @bind="EventIcon" @bind:event="oninput" maxlength="64" aria-describedby="event-icon-hint" /></label>
+                <div class="event-editor-pair" data-event-editor-pair="icon-capacity">
+                    <label>イベントアイコン（任意・64文字以内）<input id="event-icon" @bind="EventIcon" @bind:event="oninput" maxlength="64" aria-describedby="event-icon-hint" /></label>
+                    <label>参加人数上限（空欄は制限なし）<input id="event-capacity" type="number" min="0" step="1" @bind="EventCapacity" disabled="@(Busy || EventSettingsLoading)" aria-describedby="event-settings-hint" /></label>
+                </div>
                 <p id="event-icon-hint">テキスト・絵文字を指定できます。画像やHTMLにはなりません。空欄で保存するとアイコンを削除します。</p>
                 <div id="event-icon-preview" aria-label="イベントアイコンのプレビュー"><EventIconBadge Value="@EventIcon" />@EventTitle</div>
                 <label>概要の入力形式<FieldHelp HelpKey="event.descriptionFormat" Label="概要の入力形式" /><select id="event-description-format" @bind="EventDescriptionFormat"><option value="text">プレーンテキスト</option><option value="markdown">Markdown</option><option value="html">HTML（安全なタグのみ）</option></select></label>
@@ -131,7 +134,15 @@ else
                     @if (EventHeaderBusy) { <p role="status">画像を確認中です。</p> }
                     <p role="alert">@EventHeaderError</p>
                 </section>
-                <p id="event-editor-availability" class="development-note">イベントアイコンはテキスト／絵文字で保存できます。人数上限は参加管理、配色・明るさは表示設定で変更できます。このフォームへの統合は後続対応です。</p>
+                <fieldset id="event-settings-editor" disabled="@(Busy || EventSettingsLoading || EventSettingsError.Length > 0)">
+                    <legend>イベントの配色・表示モード</legend>
+                    <label>イベント配色<select id="event-theme" @bind="EventTheme"><option value="">サイト設定を継承</option>@foreach (var theme in EventThemeCatalog) { <option value="@theme.Id">@theme.Name</option> }</select></label>
+                    <label>表示モード<select id="event-theme-mode" @bind="EventThemeMode"><option value="">サイト設定を継承</option><option value="0">端末設定に従う</option><option value="1">ライト</option><option value="2">ダーク</option></select></label>
+                    <p id="event-settings-hint">人数は観覧を含むユニーク人数です。現在の参加人数より小さい上限にはできません。配色・表示モードは個人設定が優先されます。変更は概要と一緒に「保存」するまで反映されません。</p>
+                </fieldset>
+                @if (EventSettingsLoading) { <p role="status">表示設定を読み込んでいます。</p> }
+                @if (EventSettingsError.Length > 0) { <p role="alert">@EventSettingsError 取消後に編集を開き直してください。</p> }
+                <p id="event-editor-availability" class="development-note">人数上限・配色・表示モードもこのフォームで保存できます。参加管理・表示設定の専用画面からも同じ設定を変更できます。</p>
                 <label>表示<select id="event-phase" @bind="Phase"><option value="Hidden">非表示</option><option value="View">閲覧公開</option></select></label>
                 <fieldset>
                     <legend>担当管理者（0名以上・複数選択可）</legend>
@@ -140,7 +151,7 @@ else
                     @if(!View.IsAdmin){<p>イベント限定管理者には表示名だけを表示します。メール一覧は公開しません。</p>}
                 </fieldset>
                 <p>閲覧公開は参加受付ではありません。参加受付は各イベントのフェーズ管理で設定してください。</p>
-                <div class="event-core-editor-actions"><button id="event-core-save" disabled="@(Busy || EventHeaderBusy)">保存</button><button type="button" id="event-core-cancel" disabled="@Busy" @onclick="Cancel">取消</button></div>
+                <div class="event-core-editor-actions"><button id="event-core-save" disabled="@(Busy || EventHeaderBusy || EventSettingsLoading || EventSettingsError.Length > 0)">保存</button><button type="button" id="event-core-cancel" disabled="@Busy" @onclick="Cancel">取消</button></div>
             </form>
         }
     </section>
@@ -334,9 +345,27 @@ else
         } finally { if (generation == EventHeaderGeneration) EventHeaderBusy = false; }
     }
     void RemoveEventHeader() { EventHeaderGeneration++; EventHeaderBusy = false; EventHeaderDraft = EventHeaderPreview = ""; EventHeaderError = ""; }
-    void ResetEventHeader() { EventHeaderGeneration++; EventHeaderBusy = false; EventHeaderDraft = EventHeaderPreview = null; EventHeaderError = ""; }
+    void ResetEventHeader() { EventEditorGeneration++; EventSettingsLoading = false; EventSettingsError = ""; EventHeaderGeneration++; EventHeaderBusy = false; EventHeaderDraft = EventHeaderPreview = null; EventHeaderError = ""; }
     string EventDescriptionFormat = "text";
     string EventIcon = "";
+    int? EventCapacity;
+    string EventTheme = "", EventThemeMode = "", EventSettingsError = "";
+    long EventThemeVersion;
+    bool EventSettingsLoading;
+    long EventEditorGeneration;
+    ThemeCatalogEntryView[] EventThemeCatalog = [];
+    async Task LoadEventThemeCatalog()
+    {
+        var generation = EventEditorGeneration; var eventId = EventId;
+        EventSettingsLoading = true; EventSettingsError = ""; EventThemeCatalog = [];
+        try {
+            var catalog = await Core.ReadThemeCatalogAsync((await Authentication.GetAuthenticationStateAsync()).User);
+            if (generation == EventEditorGeneration && Editing == "event" && EventId == eventId) EventThemeCatalog = catalog;
+        } catch {
+            if (generation == EventEditorGeneration && Editing == "event" && EventId == eventId)
+                EventSettingsError = "表示設定を取得できないため保存できません。";
+        } finally { if (generation == EventEditorGeneration) EventSettingsLoading = false; }
+    }
     string EventTitle = "", EventDescription = "", EventLocation = "", EventLocationUrl = "", Starts = "", Opens = "", Announcement = "", Phase = "Hidden";
     long Version;
     List<SocialDraft> Social = [];
@@ -471,12 +500,18 @@ else
         Editing = "profile"; var p = View!.Profile; ProfileName = p.DisplayName; Reading = p.Reading; CallName = p.CallName; Version = p.RowVersion;
         Social = p.Social.Select(s => new SocialDraft { Service = s.Service, Url = s.Url }).ToList();
     }
-    async Task NewEvent() { ResetEventHeader(); Editing = "event"; EventId = null; Version = 0; EventDescriptionFormat = "text"; EventIcon = ""; EventTitle = EventDescription = EventLocation = EventLocationUrl = Starts = Opens = Announcement = ""; Phase = "Hidden"; Managers = []; await LoadManagerOptions(); }
+    async Task NewEvent() { ResetEventHeader(); Editing = "event"; EventId = null; Version = 0; EventDescriptionFormat = "text"; EventIcon = ""; EventTitle = EventDescription = EventLocation = EventLocationUrl = Starts = Opens = Announcement = ""; Phase = "Hidden"; Managers = []; EventCapacity = null; EventTheme = EventThemeMode = ""; EventThemeVersion = 0; var generation = EventEditorGeneration; await LoadEventThemeCatalog(); if (generation == EventEditorGeneration && Editing == "event" && EventId is null) await LoadManagerOptions(); }
     async Task EditEvent(EventView e)
     {
         ResetEventHeader(); Editing = "event"; EventId = e.Id; Version = e.RowVersion; EventTitle = e.Title; EventIcon = e.Icon; EventDescription = e.Description; EventDescriptionFormat = e.DescriptionFormat; EventLocation = e.Location; EventLocationUrl = e.LocationUrl;
         Starts = Local(e.ScheduledDate); Opens = e.OpensAt is null ? "" : Local(e.OpensAt); Announcement = e.AnnouncementMessage; Phase = e.PhaseKind; Managers = e.ManagerIds.ToHashSet();
+        EventCapacity = e.Capacity; EventTheme = e.Appearance?.ThemeId ?? "";
+        EventThemeMode = e.Appearance?.Mode is { } mode ? ((int)mode).ToString(CultureInfo.InvariantCulture) : "";
+        EventThemeVersion = e.Appearance?.RowVersion ?? 0;
+        var editorGeneration = EventEditorGeneration;
         var headerGeneration = EventHeaderGeneration;
+        await LoadEventThemeCatalog();
+        if (editorGeneration != EventEditorGeneration || Editing != "event" || EventId != e.Id) return;
         var principal = (await Authentication.GetAuthenticationStateAsync()).User;
         try {
             var image = await Core.ReadEventHeaderImageForEditAsync(principal, e.Id);
@@ -487,7 +522,7 @@ else
     void ToggleManager(string id, bool selected) { if (selected) Managers.Add(id); else Managers.Remove(id); }
     async Task SaveService() => await Save(p => Core.SaveServiceAsync(p, new(ServiceName, ServiceDescription, Version)));
     async Task SaveProfile() => await Save(p => Core.SaveProfileAsync(p, new(ProfileName, Reading, CallName, Social.Select(s => new SocialLink(s.Service, s.Url)).ToArray(), Version)));
-    async Task SaveEvent() { if (EventHeaderBusy) return; await Save(async p => { await Core.SaveEventAsync(p, EventId, new(EventTitle, EventDescription, EventLocation, ParseLocal(Starts), string.IsNullOrWhiteSpace(Opens) ? null : ParseLocal(Opens), Announcement, Phase, Managers.ToArray(), Version, EventLocationUrl, EventDescriptionFormat, EventHeaderDraft, EventIcon)); }); }
+    async Task SaveEvent() { if (EventHeaderBusy || EventSettingsLoading || EventSettingsError.Length > 0) return; await Save(async p => { await Core.SaveEventAsync(p, EventId, new(EventTitle, EventDescription, EventLocation, ParseLocal(Starts), string.IsNullOrWhiteSpace(Opens) ? null : ParseLocal(Opens), Announcement, Phase, Managers.ToArray(), Version, EventLocationUrl, EventDescriptionFormat, EventHeaderDraft, EventIcon, new(EventCapacity, new(string.IsNullOrEmpty(EventTheme) ? null : EventTheme, string.IsNullOrEmpty(EventThemeMode) ? null : (ThemeMode)int.Parse(EventThemeMode, CultureInfo.InvariantCulture), EventThemeVersion)))); }); }
     async Task Save(Func<System.Security.Claims.ClaimsPrincipal, Task> action)
     {
         FeedbackRevision++; FeedbackUnknown=false; Busy = true; Error = ""; Message = "";
