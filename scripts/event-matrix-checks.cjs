@@ -315,7 +315,7 @@ module.exports = async ({ p, g, ok }) => {
             revisionAfterClose, {timeout:25000});
         ok(await occupationDialog.count() === 0, 'Acknowledged occupation modal does not reopen on an unchanged poll');
 
-        // A later new loss must still notify, including when the original focused slot becomes disabled.
+        // A later new loss must still notify. Assigned slots may remain enabled profile buttons.
         const beforeRelease = await readParticipation(p, integrated.query);
         requireOk(await api(p, 'participation', {
             requestId:random(), rowVersion:beforeRelease.rowVersion, participantVersion:beforeRelease.participantVersion,
@@ -338,8 +338,14 @@ module.exports = async ({ p, g, ok }) => {
         ok(await occupationDialog.evaluate(e=>e.matches(':modal')), 'A later new loss opens a new native modal');
         await memberPage.locator('#participation-selection-notice-close').click();
         await occupationDialog.waitFor({state:'detached'});
-        ok(await memberPage.evaluate(()=>['participation-refresh','participation-phase'].includes(document.activeElement?.id)),
-            'Closing a notice restores a safe focus target when the original slot is now disabled');
+        const restoredFocus = await memberPage.evaluate(id => {
+            const active = document.activeElement;
+            return active?.isConnected && !active.matches(':disabled')
+                && (active.getAttribute('data-event-matrix-slot') === id
+                    || ['participation-refresh','participation-phase'].includes(active.id));
+        }, instrumentB.id);
+        ok(restoredFocus,
+            'Closing a notice restores its still-enabled slot/profile control or a safe refresh fallback');
         ok(await memberPage.locator('.participation-selection-chip').count() === 1
             && await memberPage.locator(`[data-participation-answer="${question.id}"]`).inputValue() === 'NO',
             'Close button acknowledges only the notification and retains the remaining draft');
