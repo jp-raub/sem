@@ -1,0 +1,47 @@
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+<dialog id="participation-selection-notice" @ref="Dialog" class="participation-selection-notice" role="alertdialog" aria-modal="true" aria-labelledby="participation-selection-notice-title" aria-describedby="participation-selection-notice-description">
+    <h2 id="participation-selection-notice-title">選択した参加枠が変更されました</h2>
+    <p id="participation-selection-notice-description">他の参加者の登録や枠の変更により、次の枠だけ選択を解除しました。</p>
+    <ul>@foreach (var slot in Slots) { <li>@slot</li> }</ul>
+    <p>その他の選択・未送信の回答は保持しています。この通知による登録や回答の保存は行いません。</p>
+    <button id="participation-selection-notice-close" type="button" data-dialog-close autofocus @onclick="Close">確認して閉じる</button>
+</dialog>
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<string> Slots { get; set; } = [];
+    [Parameter] public EventCallback<int> OnClose { get; set; }
+    ElementReference Dialog;
+    IJSObjectReference? Module;
+    bool Disposed;
+    bool Closing;
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (Disposed) return;
+        try
+        {
+            Module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./participation-notice.js");
+            if (!Disposed) await Module.InvokeVoidAsync("sync", Dialog, true);
+        }
+        catch (Exception e) when (e is JSDisconnectedException or JSException or TaskCanceledException)
+        { /* The parent keeps the same notice inline if native dialog interop is unavailable. */ }
+    }
+    async Task Close()
+    {
+        if (Disposed || Closing) return;
+        Closing = true;
+        var acknowledgedCount = Slots.Count;
+        try
+        {
+            if (Module is not null) await Module.InvokeVoidAsync("sync", Dialog, false);
+            if (!Disposed) await OnClose.InvokeAsync(acknowledgedCount);
+        }
+        finally { Closing = false; }
+    }
+    public async ValueTask DisposeAsync()
+    {
+        Disposed = true;
+        if (Module is null) return;
+        try { await Module.InvokeVoidAsync("release", Dialog); await Module.DisposeAsync(); }
+        catch (Exception e) when (e is JSDisconnectedException or JSException or TaskCanceledException) { }
+    }
+}

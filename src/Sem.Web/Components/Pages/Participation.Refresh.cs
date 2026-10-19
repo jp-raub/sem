@@ -15,6 +15,8 @@ public partial class Participation : IAsyncDisposable
     bool RefreshDisposed, RefreshBusy, NeedsDraftReview, RefreshFailed;
     long RefreshRevision;
     string RefreshNotice = "";
+    string[] RemovedSelectionSlots = [];
+    long RemovedSelectionContext;
 
     protected override void OnInitialized() => Authentication.AuthenticationStateChanged += RefreshAuthenticationChanged;
 
@@ -93,7 +95,10 @@ public partial class Participation : IAsyncDisposable
             if (RefreshFailed) RefreshNotice = "通信が回復し、登録状況を更新しました。";
             RefreshFailed = false;
             if (update.RemovedSlots.Length > 0)
+            {
+                QueueRemovedSelections(update.RemovedSlots);
                 RefreshNotice = "選択した枠が他の登録・変更により選択できなくなったため、その枠だけ選択を解除しました：" + string.Join("、", update.RemovedSlots);
+            }
             else if (update.RequiresReview)
                 RefreshNotice = "イベント・設問または同じ対象者の保存状態が更新されています。入力は保持しました。変更内容を確認してから続けてください。";
             RefreshRevision++;
@@ -124,7 +129,19 @@ public partial class Participation : IAsyncDisposable
         RefreshNotice = "更新内容を確認しました。保持した入力で操作を続けられます。";
     }
 
-    void ResetRefreshState() { NeedsDraftReview = false; RefreshFailed = false; RefreshNotice = ""; }
+    void QueueRemovedSelections(string[] slots)
+    {
+        // Accumulate newly invalid selections until acknowledged; unchanged polls do not re-open it.
+        if (slots.Length > 0) RemovedSelectionSlots = [..RemovedSelectionSlots, ..slots];
+    }
+
+    void AcknowledgeRemovedSelections(int count, long context)
+    {
+        if (context != RemovedSelectionContext) return;
+        RemovedSelectionSlots = RemovedSelectionSlots.Skip(count).ToArray();
+    }
+
+    void ResetRefreshState() { NeedsDraftReview = false; RefreshFailed = false; RefreshNotice = ""; RemovedSelectionContext++; RemovedSelectionSlots = []; }
 
     public async ValueTask DisposeAsync()
     {
