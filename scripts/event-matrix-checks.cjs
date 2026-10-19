@@ -178,6 +178,7 @@ module.exports = async ({ p, g, ok }) => {
         await memberPage.locator(`[data-participation-answer="${question.id}"]`).selectOption('YES');
         ok(await memberPage.locator('.participation-selection-chip').count() === 1,
             'Selecting a matrix cell updates the existing YOUR ENTRY selection chip');
+        await require('./participation-layout-checks.cjs')({ page: memberPage, ok, answerId: question.id });
 
         const refreshedName = 'Native matrix callback after';
         const latestTimetable = requireOk(await api(p, 'timetable', undefined, integrated.query), 'Read timetable before callback refresh');
@@ -380,6 +381,13 @@ module.exports = async ({ p, g, ok }) => {
         ok(new URL(adminPage.url()).pathname === `/events/${integrated.id}/timetable`
             && await adminPage.locator('.event-part-matrix').count() === 0,
         'Legacy dedicated timetable route remains available without the embedded matrix');
+        ok(await adminPage.locator('.timetable-duration').evaluateAll(elements =>
+            elements.length === 4 && elements.every(element => {
+                const style = getComputedStyle(element);
+                return style.textAlign === 'right' && style.fontVariantNumeric.includes('tabular-nums')
+                    && style.whiteSpace === 'nowrap';
+            })),
+        'Dedicated timetable duration header and song/progress cells are right-aligned tabular numbers');
         const timetableDuplicateIds = await duplicates(adminPage);
         ok(timetableDuplicateIds.length === 0,
             'Legacy timetable route has no duplicate DOM ids: ' + timetableDuplicateIds.join(', '));

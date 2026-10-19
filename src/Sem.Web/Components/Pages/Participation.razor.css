@@ -17,7 +17,7 @@
 .participation-selection-chip{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:5px 0;padding:7px 9px;border:1px solid var(--appearance-line,#cbd8ce);border-radius:7px;font-size:.8125rem;overflow-wrap:anywhere}
 .participation-selection-chip button{min-width:36px;min-height:36px;padding:0;border:0;background:transparent;color:var(--appearance-text,#18312e);font-size:1.1rem}
 .participation-refresh-note{max-width:900px;margin:6px 0 14px}
-@media(max-width:960px){.participation-entry-layout-embedded{grid-template-columns:minmax(0,1fr)}.participation-view-embedded .participation-entry-panel{position:static}}
+@media(max-width:1500px){.participation-entry-layout-embedded{grid-template-columns:minmax(0,1fr)}.participation-view-embedded .participation-entry-panel{position:static}}
 @media(max-width:600px){.participation-view-embedded>h2{font-size:1.25rem}.participation-table-scroll table{min-width:520px}.participation-view-embedded .participation-entry-panel{padding:14px}}
 .participation-admin-tools{margin:12px 0;border:1px solid var(--appearance-line,#cbd8ce);border-radius:8px;background:var(--appearance-surface,#fffefa)}
 .participation-admin-tools>summary{padding:12px 16px;cursor:pointer;font-weight:650;min-height:24px}

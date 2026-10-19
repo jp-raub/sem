@@ -5,6 +5,7 @@
 .timetable-embedded-links a{min-height:44px;display:inline-flex;align-items:center;padding:6px 10px}
 .timetable-table-scroll{max-width:100%;overflow-x:auto;overscroll-behavior-inline:contain}
 .timetable-table-scroll table{min-width:680px}
+.timetable-duration{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 @media(max-width:600px){.timetable-view-embedded>h2{font-size:1.25rem}.timetable-embedded-links{gap:4px}.timetable-table-scroll table{min-width:620px}}
 .timetable-calculation-details{margin:8px 0 12px}
 .timetable-calculation-details>summary{min-height:40px;display:flex;align-items:center;cursor:pointer;font-weight:650;color:var(--appearance-accent,#1e6557)}

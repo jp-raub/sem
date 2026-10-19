@@ -10,6 +10,7 @@
 .event-matrix-time,.event-matrix-duration{white-space:nowrap;font-variant-numeric:tabular-nums}
 .event-matrix-time{min-width:145px;text-align:right}
 .event-matrix-duration{text-align:right}
+.event-matrix-artist{text-align:right}
 .event-part-matrix tbody th{width:220px;max-width:260px;white-space:normal}
 .event-matrix-slot{display:block;width:100%;min-width:92px;min-height:42px;margin:2px 0;padding:7px 8px;border:1px solid var(--appearance-line,#cbd8ce);border-radius:7px;background:var(--appearance-surface,#fffefa);color:var(--appearance-text,#18312e);overflow-wrap:anywhere}
 .event-matrix-slot:disabled{opacity:.7;cursor:not-allowed}

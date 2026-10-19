@@ -6,11 +6,11 @@
     </p>
     @if (Rows.Count == 0 && Slots.Length == 0)
     {
-        <p class="event-part-matrix-empty">現在、表示できる曲の参加枠はありません。観覧申込みや設問回答は右側から行えます。</p>
+        <p class="event-part-matrix-empty">現在、表示できる曲の参加枠はありません。観覧申込みや設問回答は参加登録欄から行えます。</p>
     }
     else if (Rows.Count == 0)
     {
-        <p class="event-part-matrix-empty">参加枠はありますが、タイムテーブル行を表示できません。参加操作は右側から行えます。</p>
+        <p class="event-part-matrix-empty">参加枠はありますが、タイムテーブル行を表示できません。参加操作は参加登録欄から行えます。</p>
     }
     else
     {
@@ -20,7 +20,7 @@
                     <tr>
                         <th scope="col">曲・進行</th>
                         <th scope="col">開始・終了</th>
-                        <th scope="col">所要時間</th>
+                        <th scope="col" class="event-matrix-duration">所要時間</th>
                         @foreach (var column in _columns)
                         {
                             <th scope="col">@column</th>
@@ -37,7 +37,7 @@
                                     <strong>@timed.Icon @timed.Title</strong>
                                     @if (!string.IsNullOrWhiteSpace(timed.Artist))
                                     {
-                                        <small>@timed.Artist</small>
+                                        <small class="event-matrix-artist">@timed.Artist</small>
                                     }
                                     @if (timed.PrepStart is DateTimeOffset prep)
                                     {
