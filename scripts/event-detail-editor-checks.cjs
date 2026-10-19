@@ -8,11 +8,12 @@ module.exports=async({p,g,ok,eventId})=>{
  const workspace=async()=>{await page.goto('https://localhost:18443/workspace');await page.locator('[data-workspace-interactive="true"]').waitFor();};
  const stored=()=>page.evaluate(async id=>(await(await fetch('/api/core/workspace')).json()).events.find(x=>x.id===id),eventId);
  try{
+  await page.goto('https://localhost:18443/events/'+eventId+'/participants');await page.locator('[data-event-tabs-ready="true"]').waitFor();
   await workspace();const row=page.locator(`[data-core-event="${eventId}"]`);await row.locator('summary').click();
   const link=row.getByRole('link',{name:'概要・管理者を編集',exact:true});
-  ok(await link.getAttribute('href')===`/events/${eventId}#event-management`&&await row.getByRole('button',{name:'概要・管理者を編集',exact:true}).count()===0&&await page.locator('#event-core-form').count()===0,'Existing-event list offers only a detail link, never an inline editing form');
+  ok(await link.getAttribute('href')===`/events/${eventId}?tab=main#event-management`&&await row.getByRole('button',{name:'概要・管理者を編集',exact:true}).count()===0&&await page.locator('#event-core-form').count()===0,'Existing-event list offers only a detail link, never an inline editing form');
   await link.click();await page.locator('[data-event-interactive="true"]').waitFor();await page.locator('#event-edit').click();await page.locator('#event-core-save:enabled').waitFor();
-  ok(new URL(page.url()).pathname===`/events/${eventId}`&&await page.locator('#event-management #event-core-form').count()===1,'List management link opens the existing-event editor on its detail page');
+  ok(new URL(page.url()).pathname===`/events/${eventId}`&&await page.locator('#event-management #event-core-form').count()===1,'List management link opens the detail editor even when the previously saved event tab was roster');
   await require('./event-editor-layout-checks.cjs')({page,ok});
   const initial=await stored();await page.locator('#event-title').fill('Unsaved detail-only draft');await page.locator('#event-core-cancel').click();await page.locator('#event-core-form').waitFor({state:'detached'});
   ok((await stored()).title===initial.title&&!(await page.locator('#event-overview-title').innerText()).includes('Unsaved detail-only draft'),'Detail cancel discards local draft without changing the persisted event or hero');
