@@ -525,7 +525,7 @@ public static class CoreEndpoints
                             property.Value.ValueKind != JsonValueKind.Null && (property.Value.ValueKind != JsonValueKind.String ||
                             !Regex.IsMatch(property.Value.GetString() ?? "", "(?:Z|[+-][0-9]{2}:[0-9]{2})$")))
                             throw new ValidationException("日時はタイムゾーンを含むISO-8601で指定してください。");
-                    var edit = json.Deserialize<EventEdit>(new JsonSerializerOptions(JsonSerializerDefaults.Web)) ?? throw new ValidationException("入力が必要です。");
+                    var edit = json.Deserialize<EventEdit>(new JsonSerializerOptions(JsonSerializerDefaults.Web) { AllowDuplicateProperties = false, NumberHandling = System.Text.Json.Serialization.JsonNumberHandling.Strict }) ?? throw new ValidationException("入力が必要です。");
                     var id = ctx.Request.Query["id"].ToString();
                     var saved = await service.SaveEventAsync(ctx.User, id.Length == 0 ? null : id, edit, ctx.RequestAborted);
                     await ctx.Response.WriteAsJsonAsync(new { id = saved }); return;

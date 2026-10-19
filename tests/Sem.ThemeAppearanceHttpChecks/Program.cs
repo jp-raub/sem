@@ -160,6 +160,43 @@ try
     using(var unknown=await Post("event","",headerBody[..^1]+",\"unexpected\":true}","admin",adminCsrf))
         Check(unknown.StatusCode==HttpStatusCode.BadRequest,"Event image write rejects unknown JSON properties");
 
+    // Overview's optional aggregate shares the strict event transport and commits all settings in one transaction.
+    var editorOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+    var settingsEdit = new EventEdit("HTTP aggregate", "", "", DateTimeOffset.Parse("2099-01-01T00:00:00Z"),null,"","View",["manager"],0,
+        Settings:new(3,new("rose",ThemeMode.Dark,0)));
+    string aggregateId;
+    using(var created=await Post("event","",JsonSerializer.Serialize(settingsEdit,editorOptions),"admin",adminCsrf)) {
+        Check(created.StatusCode==HttpStatusCode.OK,"HTTP overview aggregate creates event and settings");
+        using var result=JsonDocument.Parse(await created.Content.ReadAsStringAsync());aggregateId=result.RootElement.GetProperty("id").GetString()!;
+    }
+    async Task<EventView> AggregateView() {
+        await using var scope=app.Services.CreateAsyncScope();
+        return (await scope.ServiceProvider.GetRequiredService<CoreFoundationService>().ReadAsync(Who("admin"))).Events.Single(e=>e.Id==aggregateId);
+    }
+    var aggregate=await AggregateView();
+    Check(aggregate.Capacity==3&&aggregate.Appearance==new ThemePreferenceView("rose",ThemeMode.Dark,1),"HTTP read exposes saved capacity and independent appearance version");
+    var validBody=JsonSerializer.Serialize(settingsEdit with{RowVersion=aggregate.RowVersion,Settings=new(4,new("rose",ThemeMode.Light,1))},editorOptions);
+    foreach(var badSettings in new[]{"{}","{\"capacity\":null}","{\"capacity\":2,\"appearance\":null}","{\"capacity\":2,\"capacity\":3,\"appearance\":{\"themeId\":null,\"mode\":null,\"rowVersion\":1}}","{\"capacity\":2,\"appearance\":{\"themeId\":null,\"mode\":99,\"rowVersion\":1}}","{\"capacity\":2,\"appearance\":{\"themeId\":null,\"mode\":null,\"rowVersion\":1,\"extra\":true}}"}) {
+        // Keep duplicate-property bytes intact, rather than normalizing them through JsonNode.
+        var raw=validBody[..validBody.IndexOf("\"settings\":",StringComparison.Ordinal)]+"\"settings\":"+badSettings+"}";
+        using var rejected=await Post("event","id="+aggregateId,raw,"manager",managerCsrf);
+        Check(rejected.StatusCode==HttpStatusCode.BadRequest,"Invalid nested aggregate JSON returns 400");
+        Check(JsonSerializer.Serialize(await AggregateView())==JsonSerializer.Serialize(aggregate),"Invalid HTTP aggregate never partially writes event/settings");
+    }
+    using(var unauthorized=await Post("event","id="+aggregateId,validBody,"member",memberCsrf))
+        Check(unauthorized.StatusCode==HttpStatusCode.Forbidden,"Member cannot alter overview capacity or theme via aggregate");
+    using(var updated=await Post("event","id="+aggregateId,validBody,"manager",managerCsrf))
+        Check(updated.StatusCode==HttpStatusCode.OK,"Assigned manager can save aggregate over HTTP");
+    using(var stale=await Post("event","id="+aggregateId,validBody,"manager",managerCsrf))
+        Check(stale.StatusCode==HttpStatusCode.Conflict,"Stale aggregate returns HTTP 409 instead of partial save");
+    aggregate=await AggregateView();
+    var legacyNode=System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(settingsEdit with{RowVersion=aggregate.RowVersion},editorOptions))!;
+    legacyNode.AsObject().Remove("settings");
+    using(var legacyWrite=await Post("event","id="+aggregateId,legacyNode.ToJsonString(),"manager",managerCsrf))
+        Check(legacyWrite.StatusCode==HttpStatusCode.OK,"Old HTTP client without aggregate remains compatible");
+    var afterLegacy=await AggregateView();
+    Check(afterLegacy.Capacity==aggregate.Capacity&&afterLegacy.Appearance==aggregate.Appearance,"Legacy HTTP write preserves settings and appearance version");
+
     string Expected(string actor) => "expectedActor=" + Uri.EscapeDataString(actor);
     string Id(string value) => "id=" + Uri.EscapeDataString(value);
 

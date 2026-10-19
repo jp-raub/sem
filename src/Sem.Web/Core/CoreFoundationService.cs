@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.Globalization;
+using System.Data;
 using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
@@ -20,7 +21,7 @@ public sealed record ProfileView(string UserId, string DisplayName, string Readi
     string Icon = "", ProfileAnswerView[]? Answers = null, string? ImageDataUrl = null, long ImageRowVersion = 0);
 public sealed record MemberView(string UserId, string DisplayName);
 public sealed record EventView(string Id, string Title, string Description, string Location, string ScheduledDate,
-    string? OpensAt, string AnnouncementMessage, string PhaseKind, string[] ManagerIds, long RowVersion, bool CanManage, string ActivePhaseName, string ActivePhaseKind, int MaxPicks, bool ManualPhaseOverride, string LocationUrl = "", string DescriptionFormat = "text", string Icon = "");
+    string? OpensAt, string AnnouncementMessage, string PhaseKind, string[] ManagerIds, long RowVersion, bool CanManage, string ActivePhaseName, string ActivePhaseKind, int MaxPicks, bool ManualPhaseOverride, string LocationUrl = "", string DescriptionFormat = "text", string Icon = "", int? Capacity = null, ThemePreferenceView? Appearance = null);
 public sealed record WorkspaceView(ServiceView Service, ProfileView Profile, string Email, bool IsAdmin, MemberView[] Members, EventView[] Events);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record GlobalAdminAccountView(string UserId, string DisplayName, string Email, bool IsAdmin, bool Enabled,
@@ -36,7 +37,11 @@ public sealed record ServiceEdit(string Name, string Description, long RowVersio
 public sealed record ProfileEdit(string DisplayName, string Reading, string CallName, SocialLink[] Social, long RowVersion);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record EventEdit(string Title, string Description, string Location, DateTimeOffset ScheduledDate,
-    DateTimeOffset? OpensAt, string AnnouncementMessage, string PhaseKind, string[] ManagerIds, long RowVersion, string? LocationUrl = null, string? DescriptionFormat = null, string? HeaderImageDataUrl = null, string? Icon = null);
+    DateTimeOffset? OpensAt, string AnnouncementMessage, string PhaseKind, string[] ManagerIds, long RowVersion, string? LocationUrl = null, string? DescriptionFormat = null, string? HeaderImageDataUrl = null, string? Icon = null, EventSettingsEdit? Settings = null);
+
+// Absent Settings preserves both legacy values; a present object deliberately includes an unlimited capacity or inherited appearance.
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record EventSettingsEdit([property: JsonRequired] int? Capacity, [property: JsonRequired] ThemePreferenceEdit Appearance);
 
 public sealed partial class CoreFoundationService(IDbContextFactory<ApplicationDbContext> factory,
     IOptions<IdentityOptions> identityOptions, TimeProvider clock, BusinessNotificationStore businessNotifications, IConfiguration? notificationConfiguration = null, Microsoft.AspNetCore.DataProtection.IDataProtectionProvider? qrProtection = null)
@@ -67,6 +72,7 @@ public sealed partial class CoreFoundationService(IDbContextFactory<ApplicationD
     public async Task<WorkspaceView> ReadAsync(ClaimsPrincipal principal, CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
+        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
         var user = await Actor(db, principal, ct);
         var settings = await db.ServiceSettings.SingleOrDefaultAsync(s => s.Id == 1, ct);
         var name = settings?.Name ?? await db.SiteStates.Where(s => s.Id == 1).Select(s => s.Name).SingleOrDefaultAsync(ct) ?? "SEM";
@@ -76,11 +82,15 @@ public sealed partial class CoreFoundationService(IDbContextFactory<ApplicationD
         var events = await db.SessionEvents.AsNoTracking().Include(e => e.Admins).Include(e => e.Phases)
             .Where(e => user.IsAdmin || e.PhaseKind == "View" || e.Admins.Any(a => a.UserId == user.Id))
             .OrderBy(e => e.ScheduledDate).ThenBy(e => e.Id).ToListAsync(ct);
-        return new(new(name, settings?.Description ?? "", settings?.RowVersion ?? 0), await ProfileWithImageAsync(db, user, Profile(user, profile), ct), user.Email!,
+        var eventIds = events.Select(e => e.Id).ToArray();
+        var appearances = await db.EventThemePreferences.AsNoTracking().Where(x => eventIds.Contains(x.EventId)).ToDictionaryAsync(x => x.EventId, ct);
+        var result = new WorkspaceView(new(name, settings?.Description ?? "", settings?.RowVersion ?? 0), await ProfileWithImageAsync(db, user, Profile(user, profile), ct), user.Email!,
             user.IsAdmin, members, events.Select(e => new EventView(e.Id, e.Title, e.Description, e.Location,
                 e.ScheduledDate, e.OpensAt, e.AnnouncementMessage, e.PhaseKind, e.Admins.Select(a => a.UserId).Order().ToArray(),
                 e.RowVersion, user.IsAdmin || e.Admins.Any(a => a.UserId == user.Id), e.Phases.Single(p => p.IsActive).Name,
-                e.Phases.Single(p => p.IsActive).Kind, e.Phases.Single(p => p.IsActive).MaxPicks, e.ManualPhaseOverride, e.LocationUrl, e.DescriptionFormat, e.Icon)).ToArray());
+                e.Phases.Single(p => p.IsActive).Kind, e.Phases.Single(p => p.IsActive).MaxPicks, e.ManualPhaseOverride, e.LocationUrl, e.DescriptionFormat, e.Icon, e.Capacity, View(appearances.GetValueOrDefault(e.Id)))).ToArray());
+        await tx.CommitAsync(ct);
+        return result;
     }
     public async Task<GlobalAdminAccountsView> ReadGlobalAdminAccountsAsync(ClaimsPrincipal principal, CancellationToken ct = default)
     {
@@ -234,12 +244,22 @@ public sealed partial class CoreFoundationService(IDbContextFactory<ApplicationD
             throw new ValidationException("表示状態／開始・開場日時を確認してください。開場と開始の同時刻は指定できます。");
         var managers = (edit.ManagerIds ?? []).Distinct(StringComparer.Ordinal).Order().ToArray();
         await using var db = await factory.CreateDbContextAsync(ct);
-        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
         var actor = await Actor(db, principal, ct);
         var item = id is null ? null : await db.SessionEvents.Include(e => e.Admins).Include(e => e.Phases).SingleOrDefaultAsync(e => e.Id == id, ct);
         if (id is not null && item is null || !actor.IsAdmin && (item is null || !item.Admins.Any(a => a.UserId == actor.Id)))
             throw new UnauthorizedAccessException("このイベントは管理できません。");
         if ((item?.RowVersion ?? 0) != edit.RowVersion) throw new CoreConflictException();
+        EventThemePreference? appearance = null;
+        if (edit.Settings is { } settingsEdit)
+        {
+            if (settingsEdit.Capacity < 0) throw new ValidationException("人数は0以上または制限なしで指定してください。");
+            if (id is not null && settingsEdit.Capacity is int cap && cap < (await Participants(db, id, ct)).Count)
+                throw new ValidationException("現在の参加人数より小さい上限には設定できません。");
+            await ValidateThemePreference(db, settingsEdit.Appearance, ct);
+            appearance = id is null ? null : await db.EventThemePreferences.SingleOrDefaultAsync(x => x.EventId == id, ct);
+            CheckVersion(appearance?.RowVersion ?? 0, appearance is null, settingsEdit.Appearance.RowVersion);
+        }
         // Authorization and stale-version rejection precede all native image decoding.
         (byte[] Png, int Width, int Height)? header = edit.HeaderImageDataUrl is { Length: > 0 }
             ? await EventHeaderImageNormalizer.NormalizeAsync(edit.HeaderImageDataUrl, ct) : null;
@@ -282,6 +302,18 @@ public sealed partial class CoreFoundationService(IDbContextFactory<ApplicationD
                 if (image is null) { image = new() { EventId = item.Id }; db.EventHeaderImages.Add(image); }
                 image.Data = header.Value.Png; image.Width = header.Value.Width; image.Height = header.Value.Height;
             }
+        }
+        if (edit.Settings is { } settings)
+        {
+            if (item.Capacity != settings.Capacity) Audit(db, actor.Id, "EventCapacityChanged", item.Id);
+            item.Capacity = settings.Capacity;
+            if (appearance is null)
+            {
+                appearance = new EventThemePreference { EventId = item.Id };
+                db.EventThemePreferences.Add(appearance);
+            }
+            SetPreference(appearance, settings.Appearance);
+            Audit(db, actor.Id, "EventThemePreferenceChanged", item.Id);
         }
         Audit(db, actor.Id, id is null ? "SessionEventCreated" : "SessionEventUpdated", item.Id);
         await db.SaveChangesAsync(ct); await tx.CommitAsync(ct); return item.Id;
