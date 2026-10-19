@@ -91,9 +91,41 @@ Check(noticeHtml.Contains("<dialog") && noticeHtml.Contains("role=\"alertdialog\
 Check(noticeHtml.Contains("data-dialog-close") && noticeHtml.Contains("autofocus") && !noticeHtml.Contains("type=\"submit\""),
     "Dialog acknowledgement is focused and cannot submit participation");
 Check(!noticeHtml.Contains("<img") && noticeHtml.Contains("&lt;img"), "Affected slot labels are rendered as escaped text, not HTML");
+// Simulate two close clicks while browser interop is still pending and a newer notice arrives.
+var closingNotice = new ParticipationSelectionNotice();
+var delayedClose = new DelayedCloseJS();
+var acknowledgements = new List<int>();
+var closingType = closingNotice.GetType();
+closingType.GetProperty("Slots")!.SetValue(closingNotice, new[]{"First song / Guitar"});
+closingType.GetProperty("OnClose")!.SetValue(closingNotice,
+    EventCallback.Factory.Create<int>(new object(), (int seen) => acknowledgements.Add(seen)));
+closingType.GetField("Module", noticeFlags)!.SetValue(closingNotice, delayedClose);
+Task BeginClose() => (Task)closingType.GetMethod("Close", noticeFlags)!.Invoke(closingNotice, null)!;
+var firstClose = BeginClose();
+closingType.GetProperty("Slots")!.SetValue(closingNotice, new[]{"First song / Guitar", "New song / Bass"});
+var duplicateClose = BeginClose();
+delayedClose.Complete();
+await Task.WhenAll(firstClose, duplicateClose);
+Check(delayedClose.Calls==1 && acknowledgements.SequenceEqual([1]),
+    "Repeated close during interop acknowledges only the original snapshot once, not a newer notice");
 Console.WriteLine($"Participation draft refresh checks passed: {count}");
 public sealed class RenderOnlyJS : IJSRuntime
 {
     public ValueTask<TValue> InvokeAsync<TValue>(string identifier, object?[]? args) => throw new InvalidOperationException("Static render must not call JS");
     public ValueTask<TValue> InvokeAsync<TValue>(string identifier, CancellationToken cancellationToken, object?[]? args) => throw new InvalidOperationException("Static render must not call JS");
+}
+
+public sealed class DelayedCloseJS : IJSObjectReference
+{
+    readonly TaskCompletionSource<bool> gate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    public int Calls { get; private set; }
+    public void Complete() => gate.TrySetResult(true);
+    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    public ValueTask<TValue> InvokeAsync<TValue>(string identifier, object?[]? args) => InvokeAsync<TValue>(identifier, default, args);
+    public ValueTask<TValue> InvokeAsync<TValue>(string identifier, CancellationToken cancellationToken, object?[]? args)
+    {
+        Calls++;
+        return new ValueTask<TValue>(Wait<TValue>());
+    }
+    async Task<TValue> Wait<TValue>() { await gate.Task; return default!; }
 }

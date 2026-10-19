@@ -13,6 +13,7 @@
     ElementReference Dialog;
     IJSObjectReference? Module;
     bool Disposed;
+    bool Closing;
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (Disposed) return;
@@ -26,10 +27,15 @@
     }
     async Task Close()
     {
-        if (Disposed) return;
+        if (Disposed || Closing) return;
+        Closing = true;
         var acknowledgedCount = Slots.Count;
-        if (Module is not null) await Module.InvokeVoidAsync("sync", Dialog, false);
-        if (!Disposed) await OnClose.InvokeAsync(acknowledgedCount);
+        try
+        {
+            if (Module is not null) await Module.InvokeVoidAsync("sync", Dialog, false);
+            if (!Disposed) await OnClose.InvokeAsync(acknowledgedCount);
+        }
+        finally { Closing = false; }
     }
     public async ValueTask DisposeAsync()
     {
