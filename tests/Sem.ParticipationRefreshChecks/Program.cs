@@ -1,3 +1,8 @@
+using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Web;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.JSInterop;
 using Sem.Web.Core;
 using Sem.Web.Components.Shared;
 int count=0;
@@ -51,4 +56,44 @@ foreach(var guard in new[]{"Pending","Uncertain","Busy","RefreshDisposed"})
     if(guard=="Pending")Check(ReferenceEquals(component.GetType().GetField("Pending",flags)!.GetValue(component),pending)
         &&pending.RequestId.Length>0,"Pending operation instance and requestId remain immutable without a service read");
 }
+// Notification state is separate from transient inline refresh messages.
+var notices = new Sem.Web.Components.Pages.Participation();
+var noticeFlags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+void InvokeNotice(string method, params object[] values) => notices.GetType().GetMethod(method, noticeFlags)!.Invoke(notices, values);
+string[] NoticeSlots() => (string[])notices.GetType().GetField("RemovedSelectionSlots", noticeFlags)!.GetValue(notices)!;
+InvokeNotice("QueueRemovedSelections", (object)new[]{"Song / Guitar"});
+InvokeNotice("QueueRemovedSelections", (object)Array.Empty<string>());
+Check(NoticeSlots().SequenceEqual(["Song / Guitar"]), "Unchanged polls cannot discard an unacknowledged modal notice");
+InvokeNotice("QueueRemovedSelections", (object)new[]{"Second song / Piano"});
+Check(NoticeSlots().Length==2, "New removals accumulate in one outstanding notification");
+InvokeNotice("AcknowledgeRemovedSelections", 1, 0L);
+Check(NoticeSlots().SequenceEqual(["Second song / Piano"]), "Acknowledgement clears only slots visible when the close action began");
+InvokeNotice("AcknowledgeRemovedSelections", 1, 0L);
+InvokeNotice("QueueRemovedSelections", (object)Array.Empty<string>());
+Check(NoticeSlots().Length==0, "Acknowledgement plus unchanged poll never reopens a notice");
+InvokeNotice("QueueRemovedSelections", (object)new[]{"Song / Guitar"});
+Check(NoticeSlots().Length==1, "A newly selected slot lost later produces a new notification");
+InvokeNotice("ResetRefreshState");
+Check(NoticeSlots().Length==0, "Context reload clears notification data from the previous event or subject");
+InvokeNotice("QueueRemovedSelections", (object)new[]{"New context song / Bass"});
+InvokeNotice("AcknowledgeRemovedSelections", 1, 0L);
+Check(NoticeSlots().Length==1, "Delayed acknowledgement from a previous context cannot clear the new context notice");
+using var services = new ServiceCollection().AddLogging().AddSingleton<IJSRuntime, RenderOnlyJS>().BuildServiceProvider();
+await using var renderer = new HtmlRenderer(services, services.GetRequiredService<ILoggerFactory>());
+var noticeHtml = await renderer.Dispatcher.InvokeAsync(async () => {
+    var output = await renderer.RenderComponentAsync<ParticipationSelectionNotice>(ParameterView.FromDictionary(
+        new Dictionary<string,object?> { ["Slots"] = new[]{"Song <img src=x onerror=alert(1)> / Guitar"} }));
+    return output.ToHtmlString();
+});
+Check(noticeHtml.Contains("<dialog") && noticeHtml.Contains("role=\"alertdialog\"")
+    && noticeHtml.Contains("aria-modal=\"true\"") && noticeHtml.Contains("aria-labelledby=\"participation-selection-notice-title\""),
+    "Removal notice renders a named native alert dialog");
+Check(noticeHtml.Contains("data-dialog-close") && noticeHtml.Contains("autofocus") && !noticeHtml.Contains("type=\"submit\""),
+    "Dialog acknowledgement is focused and cannot submit participation");
+Check(!noticeHtml.Contains("<img") && noticeHtml.Contains("&lt;img"), "Affected slot labels are rendered as escaped text, not HTML");
 Console.WriteLine($"Participation draft refresh checks passed: {count}");
+public sealed class RenderOnlyJS : IJSRuntime
+{
+    public ValueTask<TValue> InvokeAsync<TValue>(string identifier, object?[]? args) => throw new InvalidOperationException("Static render must not call JS");
+    public ValueTask<TValue> InvokeAsync<TValue>(string identifier, CancellationToken cancellationToken, object?[]? args) => throw new InvalidOperationException("Static render must not call JS");
+}

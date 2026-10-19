@@ -40,3 +40,44 @@ check(page.includes('Pending is not null || Uncertain') && page.includes('Pendin
 check(page.includes('generation == LoadGeneration') && page.includes('subject == Subject') && page.includes('BindingFor(live) != binding'), 'Response adoption checks generation, subject and live identity');
 check(!page.includes('SubmitParticipationAsync') && !page.includes('Pending =') && !page.includes('Pending='), 'Refresh path never submits or replaces a pending operation');
 console.log(`Participation refresh scheduler checks passed: ${completed}`);
+
+// Exercise the exact modal module with the existing native-dialog lifecycle code.
+const lifecycleUrl = 'data:text/javascript;base64,' + Buffer.from(fs.readFileSync('src/Sem.Web/wwwroot/comment-dialog.js')).toString('base64');
+const noticeSource = fs.readFileSync('src/Sem.Web/wwwroot/participation-notice.js','utf8').replace("'./comment-dialog.js'", JSON.stringify(lifecycleUrl));
+const notice = await import('data:text/javascript;base64,' + Buffer.from(noticeSource).toString('base64'));
+const body = {isConnected:true};
+const target = {isConnected:true,disabled:false,matches(){return this.disabled;},focus(){if(!this.disabled)document.activeElement=this;}};
+const refreshTarget = {...target}, phaseTarget = {...target};
+globalThis.document = {body,activeElement:target};
+class NativeDialog extends EventTarget {
+    open=false; isConnected=true; opens=0; closes=0; adds=0; removes=0;
+    button={isConnected:true,matches:()=>false,focus:()=>{document.activeElement=this.button;},click:()=>notice.sync(this,false)};
+    showModal(){this.open=true;this.opens++;}
+    close(){this.open=false;this.closes++;}
+    querySelector(selector){return selector==='[data-dialog-close]'?this.button:null;}
+    closest(){return {querySelector:selector=>selector==='#participation-refresh'?refreshTarget:phaseTarget};}
+    contains(element){return element===this.button;}
+    addEventListener(name,fn){this.adds++;super.addEventListener(name,fn);}
+    removeEventListener(name,fn){this.removes++;super.removeEventListener(name,fn);}
+}
+globalThis.HTMLDialogElement=NativeDialog;
+const dialog=new NativeDialog();
+notice.sync(dialog,true);notice.sync(dialog,true);
+check(dialog.open && dialog.opens===1 && dialog.adds===1 && document.activeElement===dialog.button,
+    'Native modal opens once, focuses acknowledgement, and does not duplicate on rerender');
+const cancel=new Event('cancel',{cancelable:true});dialog.dispatchEvent(cancel);
+check(cancel.defaultPrevented && !dialog.open && document.activeElement===target,
+    'Escape follows the acknowledgement action and restores the connected input');
+notice.sync(dialog,true);target.disabled=true;notice.sync(dialog,false);
+check(document.activeElement===refreshTarget, 'Disabled lost-slot trigger falls back to the refresh control');
+target.disabled=false;document.activeElement=target;notice.sync(dialog,true);target.disabled=true;refreshTarget.disabled=true;notice.sync(dialog,false);
+check(document.activeElement===phaseTarget, 'Busy refresh control falls back to the participation heading');
+refreshTarget.disabled=false;target.disabled=false;document.activeElement=target;notice.sync(dialog,true);
+notice.release(dialog);
+check(!dialog.open && dialog.removes===1, 'Disposal closes the modal and releases its native Escape listener');
+dialog.isConnected=false;const before=dialog.opens;notice.sync(dialog,true);
+check(dialog.opens===before, 'Detached event or authentication context cannot reopen an old modal');
+const markup=fs.readFileSync('src/Sem.Web/Components/Shared/ParticipationSelectionNotice.razor','utf8');
+check(markup.includes('role="alertdialog"') && markup.includes('aria-modal="true"') && markup.includes('data-dialog-close')
+    && !markup.includes('SubmitParticipationAsync'), 'Modal markup announces a labelled alert and performs no registration');
+console.log(`Participation refresh and modal checks passed: ${completed}`);

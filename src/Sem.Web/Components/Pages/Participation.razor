@@ -26,11 +26,12 @@ else
 <OperationFeedback Revision="FeedbackRevision" Busy="Busy" Success="@Message" Error="@Error" Unknown="@(Uncertain || FeedbackUnknown)" ResultKind="@FeedbackKind" />
 <p id="participation-error" role="alert">@Error</p><p id="participation-message" role="status">@Message</p>
 @if(Plan is not null){
- <p id="participation-phase">@Plan.PhaseName（@Plan.PhaseKind）／このフェーズの登録 @Plan.OwnPhaseSongCount 曲・上限 @(Plan.MaxPicks<0?"制限なし":Plan.MaxPicks.ToString())</p>
+ <p id="participation-phase" tabindex="-1">@Plan.PhaseName（@Plan.PhaseKind）／このフェーズの登録 @Plan.OwnPhaseSongCount 曲・上限 @(Plan.MaxPicks<0?"制限なし":Plan.MaxPicks.ToString())</p>
  <p id="participation-count">参加人数 @Plan.ParticipantCount ／ @(Plan.Capacity?.ToString()??"制限なし") 人（観覧を含むユニーク人数）</p>
  <button id="participation-refresh" disabled="@(Busy||RefreshBusy||Pending is not null||Uncertain||!InteractiveReady)" @onclick="ManualRefreshDraft">最新状態を取得</button>
  <p class="participation-refresh-note">表示中は約7.5秒ごとに登録状況を更新します。最新状態の取得でも有効な選択・回答は保持します。送信中・結果未確認の操作は自動変更しません。</p>
  <p id="participation-refresh-notice" role="status" data-refresh-revision="@RefreshRevision">@RefreshNotice</p>
+ @if(RemovedSelectionSlots.Length > 0){var noticeContext=RemovedSelectionContext;<ParticipationSelectionNotice @key="noticeContext" Slots="RemovedSelectionSlots" OnClose="count=>AcknowledgeRemovedSelections(count,noticeContext)" />}
  @if(NeedsDraftReview){<p role="alert">保存前に、更新されたイベント・設問・対象者の状態と保持された入力を確認してください。</p>
  @if(Plan.OwnUserId==CurrentId){<details class="participation-saved-answers"><summary>現在保存されている自分の回答と比較する</summary><ul>@foreach(var question in Plan.Questions){<li>@question.Text：@(string.IsNullOrWhiteSpace(question.OwnValue)?"未回答":question.OwnValue)</li>}</ul></details>}
  <button id="participation-review-confirm" disabled="@(Busy||RefreshBusy||Uncertain)" @onclick="ConfirmRefreshedDraft">変更内容を確認し、入力を維持して続ける</button>}

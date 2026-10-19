@@ -289,6 +289,60 @@ module.exports = async ({ p, g, ok }) => {
         'Automatic polling removes only the occupied selection and retains other selection and unsent answer');
         ok((await memberPage.locator('#participation-refresh-notice').innerText()).includes('その枠だけ選択を解除'),
             'Automatic occupation update announces the removed selection');
+        const occupationDialog = memberPage.locator('#participation-selection-notice');
+        await occupationDialog.waitFor({state:'visible'});
+        const noticeState = await occupationDialog.evaluate(e => ({
+            modal:e.matches(':modal'), text:e.textContent, focused:e.contains(document.activeElement),
+            width:e.getBoundingClientRect().width, viewport:innerWidth,
+        }));
+        ok(noticeState.modal && noticeState.focused && noticeState.text.includes(instrumentB.title)
+            && noticeState.text.includes(instrumentB.partName),
+            'Externally claimed selection opens a focused native modal naming the affected song and part');
+        ok(noticeState.width <= noticeState.viewport && await occupationDialog.getAttribute('role') === 'alertdialog',
+            'Occupation modal is accessible and fits the narrow viewport');
+        const revisionWhileOpen = await memberPage.locator('#participation-refresh-notice').getAttribute('data-refresh-revision');
+        await memberPage.waitForFunction(revision => document.querySelector('#participation-refresh-notice').dataset.refreshRevision !== revision,
+            revisionWhileOpen, {timeout:25000});
+        ok(await occupationDialog.isVisible() && await occupationDialog.count() === 1,
+            'An unchanged automatic poll neither dismisses nor duplicates the pending modal');
+        await memberPage.keyboard.press('Escape');
+        await occupationDialog.waitFor({state:'detached'});
+        ok(await memberPage.locator(`[data-participation-answer="${question.id}"]`).inputValue() === 'NO'
+            && await memberPage.locator('.participation-selection-chip').count() === 1,
+            'Escape acknowledges the modal without resetting other selections or the unsent answer');
+        const revisionAfterClose = await memberPage.locator('#participation-refresh-notice').getAttribute('data-refresh-revision');
+        await memberPage.waitForFunction(revision => document.querySelector('#participation-refresh-notice').dataset.refreshRevision !== revision,
+            revisionAfterClose, {timeout:25000});
+        ok(await occupationDialog.count() === 0, 'Acknowledged occupation modal does not reopen on an unchanged poll');
+
+        // A later new loss must still notify, including when the original focused slot becomes disabled.
+        const beforeRelease = await readParticipation(p, integrated.query);
+        requireOk(await api(p, 'participation', {
+            requestId:random(), rowVersion:beforeRelease.rowVersion, participantVersion:beforeRelease.participantVersion,
+            phaseId:beforeRelease.phaseId, kind:'Release', reason:'Modal repeat fixture',
+            slots:[{id:instrumentB.id,rowVersion:beforeRelease.slots.find(s=>s.id===instrumentB.id).rowVersion}], answers:[],
+        }, integrated.query), 'Release fixture slot before a later new selection');
+        await memberPage.locator('#participation-refresh').click();
+        const repeatedCell = memberPage.locator(`[data-event-matrix-slot="${instrumentB.id}"]`);
+        await memberPage.waitForFunction(id=>!document.querySelector(`[data-event-matrix-slot="${id}"]`).disabled, instrumentB.id);
+        await repeatedCell.evaluate(e=>e.scrollIntoView({block:'center',inline:'end'}));
+        await repeatedCell.click();
+        const beforeRepeatClaim = await readParticipation(p, integrated.query);
+        requireOk(await api(p, 'participation', {
+            requestId:random(), rowVersion:beforeRepeatClaim.rowVersion, participantVersion:beforeRepeatClaim.participantVersion,
+            phaseId:beforeRepeatClaim.phaseId, kind:'Register',
+            slots:[{id:instrumentB.id,rowVersion:beforeRepeatClaim.slots.find(s=>s.id===instrumentB.id).rowVersion}],
+            answers:[{questionId:question.id,value:'NO'}],
+        }, integrated.query), 'Claim a newly reselected fixture slot again');
+        await occupationDialog.waitFor({state:'visible',timeout:25000});
+        ok(await occupationDialog.evaluate(e=>e.matches(':modal')), 'A later new loss opens a new native modal');
+        await memberPage.locator('#participation-selection-notice-close').click();
+        await occupationDialog.waitFor({state:'detached'});
+        ok(await memberPage.evaluate(()=>['participation-refresh','participation-phase'].includes(document.activeElement?.id)),
+            'Closing a notice restores a safe focus target when the original slot is now disabled');
+        ok(await memberPage.locator('.participation-selection-chip').count() === 1
+            && await memberPage.locator(`[data-participation-answer="${question.id}"]`).inputValue() === 'NO',
+            'Close button acknowledges only the notification and retains the remaining draft');
         const afterPoll = await readParticipation(g, integrated.query);
         ok(afterPoll.slots.find(slot=>slot.id===instrumentA.id).assignedUserId == null
             && afterPoll.questions.find(item=>item.id===question.id).ownValue === 'YES',
