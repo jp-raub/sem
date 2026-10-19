@@ -53,7 +53,7 @@ Check(html.Contains("現在、表示できる曲の参加枠はありません")
 html = await Render([], [Slot("unplaced", "s1", "Guitar")]);
 Check(html.Contains("参加枠はありますが") && !html.Contains("現在、表示できる曲の参加枠はありません"), "Unplaced slots are distinguished from no slots");
 
-var song = Row("song-row", "Song", "s1", "合奏 <song>");
+var song = Row("song-row", "Song", "s1", "合奏 <song>") with { Artist = "Artist <name> & Co" };
 var slots = new[]
 {
     Slot("free", "s1", "Guitar"),
@@ -73,6 +73,12 @@ Check(html.IndexOf(">Guitar</th>", StringComparison.Ordinal) < html.IndexOf(">Dr
 Check(html.Contains("aria-pressed=\"true\""), "Selected state is exposed to assistive technology");
 Check(Regex.Matches(html, "aria-pressed=\"false\"").Count == 2, "Unselected buttons explicitly expose a false pressed state");
 var rawSlotsHtml = await Render([song, transition], slots, new HashSet<string> { "free" }, decode: false);
+Check(Regex.IsMatch(html, "<small\\b[^>]*class=\"event-matrix-artist\"[^>]*>Artist <name> & Co</small>"),
+    "Artist has a dedicated alignment class independent of preparation notes");
+Check(rawSlotsHtml.Contains("Artist &lt;name&gt; &amp; Co") && !rawSlotsHtml.Contains("Artist <name>"),
+    "Artist alignment preserves HTML encoding");
+Check(Regex.IsMatch(html, "<th\\b[^>]*scope=\"col\"[^>]*class=\"event-matrix-duration\"[^>]*>所要時間</th>"),
+    "Duration header shares its right-alignment class with duration cells");
 string SlotButton(string markup, string id) => Regex.Match(markup,
     "<button\\b[^>]*data-event-matrix-slot=\"" + Regex.Escape(id) + "\"[^>]*>.*?</button>",
     RegexOptions.Singleline).Value;
