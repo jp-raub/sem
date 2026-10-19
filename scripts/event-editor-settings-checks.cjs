@@ -12,7 +12,7 @@ module.exports=async({p,ok})=>{
  const workspace=async()=>{await page.goto('https://localhost:18443/workspace');await page.locator('[data-workspace-interactive="true"]').waitFor();};
  const saved=async()=>requireOk(await api('workspace')).events.find(e=>e.title===title);
  let id;
- const edit=async()=>{await workspace();const row=page.locator(`[data-core-event="${id}"]`);await row.locator('summary').click();await row.getByRole('button',{name:'概要・管理者を編集',exact:true}).click();await page.waitForFunction(()=>!document.querySelector('#event-theme')?.disabled&&!document.querySelector('#event-core-save')?.disabled);};
+ const edit=async()=>require('./event-detail-editor-helper.cjs')(page,id);
  const save=async()=>{await page.locator('#event-core-save').click();await page.waitForFunction(()=>!document.querySelector('#event-core-form'));};
  const cancel=async()=>{await page.locator('#event-core-cancel').click();await page.waitForFunction(()=>!document.querySelector('#event-core-form'));};
  try{
@@ -39,13 +39,13 @@ module.exports=async({p,ok})=>{
   const actor=appearance.actorId;
   requireOk(await api('theme-event',{themeId:'rose',mode:1,rowVersion:appearance.event.rowVersion},'?id='+id+'&expectedActor='+encodeURIComponent(actor)));
   await page.locator('#event-capacity').fill('8');await page.locator('#event-core-save').click();
-  await page.waitForFunction(()=>document.querySelector('#core-error')?.textContent.includes('ほかの画面で更新'));
+  await page.waitForFunction(()=>document.querySelector('#event-editor-error')?.textContent.includes('ほかの画面で更新'));
   after=await saved();ok(after.capacity===3&&after.appearance.mode===1&&await page.locator('#event-capacity').inputValue()==='8','Dedicated appearance change rejects stale overview atomically and retains local draft');
   await page.getByRole('button',{name:'結果を確認して閉じる',exact:true}).click();
   await cancel();await edit();
   event=await saved();requireOk(await api('capacity',{capacity:4,rowVersion:event.rowVersion},'?id='+id));
   await page.locator('#event-theme-mode').selectOption('2');await page.locator('#event-core-save').click();
-  await page.waitForFunction(()=>document.querySelector('#core-error')?.textContent.includes('ほかの画面で更新'));
+  await page.waitForFunction(()=>document.querySelector('#event-editor-error')?.textContent.includes('ほかの画面で更新'));
   after=await saved();ok(after.capacity===4&&after.appearance.mode===1&&await page.locator('#event-theme-mode').inputValue()==='2','Dedicated capacity change rejects stale event version without saving the draft appearance');
   await page.getByRole('button',{name:'結果を確認して閉じる',exact:true}).click();
   await cancel();await edit();

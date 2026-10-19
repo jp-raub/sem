@@ -48,6 +48,8 @@ node --check scripts/admin-search-audit-checks.cjs
 node --check scripts/event-location-checks.cjs
 node --check scripts/event-description-checks.cjs
 node --check scripts/event-editor-settings-checks.cjs
+node --check scripts/event-detail-editor-helper.cjs
+node --check scripts/event-detail-editor-checks.cjs
 node --check scripts/event-header-checks.cjs
 node --check scripts/acceptance-retention-checks.cjs
 node --check scripts/comment-checks.cjs

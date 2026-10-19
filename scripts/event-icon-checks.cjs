@@ -3,7 +3,8 @@
 module.exports=async({p,g,ok,eventId})=>{
  const page=await p.context().newPage(),member=await g.context().newPage();
  const row=()=>page.locator(`[data-core-event="${eventId}"]`);
- async function edit(){await page.goto('https://localhost:18443/workspace');await page.locator('[data-workspace-interactive="true"]').waitFor();await row().locator('summary').click();await row().getByRole('button',{name:'概要・管理者を編集',exact:true}).click();await page.locator('#event-icon').waitFor();}
+ async function edit(){await require('./event-detail-editor-helper.cjs')(page,eventId);await page.locator('#event-icon').waitFor();}
+ async function list(){await page.goto('https://localhost:18443/workspace');await page.locator('[data-workspace-interactive="true"]').waitFor();}
  async function save(){await page.locator('#event-core-save').click();await page.waitForFunction(()=>!document.querySelector('#event-core-form'));}
  async function stored(){return page.evaluate(async id=>(await(await fetch('/api/core/workspace')).json()).events.find(e=>e.id===id).icon,eventId);}
  try{
@@ -11,9 +12,9 @@ module.exports=async({p,g,ok,eventId})=>{
   await page.locator('#event-icon').fill('👩‍🎤 合奏');await page.locator('#event-icon-preview .event-icon').waitFor();
   ok(await page.locator('#event-icon-preview .event-icon').innerText()==='👩‍🎤 合奏'&&await stored()==='','Icon draft previews immediately without writing saved event');
   await page.locator('#event-core-cancel').click();await page.waitForFunction(()=>!document.querySelector('#event-core-form'));
-  ok(await stored()===''&&await row().locator('.event-icon').count()===0,'Cancel leaves saved icon and list unchanged');
+  await list();ok(await stored()===''&&await row().locator('.event-icon').count()===0,'Cancel leaves saved icon and list unchanged');
   await edit();await page.locator('#event-icon').fill('👩‍🎤 合奏');await save();
-  ok(await stored()==='👩‍🎤 合奏'&&await row().locator('.event-icon').innerText()==='👩‍🎤 合奏','Saved Unicode icon appears in real event list');
+  await list();ok(await stored()==='👩‍🎤 合奏'&&await row().locator('.event-icon').innerText()==='👩‍🎤 合奏','Saved Unicode icon appears in real event list');
   await page.goto('https://localhost:18443/events/'+eventId);await page.locator('#event-overview-title .event-icon').waitFor();
   ok(await page.locator('#event-overview-title .event-icon').innerText()==='👩‍🎤 合奏','Saved icon appears in event overview heading');
   await member.goto('https://localhost:18443/events/'+eventId);await member.locator('#event-overview-title .event-icon').waitFor();
@@ -26,7 +27,7 @@ module.exports=async({p,g,ok,eventId})=>{
   await save();await page.goto('https://localhost:18443/events/'+eventId);await page.locator('#event-overview-title .event-icon').waitFor();
   ok(await page.locator('#event-overview-title .event-icon').innerText()===literal&&await page.locator('#event-overview-title img').count()===0,'Saved icon is encoded in overview, never interpreted as HTML');
   await edit();await page.locator('#event-icon').fill('');await save();
-  ok(await stored()===''&&await row().locator('.event-icon').count()===0,'Explicit empty saved input removes only event icon');
+  await list();ok(await stored()===''&&await row().locator('.event-icon').count()===0,'Explicit empty saved input removes only event icon');
   await edit();
   const viewport=page.viewportSize(),mode=await page.evaluate(()=>document.documentElement.getAttribute('data-appearance-mode'));
   await page.setViewportSize({width:390,height:950});

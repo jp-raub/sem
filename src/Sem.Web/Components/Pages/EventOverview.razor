@@ -9,9 +9,11 @@
 
 <PageTitle>@(View?.Title ?? "イベント")</PageTitle>
 <EventTabNavigation EventId="@EventId" Selected="main" />
-<section id="event-tab-panel" role="tabpanel" aria-label="イベント" aria-labelledby="event-tab-main" tabindex="0">
-    <p class="event-breadcrumb"><a href="/workspace#core-events">イベント一覧</a><span aria-hidden="true"> / </span>@(View?.Title ?? "イベント")</p>
+<section id="event-tab-panel" role="tabpanel" aria-label="イベント" aria-labelledby="event-tab-main" tabindex="0" data-event-interactive="@InteractiveReady.ToString().ToLowerInvariant()">
+    <p class="event-breadcrumb"><a data-enhance-nav="false" href="/workspace#core-events">イベント一覧</a><span aria-hidden="true"> / </span>@(View?.Title ?? "イベント")</p>
+    <OperationFeedback Revision="EditorFeedbackRevision" Success="@EditorMessage" />
     <p role="alert">@Error</p>
+    <p id="event-editor-message" role="status">@EditorMessage</p>
     @if (View is not null)
     {
         <header class="event-overview-hero">
@@ -44,6 +46,21 @@
             <a href="@Link("qr")">自分の受付QR</a>
         </nav>
 
+        @if (View.Available.Contains("notifications"))
+        {
+            <section id="event-management" class="panel" aria-labelledby="event-management-heading">
+                <h2 id="event-management-heading">イベントの概要・管理者</h2>
+                @if (EditingOverview)
+                {
+                    <EventCoreEditor @key="EditorContextKey" TargetEventId="@EventId" Saved="EditorSaved" Cancelled="EditorCancelled" />
+                }
+                else
+                {
+                    <button id="event-edit" @onclick="BeginEdit">概要・管理者を編集</button>
+                }
+            </section>
+        }
+
         <section id="event-timetable-section" class="event-journey-section" aria-labelledby="event-timetable-heading">
             <Timetable EventId="@EventId"
                        Embedded="true"
@@ -64,7 +81,7 @@
                            TimetableDurationFormat="@TimetableDurationFormat" />
         </section>
 
-        <p class="event-back-link"><a href="/workspace#core-events">イベント一覧へ戻る</a></p>
+        <p class="event-back-link"><a data-enhance-nav="false" href="/workspace#core-events">イベント一覧へ戻る</a></p>
     }
 </section>
 
@@ -84,7 +101,23 @@
     bool HasBoundContext;
     long LoadGeneration;
     long ContextGeneration;
-    bool Disposed;
+    bool Disposed, EditingOverview, InteractiveReady;
+    protected override Task OnAfterRenderAsync(bool firstRender) { if (firstRender) { InteractiveReady = true; StateHasChanged(); } return Task.CompletedTask; }
+    string EditorMessage = "";
+    long EditorFeedbackRevision;
+    string EditorContextKey => $"{EventId}:{ContextGeneration}:{ContextIdentityKey}";
+    void BeginEdit() { EditingOverview = true; EditorMessage = ""; }
+    void EditorCancelled() { EditingOverview = false; EditorMessage = "下書きを取り消しました。"; }
+    async Task EditorSaved()
+    {
+        var eventId = EventId; var context = ContextGeneration; var identity = BoundIdentity;
+        var principal = (await Authentication.GetAuthenticationStateAsync()).User;
+        if (Disposed || identity != BindingFor(principal)) return;
+        EditingOverview = false;
+        await RefreshContextAsync(eventId, principal);
+        if (!Disposed && EventId == eventId && ContextGeneration == context && BoundIdentity == identity)
+        { EditorMessage = "保存しました。"; EditorFeedbackRevision++; }
+    }
 
     string Link(string suffix) => "/events/" + Uri.EscapeDataString(EventId) + "/" + suffix;
 
@@ -110,6 +143,7 @@
         if (contextChanged)
         {
             ContextGeneration++;
+            EditingOverview = false; EditorMessage = "";
             TimedRows = null;
             TimedRowsEventId = null;
             TimedRowsContextGeneration = -1;
@@ -133,6 +167,7 @@
             if (!Disposed && generation == LoadGeneration && eventId == EventId && BoundEventId == eventId && BoundIdentity == identity)
             {
                 ContextGeneration++;
+                EditingOverview = false; EditorMessage = "";
                 TimedRows = null;
                 TimedRowsEventId = null;
                 TimedRowsContextGeneration = -1;
