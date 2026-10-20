@@ -158,4 +158,5 @@ Check(!commentAttributes.Any(name => name.StartsWith("@", StringComparison.Ordin
 Check(commentAttributes.Contains("data-dialog-close"), "Comment dialog exposes its guarded close action to native cancel");
 Check(commentAttributes.Contains("onclick"), "Comment dialog close remains a real Blazor click handler");
 #pragma warning restore BL0006
-Console.WriteLine($"PASS {checks} matrix rendering checks (not interactive browser acceptance)");
+await EntrySummaryChecks.Run(renderer, Check);
+Console.WriteLine($"PASS {checks} matrix and entry summary rendering checks (not interactive browser acceptance)");

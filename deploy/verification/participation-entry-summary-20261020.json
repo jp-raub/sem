@@ -1,0 +1,44 @@
+{
+  "schema": 1,
+  "baseline_commit": "3f80726908513a4962f7e9c7da09dd76ae6dd165",
+  "scope": "Read-only YOUR ENTRY summary using existing ParticipationPlan; deterministic CoreChecks test clock",
+  "local_tests": {
+    "dotnet_suites": 79,
+    "dotnet_suites_passed": 79,
+    "matrix_rendering_checks": 66,
+    "synthetic_ui_scripts": 16,
+    "synthetic_ui_scripts_passed": 16,
+    "native_browser_checks": 302,
+    "native_client_errors": 0,
+    "whole_data_directory_restores": 2,
+    "common_browser_checks": {
+      "field_help": 28,
+      "operation_feedback": 27,
+      "navigation_lifecycle": 16
+    },
+    "responsive_summary_cases": 16
+  },
+  "verification_notes": [
+    "Final native run starts with a new disposable database. Earlier failed runs are not counted as successful.",
+    "Existing CoreChecks fixture now uses a fixed test clock; product clock and denial assertions are unchanged.",
+    "After the serial .NET run only the browser helper was changed to restore its shared event for later profile/retention checks. .NET and product files remained unchanged.",
+    "Local native wrapper uses --no-restore after verified restore/build; network namespace and dropped capabilities retained. Committed CI fixture is unchanged."
+  ],
+  "source_files_checked": 1003,
+  "source_manifest_sha256": "363622ebeda929157a65934517e5d75b86720f4f62b976b77de896ffba3c8d23",
+  "source_changes_during_final_native_verification": 0,
+  "candidate_source_hashes": {
+    "scripts/event-matrix-checks.cjs": "3c3cc95b437769742650769030937816ff9f92699fe44bacbc43061462eb6927",
+    "scripts/integration-checks.sh": "91210ec908cc17bb72317e030c52fb4e6abca8c667442201a83353d3b0739b40",
+    "scripts/participation-layout-checks.cjs": "031e790abf4aadce108ac2aab3d0e2cd91b76343e20843b36ee18c7c3ec03b43",
+    "src/Sem.Web/Components/Pages/Participation.razor": "be738aaa472d4896740a2898824fefb267a1cd6fe1071293911bee8199c557b0",
+    "tests/Sem.CoreChecks/Program.cs": "dc21102d42915a5e2b189b9e0c2abe1fc36a29bb1b15e99c73c3a2cee195d836",
+    "tests/Sem.EventMatrixChecks/Program.cs": "466101e8f91c0b0feef44c8b30b7f132c28744f7fcafe49c0e06948724ac0767",
+    "scripts/entry-summary-checks.cjs": "d4839ee9dc536ef8f180ae031065efc1642e3677e27ff69574c7954671838f81",
+    "src/Sem.Web/Components/Shared/ParticipationEntrySummary.razor": "661906ae5a3a53113fce5a4878cc12d3fc4d33dae9b40ccb02a3fa05a3cc2d32",
+    "src/Sem.Web/Components/Shared/ParticipationEntrySummary.razor.css": "fb9655f820129274be3e0c6a5f42e9a75a45f90ce820b71c527c498c9e7d8736",
+    "tests/Sem.EventMatrixChecks/EntrySummaryChecks.cs": "5b6d3646ea2f80d72322bddd7e1524e308673446ed0f73fc9d5104396e52b9e2",
+    "deploy/PARTICIPATION-ENTRY-SUMMARY.ja.md": "3f1209c38f8613bce615f4fd1cf71189e97a8226c6c0fcbc295a1923a147edee"
+  },
+  "excluded": "No database, mail, cookie, private key, credential, proof or raw application logs. Physical devices and DXP acceptance are separate."
+}

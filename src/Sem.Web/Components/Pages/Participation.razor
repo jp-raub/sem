@@ -77,6 +77,10 @@ else
    {
     <p class="participation-entry-eyebrow">YOUR ENTRY</p>
     <h3>参加パートを登録</h3>
+   }
+   <Sem.Web.Components.Shared.ParticipationEntrySummary Plan="@Plan" IsSelf="@(Plan.OwnUserId==CurrentId)" />
+   @if(Embedded)
+   {
     <div class="participation-selection-list" aria-live="polite">
      @if(Selected.Count == 0)
      {

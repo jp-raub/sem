@@ -56,6 +56,7 @@ node --check scripts/comment-checks.cjs
 bash -n scripts/acceptance-browser-fixture.sh
 node --check scripts/event-matrix-checks.cjs
 node --check scripts/participation-layout-checks.cjs
+node --check scripts/entry-summary-checks.cjs
 node scripts/participation-refresh-checks.mjs
 node --check src/Sem.Web/wwwroot/join.js
 node --check scripts/application-join-ui-checks.mjs
