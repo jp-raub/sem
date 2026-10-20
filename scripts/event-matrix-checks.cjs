@@ -149,6 +149,8 @@ module.exports = async ({ p, g, ok }) => {
         await memberPage.locator(`[data-event-matrix-slot="${memberVoiceSlot.id}"]`).waitFor();
         ok(await memberPage.locator('.participation-entry-eyebrow').innerText() === 'YOUR ENTRY',
             'Integrated event displays the matrix and YOUR ENTRY panel');
+        ok((await memberPage.locator('.entry-summary-number').innerText()).replace(/\s+/g, ' ').trim() === '0 / 1 曲',
+            'New participant summary starts with zero persisted songs');
         const scrolls = await memberPage.locator('.event-part-matrix-scroll').evaluate(element => ({
             client: element.clientWidth,
             scroll: element.scrollWidth,
@@ -178,6 +180,8 @@ module.exports = async ({ p, g, ok }) => {
         await memberPage.locator(`[data-participation-answer="${question.id}"]`).selectOption('YES');
         ok(await memberPage.locator('.participation-selection-chip').count() === 1,
             'Selecting a matrix cell updates the existing YOUR ENTRY selection chip');
+        ok((await memberPage.locator('.entry-summary-number').innerText()).replace(/\s+/g, ' ').trim() === '0 / 1 曲',
+            'Unsent finite selection does not increase persisted summary count');
         await require('./participation-layout-checks.cjs')({ page: memberPage, ok, answerId: question.id });
 
         const refreshedName = 'Native matrix callback after';
@@ -431,6 +435,9 @@ module.exports = async ({ p, g, ok }) => {
             && await memberPage.locator('.event-matrix-transition').innerText().then(text => text.includes(progress.name))
             && await memberPage.locator('[data-event-matrix-slot]').count() === 0,
         'Progress row renders with the three base columns when no participation-part columns exist');
+        ok((await memberPage.locator('.entry-summary').innerText()).includes('閲覧期間・パート登録受付外')
+            && await memberPage.locator('.entry-summary [role="meter"]').count() === 0,
+            'View-only zero-slot summary is closed and has no invalid 0/0 meter');
         const progressDuplicateIds = await duplicates(memberPage);
         ok(progressDuplicateIds.length === 0,
             'Progress-only event has no duplicate DOM ids: ' + progressDuplicateIds.join(', '));
@@ -454,6 +461,9 @@ module.exports = async ({ p, g, ok }) => {
         const emptyDuplicateIds = await duplicates(memberPage);
         ok(emptyDuplicateIds.length === 0,
             'Zero-row event has no duplicate DOM ids: ' + emptyDuplicateIds.join(', '));
+        await require('./entry-summary-checks.cjs')({
+            p, g, memberPage, adminPage, ok, api, requireOk, integrated, question, songs, guitar,
+        });
         ok(errors.length === 0, 'Matrix and legacy route browser flows have no client runtime errors');
     } finally {
         await memberPage.close();

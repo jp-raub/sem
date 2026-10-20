@@ -13,7 +13,8 @@ var path = Path.Combine(root, "core.db"); var services = new ServiceCollection()
 services.AddLogging();
 services.AddDbContextFactory<ApplicationDbContext>(o => o.UseSqlite("Data Source=" + path), ServiceLifetime.Scoped);
 services.AddIdentityCore<ApplicationUser>(o => o.Stores.SchemaVersion = IdentitySchemaVersions.Version3).AddEntityFrameworkStores<ApplicationDbContext>();
-services.AddSingleton(TimeProvider.System); Microsoft.Extensions.DependencyInjection.DataProtectionServiceCollectionExtensions.AddDataProtection(services);services.AddSingleton<BusinessNotificationStore>();services.AddScoped<CoreFoundationService>();
+var clock = new FixedTimeProvider();
+services.AddSingleton<TimeProvider>(clock); Microsoft.Extensions.DependencyInjection.DataProtectionServiceCollectionExtensions.AddDataProtection(services);services.AddSingleton<BusinessNotificationStore>();services.AddScoped<CoreFoundationService>();
 using var provider = services.BuildServiceProvider(); using var scope = provider.CreateScope();
 var factory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
 var core = scope.ServiceProvider.GetRequiredService<CoreFoundationService>(); var passed = 0;
@@ -35,7 +36,7 @@ try
             new ApplicationUser { Id = "unconfirmed", DisplayName = "Unconfirmed", UserName = "unconfirmed@test.example", Email = "unconfirmed@test.example", SecurityStamp = "unconfirmed-stamp", Enabled = true, EmailConfirmed = false },
             new ApplicationUser { Id = "recovering", DisplayName = "Recovering", UserName = "recovering@test.example", Email = "recovering@test.example", SecurityStamp = "recovering-stamp", Enabled = true, EmailConfirmed = true });
         await db.SaveChangesAsync();
-        var recoveryNow = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var recoveryNow = clock.GetUtcNow().ToUnixTimeSeconds();
         db.PasskeyRecoveryOperations.Add(new PasskeyRecoveryOperation
         {
             UserId = "recovering", AdminId = "admin", ActorId = "admin", ActorType = "Administrator",
@@ -395,3 +396,10 @@ try
     Console.WriteLine("Core foundation checks passed: " + passed);
 }
 finally { SqliteConnection.ClearAllPools(); Directory.Delete(root, true); }
+
+// Keep the automatic event phase before the fixture's 2026-10-20 event,
+// independently of the wall clock. Recovery deadlines use this same clock.
+sealed class FixedTimeProvider : TimeProvider
+{
+    public override DateTimeOffset GetUtcNow() => new(2026, 10, 19, 0, 0, 0, TimeSpan.Zero);
+}

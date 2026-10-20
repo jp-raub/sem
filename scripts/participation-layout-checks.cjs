@@ -43,6 +43,20 @@ module.exports = async ({ page, ok, answerId }) => {
                 ok(JSON.stringify(await selected()) === JSON.stringify(selectedBefore)
                     && await answer.inputValue() === valueBefore,
                 `Viewport and display-mode changes preserve selected slots and unsent answer at ${width}px ${mode}`);
+                const summaryState = await page.locator('.entry-summary').evaluate(element => {
+                    const rect = element.getBoundingClientRect();
+                    const meter = element.querySelector('[role="meter"]');
+                    return {
+                        fits: rect.left >= 0 && rect.right <= innerWidth + 1 && element.scrollWidth <= element.clientWidth + 1,
+                        noControls: element.querySelectorAll('button,input,select,textarea,[tabindex]').length === 0,
+                        now: meter?.getAttribute('aria-valuenow'),
+                        max: meter?.getAttribute('aria-valuemax'),
+                        number: element.querySelector('.entry-summary-number').textContent.replace(/\s+/g, ' ').trim(),
+                    };
+                });
+                ok(summaryState.fits && summaryState.noControls && summaryState.now === '0'
+                    && summaryState.max === '1' && summaryState.number === '0 / 1 曲',
+                `Summary fits without focus stops and excludes unsent selection at ${width}px ${mode}`);
                 if (process.env.SEM_E2E_RESULTS && [390, 1200, 1501].includes(width) && mode === 'light') {
                     const fs = require('node:fs');
                     const path = require('node:path');
