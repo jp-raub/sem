@@ -53,7 +53,11 @@ public sealed partial class CoreFoundationService {
    var eligible=edit.Slots.Select(c=>(Choice:c,Part:parts.SingleOrDefault(p=>p.Id==c.Id))).Where(x=>x.Part is not null&&x.Part.AssignedUserId==null&&x.Part.RowVersion==x.Choice.RowVersion&&activeSongs.Contains(x.Part.SongId)&&definitions.ContainsKey(x.Part.PartDefinitionId)).Select(x=>x.Part!).ToArray();
    foreach(var group in eligible.GroupBy(x=>x.SongId)){var categories=parts.Where(x=>x.SongId==group.Key&&x.AssignedUserId==subject).Concat(group).Select(x=>definitions.GetValueOrDefault(x.PartDefinitionId,"invalid")).ToArray();if(categories.Length>1&&(categories.Length!=2||categories.Count(x=>x=="Sing")!=1||categories.Count(x=>x=="Play")!=1)&&!edit.CompatibilityException)throw new ValidationException("兼務は1枠、または声1＋楽器1です。管理者例外には指定と理由が必要です。");}
    var counted=parts.Where(x=>x.AssignedUserId==subject&&x.PhaseId==phase.Id).Select(x=>x.SongId).ToHashSet();
-   foreach(var choice in edit.Slots){var p=parts.SingleOrDefault(x=>x.Id==choice.Id);var code=p is null||!activeSongs.Contains(p.SongId)||!definitions.ContainsKey(p.PartDefinitionId)?"Unavailable":p.AssignedUserId!=null?"Occupied":p.RowVersion!=choice.RowVersion?"StaleSlot":!counted.Contains(p.SongId)&&phase.MaxPicks>=0&&counted.Count>=phase.MaxPicks?"PhaseLimit":"Registered";if(code=="Registered"){p!.AssignedUserId=subject;p.PhaseId=phase.Id;p.RowVersion++;counted.Add(p.SongId);}results.Add(new(choice.Id,code=="Registered",code));}
+   // Validate the entire eligible batch before mutating any slot or persisting
+   // answers/comments. Existing parts on the same song count only once.
+   if(phase.MaxPicks>=0&&counted.Union(eligible.Select(x=>x.SongId)).Count()>phase.MaxPicks)
+    throw new ValidationException("このフェーズの曲数上限を超えるため、今回の参加パートは登録していません。選択を減らして再度登録してください。");
+   foreach(var choice in edit.Slots){var p=parts.SingleOrDefault(x=>x.Id==choice.Id);var code=p is null||!activeSongs.Contains(p.SongId)||!definitions.ContainsKey(p.PartDefinitionId)?"Unavailable":p.AssignedUserId!=null?"Occupied":p.RowVersion!=choice.RowVersion?"StaleSlot":"Registered";if(code=="Registered"){p!.AssignedUserId=subject;p.PhaseId=phase.Id;p.RowVersion++;counted.Add(p.SongId);}results.Add(new(choice.Id,code=="Registered",code));}
    successfulParticipationWrite=results.Any(x=>x.Success);
    if(results.Any(x=>x.Success)&&spectator is not null)db.EventSpectators.Remove(spectator);
   }else if(edit.Kind=="Spectate"){

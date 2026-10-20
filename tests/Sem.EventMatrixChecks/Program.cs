@@ -159,4 +159,5 @@ Check(commentAttributes.Contains("data-dialog-close"), "Comment dialog exposes i
 Check(commentAttributes.Contains("onclick"), "Comment dialog close remains a real Blazor click handler");
 #pragma warning restore BL0006
 await EntrySummaryChecks.Run(renderer, Check);
+await ReleaseDraftChecks.Run(Check);
 Console.WriteLine($"PASS {checks} matrix and entry summary rendering checks (not interactive browser acceptance)");
