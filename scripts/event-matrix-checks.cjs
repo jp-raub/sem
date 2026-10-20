@@ -464,6 +464,9 @@ module.exports = async ({ p, g, ok }) => {
         await require('./entry-summary-checks.cjs')({
             p, g, memberPage, adminPage, ok, api, requireOk, integrated, question, songs, guitar,
         });
+        await require('./participation-condition-checks.cjs')({
+            p, g, memberPage, adminPage, ok, api, requireOk, event,
+        });
         ok(errors.length === 0, 'Matrix and legacy route browser flows have no client runtime errors');
     } finally {
         await memberPage.close();
