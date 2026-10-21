@@ -1,0 +1,102 @@
+@page "/settings/account"
+@rendermode InteractiveServer
+@implements IAsyncDisposable
+@using Microsoft.JSInterop
+@inject IJSRuntime JS
+
+<PageTitle>アカウント管理</PageTitle>
+<h1>アカウント管理</h1>
+<p>ログインに使うパスキーとメールアドレスを管理します。表示名・画像・SNSは<a href="/profile/settings#profile-edit-heading">プロフィール管理</a>で変更できます。</p>
+<p><a href="/workspace">イベント一覧へ戻る</a></p>
+<div id="account-settings">
+    <nav data-enhance-nav="false" class="profile-settings-sections" aria-label="アカウントの設定"><a href="/settings/account#account-passkeys">パスキー</a><a href="/settings/account#profile-email-change">メール変更</a></nav>
+    <section class="panel" id="account-passkeys" aria-labelledby="account-passkeys-heading">
+        <h2 id="account-passkeys-heading">パスキーの管理</h2>
+        <p>複数の端末を登録しておくと、端末を紛失した場合に別のパスキーを使えます。認証用メールアドレスは読み取り専用です。</p>
+        <p class="account-passkeys-email">認証用メールアドレス：<strong id="account-passkeys-email">確認中です。</strong></p>
+        <p id="account-passkeys-status" role="status" aria-live="polite">パスキーを読み込んでいます。</p>
+        <p id="account-passkeys-error" role="alert"></p>
+        <div id="account-passkeys-list" aria-live="polite"></div>
+        <div class="account-passkeys-controls">
+            <button type="button" id="account-passkeys-add" disabled>パスキーを追加</button>
+            <button type="button" id="account-passkeys-refresh">一覧を再取得</button>
+        </div>
+        <div id="account-passkeys-add-flow" class="account-passkeys-add-flow" hidden>
+            <h3>パスキー追加の本人確認</h3>
+            <p id="account-passkeys-add-status" role="status" aria-live="polite"></p>
+            <div id="account-passkeys-email-code-panel">
+                <label for="account-passkeys-email-code">保存済みメールに届いた64桁の確認コード<FieldHelp HelpKey="account.emailCode" Label="確認コード" /></label>
+                <input id="account-passkeys-email-code" type="text" inputmode="latin" maxlength="64"
+                       autocomplete="off" autocapitalize="off" spellcheck="false" disabled />
+                <button type="button" id="account-passkeys-add-confirm" disabled>確認コードを確認</button>
+            </div>
+            <div class="account-passkeys-controls">
+                <button type="button" id="account-passkeys-add-resend" hidden>確認コードを再送</button>
+                <button type="button" id="account-passkeys-add-create" hidden>新しいパスキーを登録</button>
+                <button type="button" id="account-passkeys-add-cancel" hidden>追加を取り消す</button>
+            </div>
+        </div>
+        <p class="account-passkeys-note">最後の有効なパスキーは削除できません。削除には対象パスキーによる再認証と、明示的な確認が必要です。</p>
+    </section>
+    <section class="panel" id="profile-email-change" aria-labelledby="profile-email-change-heading">
+        <h2 id="profile-email-change-heading">メールアドレスの変更</h2>
+        <p>新しいメールアドレスを入力し、パスキーで再認証した後、届いた確認リンクを開いて変更を確定してください。確認リンクを開いてもログイン状態は発行されません。</p>
+        <p id="profile-email-change-status" role="status" aria-live="polite">変更状況を確認しています。</p>
+        <p id="profile-email-change-error" role="alert"></p>
+        <form id="profile-email-change-form" method="post" action="/settings/account">
+            <label for="profile-email-change-address">新しいメールアドレス<FieldHelp HelpKey="account.newEmail" Label="新しいメールアドレス" /></label>
+            <input id="profile-email-change-address" name="newEmail" type="email" maxlength="254" autocomplete="email" required disabled />
+            <button id="profile-email-change-begin" type="submit" disabled>変更を開始して再認証</button>
+        </form>
+        <div id="profile-email-change-pending" hidden>
+            <p id="profile-email-change-pending-status"></p>
+            <button id="profile-email-change-resend" type="button">再認証して確認メールを送信</button>
+            <button id="profile-email-change-cancel" type="button">変更を取り消す</button>
+        </div>
+        <button id="profile-email-change-refresh" type="button">状況を再取得</button>
+    </section>
+</div>
+
+@code {
+    private IJSObjectReference? _emailChangeModule;
+    private IJSObjectReference? _accountPasskeysModule;
+    private bool _disposed;
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try
+        {
+            var module = await JS.InvokeAsync<IJSObjectReference>("import", "/profile-email-change.js");
+            if (_disposed) { await module.DisposeAsync(); return; }
+            _emailChangeModule = module;
+            await module.InvokeVoidAsync("init");
+        }
+        catch
+        {
+            // Email-change controls stay inert unless their own authentication check succeeds.
+        }
+        if (_disposed) return;
+        try
+        {
+            var module = await JS.InvokeAsync<IJSObjectReference>("import", "/account-passkeys.js");
+            if (_disposed) { await module.DisposeAsync(); return; }
+            _accountPasskeysModule = module;
+            await module.InvokeVoidAsync("init");
+        }
+        catch
+        {
+            // Passkey initialization is independent of the email-change module.
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _disposed = true;
+        foreach (var module in new[] { _emailChangeModule, _accountPasskeysModule })
+        {
+            if (module is null) continue;
+            try { await module.InvokeVoidAsync("cleanup"); await module.DisposeAsync(); }
+            catch (JSDisconnectedException) { }
+        }
+    }
+}

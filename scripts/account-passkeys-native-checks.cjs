@@ -13,7 +13,7 @@ module.exports = async function ({ p, g, ok, cdp, adminAuth }) {
     };
     const entryUrl = p.url();
     const origin = new URL(p.url()).origin;
-    const settingsUrl = new URL('/profile/settings', origin).href;
+    const settingsUrl = new URL('/settings/account', origin).href;
     const confirmationSubject = 'SEM パスキー追加のメール確認';
     const fixtureEmail = 'admin@example.test';
     const waitMs = 250;
@@ -106,7 +106,7 @@ module.exports = async function ({ p, g, ok, cdp, adminAuth }) {
         // already owns `adminAuth`.
         inspectionPage = await p.context().newPage();
         await inspectionPage.goto(settingsUrl, { waitUntil: 'domcontentloaded' });
-        await inspectionPage.locator('#profile-settings').waitFor({ state: 'visible', timeout: 20_000 });
+        await inspectionPage.locator('#account-settings').waitFor({ state: 'visible', timeout: 20_000 });
         await inspectionPage.waitForFunction(() =>
             document.querySelector('#account-passkeys-email')?.textContent.trim() !== '確認中です.' &&
             document.querySelector('#account-passkeys-list .account-passkey-item'));
@@ -164,7 +164,7 @@ module.exports = async function ({ p, g, ok, cdp, adminAuth }) {
             'The existing page-scoped virtual authenticator matches the fixture passkey count.');
 
         await p.goto(settingsUrl, { waitUntil: 'domcontentloaded' });
-        await p.locator('#profile-settings').waitFor({ state: 'visible', timeout: 20_000 });
+        await p.locator('#account-settings').waitFor({ state: 'visible', timeout: 20_000 });
         await waitForAccount(p, state => state.status === 200 &&
             state.passkeys.length === initial.passkeys.length && !state.pendingAddition,
         'Authenticated account settings did not become ready.');

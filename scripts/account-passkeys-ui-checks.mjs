@@ -7,6 +7,8 @@ import { createHash } from 'node:crypto';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const profile = readFileSync(join(root, 'src/Sem.Web/Components/Pages/ProfileSettings.razor'), 'utf8');
+const account = readFileSync(join(root, 'src/Sem.Web/Components/Pages/AccountSettings.razor'), 'utf8');
+const accountCss = readFileSync(join(root, 'src/Sem.Web/Components/Pages/AccountSettings.razor.css'), 'utf8');
 const ui = readFileSync(join(root, 'src/Sem.Web/wwwroot/account-passkeys.js'), 'utf8');
 const workspaceUi = readFileSync(join(root, 'src/Sem.Web/wwwroot/sem.js'), 'utf8');
 const api = readFileSync(join(root, 'src/Sem.Web/Runtime/AccountPasskeyEndpoints.cs'), 'utf8');
@@ -22,10 +24,16 @@ const requireText = (text, pattern, label) => assert.match(text, pattern, label)
 
 requireText(mock, /アカウント一覧へ権限/, 'approved account mock remains the source reference');
 requireText(mock, /認証メールは読み取り専用/, 'mock keeps the auth email read-only');
-requireText(profile, /id="account-passkeys"[\s\S]*?アカウント管理：パスキー/, 'passkey management is integrated into profile settings');
+requireText(accountCss, /account-passkey-item[\s\S]*?max-width: 640px/, 'scoped passkey styles move with the account page');
+assert.doesNotMatch(profile + account, /href="#/, 'section links include their page path because the application base is root');
+requireText(account, /@page "\/settings\/account"/, 'account management has its own route');
+requireText(account, /id="account-passkeys"[\s\S]*?パスキーの管理/, 'passkey management remains on the real account page');
+assert.doesNotMatch(profile, /id="account-passkeys"|id="profile-email-change"/, 'profile page does not mount account controls');
+assert.doesNotMatch(account, /id="profile-editor-form"|profile-editor\.js/, 'account page does not mount the profile editor');
+requireText(profile, /profile-settings-navigation\.js/, 'known legacy anchors keep a compatibility path');
 for (const id of ['account-passkeys-email', 'account-passkeys-list', 'account-passkeys-add',
     'account-passkeys-add-flow', 'account-passkeys-email-code', 'account-passkeys-refresh'])
-    requireText(profile, new RegExp(`id="${id}"`), `profile UI includes ${id}`);
+    requireText(account, new RegExp(`id="${id}"`), `account UI includes ${id}`);
 for (const action of ['list', 'rename', 'delete-options', 'delete-verify', 'delete-confirm', 'delete-cancel',
     'add-begin', 'add-reauth', 'add-resend', 'add-confirm', 'add-create-options', 'add-complete', 'add-cancel'])
     requireText(ui, new RegExp(`request\\('${action}'`), `UI routes ${action} through the dedicated API`);
