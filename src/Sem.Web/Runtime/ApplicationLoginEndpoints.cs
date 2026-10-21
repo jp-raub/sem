@@ -51,6 +51,19 @@ public static class ApplicationLoginEndpoints
             return;
         }
 
+        // Never log header values, email, credentials, cookies or exception messages.
+        var logger = context.RequestServices.GetRequiredService<ILoggerFactory>()
+            .CreateLogger("Sem.LoginBoundary");
+        var diagnosticId = Guid.NewGuid().ToString("N");
+        context.Response.Headers["X-SEM-Login-Diagnostic"] = diagnosticId;
+        var stageAction = isOptions ? "login-options" : "login";
+        void Diagnose(string stage, string reason)
+        {
+            logger.LogInformation(new EventId(4301, "LoginBoundary"),
+                "SEM_LOGIN_BOUNDARY action={Action} stage={Stage} reason={Reason} diagnostic={DiagnosticId}",
+                stageAction, stage, reason, diagnosticId);
+        }
+
         var bodyLimit = isOptions ? OptionsBodyLimit : LoginBodyLimit;
         if (context.Request.ContentLength is long contentLength && contentLength > bodyLimit)
         {
@@ -77,6 +90,9 @@ public static class ApplicationLoginEndpoints
         if (!string.Equals(context.Request.Headers.Origin.ToString(),
                 expectedOrigin, StringComparison.Ordinal))
         {
+            var origins = context.Request.Headers.Origin;
+            Diagnose("origin-rejected", origins.Count == 0 ? "missing" : origins.Count != 1 ? "multiple" :
+                origins[0] == "null" ? "opaque" : "mismatch");
             await WriteError(context, StatusCodes.Status403Forbidden,
                 "この送信元からの操作は許可されていません。");
             return;
@@ -84,6 +100,7 @@ public static class ApplicationLoginEndpoints
         if (!context.Request.Headers.TryGetValue("X-CSRF-TOKEN", out var csrfValues) ||
             csrfValues.Count != 1 || string.IsNullOrWhiteSpace(csrfValues[0]))
         {
+            Diagnose("csrf-rejected", "header-missing-or-invalid");
             await WriteError(context, StatusCodes.Status400BadRequest,
                 "ページを再読み込みしてください。");
             return;
@@ -94,7 +111,13 @@ public static class ApplicationLoginEndpoints
         if (sizeFeature is { IsReadOnly: false })
             sizeFeature.MaxRequestBodySize = bodyLimit;
 
-        await antiforgery.ValidateRequestAsync(context);
+        try { await antiforgery.ValidateRequestAsync(context); }
+        catch (AntiforgeryValidationException)
+        {
+            Diagnose("csrf-rejected", "validation-failed");
+            throw;
+        }
+        Diagnose("request-boundary-passed", "origin-and-csrf-valid");
         byte[] bytes;
         try
         {
@@ -140,12 +163,16 @@ public static class ApplicationLoginEndpoints
             var options = await signin.MakePasskeyRequestOptionsAsync(owner);
             context.Response.ContentType = "application/json";
             await context.Response.WriteAsync(options, context.RequestAborted);
+            Diagnose("options-issued", "completed");
             return;
         }
 
         var result = await signin.PasskeySignInAsync(value);
         if (!result.Succeeded)
+        {
+            Diagnose("credential-rejected", "identity-refused");
             throw new ValidationException("パスキーでログインできませんでした。");
+        }
         var authenticated = await users.GetUserAsync(context.User);
         if (authenticated is not { Enabled: true, EmailConfirmed: true })
         {
@@ -156,6 +183,7 @@ public static class ApplicationLoginEndpoints
             [new Claim(PasskeyAdditionService.SessionClaim, SemEndpoints.Secret())]);
         await context.Response.WriteAsJsonAsync(
             new { message = "ログインしました。" }, context.RequestAborted);
+        Diagnose("session-issued", "completed");
     }
 
     static bool HasJsonContentType(string? value)

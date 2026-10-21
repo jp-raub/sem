@@ -19,6 +19,8 @@ var dbPath = Path.Combine(root, "synthetic.db");
 var builder = WebApplication.CreateBuilder();
 builder.WebHost.UseUrls("http://127.0.0.1:0");
 builder.Logging.ClearProviders();
+var diagnosticLogs = new DiagnosticLogProvider();
+builder.Logging.AddProvider(diagnosticLogs);
 builder.Services.AddDbContext<ApplicationDbContext>(o => o.UseSqlite("Data Source=" + dbPath));
 builder.Services.AddIdentityCore<ApplicationUser>(o =>
     {
@@ -103,17 +105,17 @@ try
 
     async Task<HttpResponseMessage> Post(
         string path, HttpContent content, bool includeCsrf = true,
-        bool includeCookie = true, string origin = Origin, string? csrfToken = null)
+        bool includeCookie = true, string? origin = Origin, string? csrfToken = null)
     {
         var request = new HttpRequestMessage(HttpMethod.Post, path) { Content = content };
-        request.Headers.Add("Origin", origin);
+        if (origin is not null) request.Headers.Add("Origin", origin);
         if (includeCookie) request.Headers.Add("Cookie", cookie);
         if (includeCsrf) request.Headers.Add("X-CSRF-TOKEN", csrfToken ?? csrf.Token);
         return await client.SendAsync(request);
     }
 
     async Task AssertRejected(string action, HttpContent content, HttpStatusCode expected,
-        string name, bool includeCsrf = true, bool includeCookie = true, string origin = Origin)
+        string name, bool includeCsrf = true, bool includeCookie = true, string? origin = Origin)
     {
         using var response = await Post("/api/" + action, content, includeCsrf,
             includeCookie, origin);
@@ -175,6 +177,21 @@ try
         HttpStatusCode.Forbidden, "foreign Origin is rejected", includeCookie: false,
         origin: "https://attacker.invalid");
 
+    foreach (var origin in new string?[] { null, "null" })
+        await AssertRejected("login-options",
+            new StringContent("{\"email\":\"private-origin-test@example.test\"}", Encoding.UTF8, "application/json"),
+            HttpStatusCode.Forbidden, "missing and opaque Origin remain rejected", includeCookie: false, origin: origin);
+    var diagnostics = diagnosticLogs.Lines.ToArray();
+    Check(diagnostics.Any(x => x.Contains("stage=origin-rejected reason=missing")) &&
+        diagnostics.Any(x => x.Contains("stage=origin-rejected reason=opaque")) &&
+        diagnostics.Any(x => x.Contains("stage=origin-rejected reason=mismatch")),
+        "safe Docker diagnostics distinguish missing, opaque and mismatched Origin");
+    Check(diagnostics.All(x => !x.Contains("@") && !x.Contains(Origin) &&
+        !x.Contains("attacker.invalid") && !x.Contains(csrf.Token) && !x.Contains(cookie)),
+        "diagnostics exclude email, Origin values, CSRF tokens and cookies");
+    Check(diagnostics.All(x => System.Text.RegularExpressions.Regex.IsMatch(x, "diagnostic=[a-f0-9]{32}$")),
+        "diagnostics use a server-generated bounded correlation identifier");
+
     await AssertRejected("login-options?email=a@example.test",
         new StringContent("{\"email\":\"a@example.test\"}", Encoding.UTF8, "application/json"),
         HttpStatusCode.BadRequest, "query string is rejected", includeCookie: false);
@@ -222,4 +239,20 @@ finally
     await app.DisposeAsync();
     SqliteConnection.ClearAllPools();
     if (Directory.Exists(root)) Directory.Delete(root, true);
+}
+sealed class DiagnosticLogProvider : ILoggerProvider
+{
+    public System.Collections.Concurrent.ConcurrentQueue<string> Lines { get; } = new();
+    public ILogger CreateLogger(string categoryName) => new DiagnosticLogger(categoryName, Lines);
+    public void Dispose() { }
+    sealed class DiagnosticLogger(string category, System.Collections.Concurrent.ConcurrentQueue<string> lines) : ILogger
+    {
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(LogLevel level) => category == "Sem.LoginBoundary";
+        public void Log<TState>(LogLevel level, EventId eventId, TState state, Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            if (IsEnabled(level)) lines.Enqueue(formatter(state, null));
+        }
+    }
 }
