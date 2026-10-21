@@ -8,6 +8,9 @@ cleanup(){ for name in host smtp; do if [[ -f "$run/$name.pid" ]]; then kill "$(
 trap cleanup EXIT
 umask 077
 cd "$root"
+mkdir -p verification/acceptance-native
+printf 'phase\tseconds\n' > verification/acceptance-native/fixture-phases.tsv
+fixture_started=$SECONDS
 for port in 18080 18443 18025 2525; do
  python3 - "$port" <<'PY'
 import socket,sys
@@ -15,6 +18,8 @@ s=socket.socket(); s.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1); s.bind
 PY
 done
 dotnet publish src/Sem.Web/Sem.Web.csproj -c Release -o "$run/app" > "$run/publish.log"
+printf 'publish\t%s\n' "$((SECONDS-fixture_started))" >> verification/acceptance-native/fixture-phases.tsv
+fixture_started=$SECONDS
 openssl req -x509 -newkey rsa:2048 -nodes -keyout "$run/key.pem" -out "$run/cert.pem" -days 1 -subj /CN=localhost > /dev/null 2>&1
 cat > "$run/start.sh" <<'START'
 #!/usr/bin/env bash
@@ -51,6 +56,7 @@ bash "$run/start.sh" > "$run/host.log" 2>&1 & echo $! > "$run/host.pid"
 ready=false
 for i in $(seq 1 60); do if curl -fsS http://127.0.0.1:18080/health/ready >/dev/null 2>&1; then ready=true; break; fi; sleep 1; done
 [[ "$ready" == true ]]
+printf 'fixture-startup\t%s\n' "$((SECONDS-fixture_started))" >> verification/acceptance-native/fixture-phases.tsv
 export SEM_E2E_KEY="$run/key.pem" SEM_E2E_CERT="$run/cert.pem"
 export SEM_STORAGE_UPGRADE_COMMAND="$run/restore.sh"
 export SEM_PACED_API_CHECKS=1
@@ -63,4 +69,8 @@ case "${SEM_ACCEPTANCE_FOCUS:-full}" in
  *) echo 'Unknown acceptance focus; full verification was not run.' >&2; exit 1 ;;
 esac
 export SEM_E2E_RESULTS="$root/verification/acceptance-native"
-node scripts/e2e.cjs
+browser_started=$SECONDS
+status=0
+node scripts/e2e.cjs || status=$?
+printf 'browser-total\t%s\n' "$((SECONDS-browser_started))" >> verification/acceptance-native/fixture-phases.tsv
+exit "$status"
