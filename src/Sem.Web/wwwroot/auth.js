@@ -164,7 +164,9 @@
         const headers = new Headers();
         const init = {
             method,
-            mode: 'same-origin',
+            // Keep the browser-generated Origin with no-referrer, including WebKit.
+            // Destination is still an allowlisted same-origin path and redirects are rejected.
+            mode: 'cors',
             credentials: 'same-origin',
             cache: 'no-store',
             redirect: 'error',

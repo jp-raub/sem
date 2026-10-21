@@ -214,7 +214,9 @@ const happy = await finishLogin();
 assert.deepEqual(happy.calls.map(call => call.url), ['/api/csrf', '/api/login-options', '/api/login']);
 assert.deepEqual(happy.calls.map(call => call.init.method), ['GET', 'POST', 'POST']);
 for (const call of happy.calls) {
-    assert.equal(call.init.mode, 'same-origin');
+    assert.equal(call.init.mode, 'cors', 'preserve browser Origin under the application no-referrer policy');
+    assert.match(call.url, /^\/api\/(csrf|login-options|login|status)$/);
+    assert.equal(call.init.headers.has('Origin'), false, 'Origin must be browser-generated, never spoofed');
     assert.equal(call.init.credentials, 'same-origin');
     assert.equal(call.init.cache, 'no-store');
     assert.equal(call.init.redirect, 'error');
