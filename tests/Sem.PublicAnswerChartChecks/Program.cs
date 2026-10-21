@@ -42,4 +42,13 @@ Check(html.Contains("回答者はいません。"), "An empty respondent group h
 var firstId = Regex.Match(await Render(question), "aria-controls=\"([^\"]+)\"").Groups[1].Value;
 var nextId = Regex.Match(await Render(question), "aria-controls=\"([^\"]+)\"").Groups[1].Value;
 Check(firstId != nextId, "Multiple chart instances cannot duplicate IDs");
-Console.WriteLine($"Public answer chart checks passed: {checks}");
+ParticipationResult Result(params ParticipationItem[] items) => new("request", items.Count(x => x.Success), items);
+Check(PublicAnswerRefreshPolicy.SavedAnswers("Answers", Result(new ParticipationItem("user", true, "AnswersUpdated"))), "Committed answer update triggers the summary refresh");
+Check(PublicAnswerRefreshPolicy.SavedAnswers("Spectate", Result(new ParticipationItem("user", true, "SpectatorRegistered"))), "Committed spectator answers trigger refresh");
+Check(PublicAnswerRefreshPolicy.SavedAnswers("Register", Result(new ParticipationItem("slot", true, "Registered"), new ParticipationItem("other", false, "Occupied"))), "Partial slot success refreshes committed answers");
+Check(!PublicAnswerRefreshPolicy.SavedAnswers("Register", Result(new ParticipationItem("slot", false, "Occupied"), new ParticipationItem("comment", true, "CommentCreated"))), "Comment-only success does not pretend that answers were saved");
+Check(!PublicAnswerRefreshPolicy.SavedAnswers("Register", Result(new ParticipationItem("slot", false, "PhaseLimit"))), "Rejected registration does not trigger answer success");
+Check(!PublicAnswerRefreshPolicy.SavedAnswers("Release", Result(new ParticipationItem("slot", true, "Released"))), "Release does not claim an answer change");
+Check(!PublicAnswerRefreshPolicy.SavedAnswers("Spectate", Result(new ParticipationItem("user", false, "AlreadySpectator"))), "Existing spectator without a write does not trigger refresh");
+Check(PublicAnswerRefreshPolicy.SavedAnswers("Answers", Result(new ParticipationItem("user", true, "AnswersUpdated")) with { Replayed = true }), "Confirmed idempotent replay refreshes the saved result");
+Console.WriteLine($"Public answer chart and refresh checks passed: {checks}");

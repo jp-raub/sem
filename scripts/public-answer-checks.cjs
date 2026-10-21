@@ -29,6 +29,30 @@ module.exports=async({p,g,ok})=>{
   ok(await w.locator('.public-answer-chart img').count()===0,'Respondent names in charts do not create injected images');
   const touch=await g.context().browser().newContext({storageState:await g.context().storageState(),hasTouch:true,ignoreHTTPSErrors:true,viewport:{width:390,height:844}});
   try{const t=await touch.newPage();await t.goto('https://localhost:18443/events/'+id+'/public-answers');const tb=t.locator('[data-public-question="'+yes.id+'"] .public-answer-chart[data-interactive="true"] [data-answer-group="1"] .public-answer-bar');await tb.waitFor();await tb.tap();await t.waitForFunction(()=>document.querySelector('[data-answer-group="1"] .public-answer-bar[aria-expanded="true"]'));ok(await t.locator('[data-public-question="'+yes.id+'"] [data-answer-group="1"] .public-answer-respondents').isVisible(),'Real touch context opens the respondent list with a tap');await tb.tap();await t.waitForFunction(()=>document.querySelector('[data-answer-group="1"] .public-answer-bar[aria-expanded="false"]'));ok(true,'Second tap closes the respondent list');}finally{await touch.close();}
+  // The event detail owns the save-to-summary signal; no global timer or private draft is shared.
+  await w.goto('https://localhost:18443/events/'+id);
+  const embedded=w.locator('#event-public-answers-section');
+  await embedded.locator('[data-public-question="'+yes.id+'"] .public-answer-chart[data-interactive="true"]').waitFor();
+  await w.locator('[data-participation-interactive="true"]').waitFor();
+  const input=w.locator('[data-participation-answer="'+yes.id+'"]');
+  const privateInput=w.locator('[data-participation-answer="'+text.id+'"]');
+  await input.selectOption('YES');await privateInput.fill('UNSENT-PRIVATE-DRAFT');
+  await embedded.locator('#public-answers-refresh').click();
+  await embedded.locator('[data-public-question="'+yes.id+'"] .public-answer-chart[data-interactive="true"]').waitFor();
+  ok(await input.inputValue()==='YES'&&await privateInput.inputValue()==='UNSENT-PRIVATE-DRAFT'&&!(await embedded.textContent()).includes('UNSENT-PRIVATE-DRAFT'),'Reading the embedded summary preserves unsent answers and never publishes the draft');
+  await w.locator('#participation-comment').fill('x');await w.locator('#participation-submit').click();
+  await w.waitForFunction(()=>document.querySelector('#participation-error')?.textContent.length>0);
+  ok((await api(g,'public-answers',undefined,q)).body.questions[0].groups.find(x=>x.value==='NO').count===1&&await input.inputValue()==='YES','Failed save preserves the draft and leaves the saved summary unchanged');
+  const dialog=w.locator('dialog[open]');await dialog.waitFor({state:'visible'});await dialog.getByRole('button',{name:'結果を確認して閉じる',exact:true}).click();
+  await w.locator('#participation-comment').fill('');await w.locator('#participation-submit').click();
+  await w.waitForFunction(id=>document.querySelector('#event-public-answers-section [data-public-question="'+id+'"] [data-answer-group="0"] .public-answer-fill')?.style.width==='100%',yes.id);
+  ok((await api(g,'public-answers',undefined,q)).body.questions[0].groups.find(x=>x.value==='YES').count===1,'Committed UI answer save immediately redraws the embedded chart and table without a refresh click');
+  ok(!(await embedded.textContent()).includes('UNSENT-PRIVATE-DRAFT')&&await privateInput.inputValue()==='UNSENT-PRIVATE-DRAFT','Private answer remains only in the participant form after the summary update');
+  const successDialog=w.locator('dialog[open]');if(await successDialog.isVisible())await successDialog.getByRole('button',{name:'結果を確認して閉じる',exact:true}).click();
+  await input.selectOption('NO');await privateInput.fill('PRIVATE-NATIVE-BODY');await w.locator('#participation-submit').click();
+  await w.waitForFunction(id=>document.querySelector('#event-public-answers-section [data-public-question="'+id+'"] [data-answer-group="1"] .public-answer-fill')?.style.width==='100%',yes.id);
+  ok((await embedded.locator('[data-public-question="'+yes.id+'"] table').innerText()).includes('NO'),'A second confirmed save refreshes the existing embedded component');
+  await w.goto('https://localhost:18443/events/'+id+'/public-answers');await w.locator('[data-public-question="'+yes.id+'"] .public-answer-chart[data-interactive="true"]').waitFor();
   await save([yes,{...text,publicText:true},privateQ]);await w.locator('#public-answers-refresh').click();await w.waitForFunction(()=>document.body.textContent.includes('PRIVATE-NATIVE-BODY'));ok((await api(g,'public-answers',undefined,q)).body.questions.find(x=>x.id===text.id).groups[0].value==='PRIVATE-NATIVE-BODY','Explicit body permission publishes exact answer via API and real refresh');
   await save([yes,text,privateQ]);await w.locator('#public-answers-refresh').click();await w.waitForFunction(()=>document.body.textContent.includes('回答本文は非公開です')&&!document.body.textContent.includes('PRIVATE-NATIVE-BODY'));ok(!(await w.locator('body').innerText()).includes('PRIVATE-NATIVE-BODY'),'Real refresh removes body after publication revocation');
   await w.goto('https://localhost:18443/events/'+id+'/participation');await w.locator('[data-answer-publication="'+text.id+'"]').waitFor();ok((await w.locator('[data-answer-publication="'+text.id+'"]').innerText()).includes('本文は公開されません')&&(await w.locator('[data-answer-publication="'+privateQ.id+'"]').innerText()).includes('含めません'),'Actual participant form explains independent publication settings');
