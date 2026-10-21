@@ -1,0 +1,44 @@
+@using Sem.Web.Core
+@if (Question.Groups.Length > 0)
+{
+    <div class="public-answer-chart @(HideTooltip ? "hide-tooltip" : "")" data-interactive="@Interactive.ToString().ToLowerInvariant()" role="group" aria-label="@(Question.Text + " の回答件数グラフ")">
+        <p class="public-chart-help">棒にマウスを重ねるかフォーカスすると回答者名を表示します。タップ・Enter・Spaceで回答者一覧を開閉できます。集計表も下にあります。</p>
+        @for (var i = 0; i < Question.Groups.Length; i++)
+        {
+            var index = i;
+            var group = Question.Groups[i];
+            var label = Label(group);
+            var expanded = Expanded == index;
+            <div class="public-answer-group @(expanded ? "is-expanded" : "")" data-answer-group="@index">
+                <button type="button" disabled="@(!Interactive)" class="public-answer-bar" aria-expanded="@expanded.ToString().ToLowerInvariant()" aria-controls="@PanelId(index)" @onclick="() => Toggle(index)" @onkeydown="HandleKey" @onfocus="() => HideTooltip = false" @onmouseenter="() => HideTooltip = false">
+                    <span class="public-answer-label">@label</span>
+                    <span class="public-answer-track" aria-hidden="true"><span class="public-answer-fill" style="@($"width:{Percentage(group.Count)}%")"></span></span>
+                    <span class="public-answer-count">@group.Count 件<span class="public-chart-sr">、回答者一覧</span></span>
+                    <span class="public-answer-tooltip" aria-hidden="true">@Names(group)</span>
+                </button>
+                    <div id="@PanelId(index)" hidden="@(!expanded)" class="public-answer-respondents" role="region" aria-label="@(label + " の回答者")">
+                        <p>@label：@group.Count 件</p>
+                        @if (group.Respondents.Length == 0) { <p>回答者はいません。</p> }
+                        else
+                        {
+                            <ul>@foreach (var person in group.Respondents) { <li><a href="@($"/profiles/{Uri.EscapeDataString(person.UserId)}")">@person.DisplayName</a></li> }</ul>
+                        }
+                    </div>
+            </div>
+        }
+    </div>
+}
+@code {
+    [Parameter, EditorRequired] public PublicQuestionSummary Question { get; set; } = default!;
+    readonly string InstanceId = "public-chart-" + Guid.NewGuid().ToString("N");
+    int? Expanded;
+    bool HideTooltip, Interactive;
+    protected override void OnAfterRender(bool firstRender) { if (firstRender) { Interactive = true; StateHasChanged(); } }
+    protected override void OnParametersSet() { Expanded = null; HideTooltip = false; }
+    string PanelId(int index) => InstanceId + "-" + index;
+    string Label(PublicAnswerGroup group) => Question.Type == "Text" && !Question.PublicText ? "回答済み" : group.Value ?? "回答済み";
+    static string Names(PublicAnswerGroup group) => group.Respondents.Length == 0 ? "回答者はいません。" : string.Join("、", group.Respondents.Select(person => person.DisplayName));
+    int Percentage(int count) => Question.AnsweredCount <= 0 ? 0 : (int)Math.Clamp((long)count * 100 / Question.AnsweredCount, 0, 100);
+    void Toggle(int index) { HideTooltip = false; Expanded = Expanded == index ? null : index; }
+    void HandleKey(KeyboardEventArgs args) { if (args.Key == "Escape") { Expanded = null; HideTooltip = true; } }
+}

@@ -1,0 +1,45 @@
+using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Web;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Sem.Web.Components.Shared;
+using Sem.Web.Core;
+using System.Text.RegularExpressions;
+
+var services = new ServiceCollection().AddLogging().BuildServiceProvider();
+await using var renderer = new HtmlRenderer(services, services.GetRequiredService<ILoggerFactory>());
+var checks = 0;
+void Check(bool value, string label) { if (!value) throw new InvalidOperationException(label); checks++; Console.WriteLine("PASS " + label); }
+async Task<string> Render(PublicQuestionSummary question) => await renderer.Dispatcher.InvokeAsync(async () =>
+    (await renderer.RenderComponentAsync<PublicAnswerChart>(ParameterView.FromDictionary(new Dictionary<string, object?> { ["Question"] = question }))).ToHtmlString());
+PublicAnswerGroup Group(string? value, int count) => new(value, count, [new PublicRespondent("user/id", "Member <img src=x> & Co")]);
+var question = new PublicQuestionSummary("question", "Question <script>alert(1)</script>", "YesNo", false, 4, [Group("YES", 3), Group("NO", 1)]);
+var html = await Render(question);
+Check(Regex.Matches(html, "class=\"public-answer-bar\"").Count == 2, "Both YES and NO bars render");
+Check(html.Contains("width:75%") && html.Contains("width:25%"), "Bars use the saved answered-count denominator");
+Check(html.Contains("3 件") && html.Contains("1 件"), "Exact counts stay visible beside bars");
+Check(html.Contains("YES") && html.Contains("NO"), "Answer labels stay visible");
+Check(Regex.Matches(html, "aria-expanded=\"false\"").Count == 2, "Collapsed state uses explicit ARIA strings");
+Check(Regex.Matches(html, "aria-controls=\"public-chart-[a-f0-9]{32}-[01]\"").Count == 2, "Every button has an instance-scoped control identifier");
+Check(!html.Contains("<script>") && html.Contains("&lt;script&gt;"), "Question text is encoded");
+Check(!html.Contains("<img") && html.Contains("&lt;img src=x&gt;"), "Respondent names are encoded");
+Check(html.Contains("type=\"button\""), "Chart buttons do not submit a form");
+Check(html.Contains("disabled") && html.Contains("data-interactive=\"false\""), "SSR bars remain disabled until interactive rendering");
+Check(!html.Contains("<form") && !html.Contains("/api/"), "Chart introduces no write form or API transport");
+var privateQuestion = question with { Type = "Text", PublicText = false, Groups = [Group("PRIVATE-MUST-NOT-RENDER", 4)] };
+html = await Render(privateQuestion);
+Check(!html.Contains("PRIVATE-MUST-NOT-RENDER") && System.Net.WebUtility.HtmlDecode(html).Contains("回答済み"), "Private text stays hidden even if a malformed DTO contains a value");
+html = await Render(privateQuestion with { PublicText = true });
+Check(html.Contains("PRIVATE-MUST-NOT-RENDER"), "Explicitly public text preserves its label");
+html = await Render(question with { AnsweredCount = 0, Groups = [] });
+Check(!html.Contains("public-answer-chart") && !html.Contains("NaN"), "An empty summary does not invent a graph");
+html = await Render(question with { AnsweredCount = 0, Groups = [Group(null, 0)] });
+Check(html.Contains("width:0%") && !html.Contains("NaN"), "Zero denominator never divides by zero");
+html = await Render(question with { AnsweredCount = 1, Groups = [Group("Too high", int.MaxValue), Group("Negative", -1)] });
+Check(html.Contains("width:100%") && html.Contains("width:0%"), "Visual widths are bounded without overflow");
+html = await Render(question with { Groups = [new PublicAnswerGroup("Empty", 0, [])] });
+Check(html.Contains("回答者はいません。"), "An empty respondent group has an explicit explanation");
+var firstId = Regex.Match(await Render(question), "aria-controls=\"([^\"]+)\"").Groups[1].Value;
+var nextId = Regex.Match(await Render(question), "aria-controls=\"([^\"]+)\"").Groups[1].Value;
+Check(firstId != nextId, "Multiple chart instances cannot duplicate IDs");
+Console.WriteLine($"Public answer chart checks passed: {checks}");
