@@ -104,5 +104,8 @@ jobs:
         if: always()
         with:
           name: acceptance-browser-results
-          path: verification/acceptance-native/e2e-result.json
+          path: |
+            verification/acceptance-native/e2e-result.json
+            verification/acceptance-native/acceptance-phases.json
+            verification/acceptance-native/fixture-phases.tsv
           retention-days: 7

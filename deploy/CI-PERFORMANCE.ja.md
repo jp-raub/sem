@@ -28,4 +28,37 @@ suiteの実行は引き続き逐次です。`--no-build --no-restore`で直前�
 
 改善後は`verification/timings.tsv`にUI・全graph restore/build・各suite・全suite・publish/Docker build・Docker smokeの秒数を記録します。初回のcold cacheと後続cache hitは区別します。結果は変更PRの実測コメントとActionsの実行履歴に記録し、推定短縮率を成功実績として扱いません。
 
-全.NET suite、合成UI10本、対話browser109検査とデータ入り復元、Dockerの非root権限・初回起動・再起動は残します。ブラウザー版更新、テスト削除、失敗無視、無条件skip、実DBの公開は高速化として採用しません。
+上記の合成UI10本・browser109検査は初回高速化当時の数で、現在の固定件数や上限ではありません。現行の全.NET suite・合成UI・対話ブラウザー・データ入り復元、Dockerの非root権限・初回起動・再起動を維持します。ブラウザー版更新、テスト削除、失敗無視、無条件skip、実DBの公開は高速化として採用しません。
+
+## CI・受入テスト効率化の試行（2026-10-21開始、暫定）
+
+次の5件のPR、または2週間（2026-11-04 UTCまで）の早い方で中間評価します。PR数が不足する場合は勝手に延長せず、評価材料と継続期間を相談します。起点はこの計測導入PRです。過去PR101は参考例で、5件へ遡及計上しません。
+
+### 保持する品質境界
+
+- 受入済みの再現可能な動作は合成データの自動回帰で保持します。手元への依頼は新規・変更箇所とDXP／物理端末などの非自動化部分に限定し、未変更機能の一式再確認を毎回求めません。
+- SQLite/WAL、Data Protection鍵、私有ファイルを含む保全検証を削除しません。DB・migration・鍵・保存ファイル・バックアップ／復元・CD／更新に影響する変更、および**公開候補**ではフルの一式保全・復元・利用可能性確認を必須にします。影響が明確にない開発途中では関連回帰と軽量保持確認を選べますが、不明ならフルへ戻します。
+- 今回は計測のみを導入し、PRとmainの既存フル検証・25分／40分上限・CDの両必須jobを維持します。条件skip、失敗無視、assertの削減は追加しません。
+- 並列化はフェーズ実測を得てから、独立した一時環境・データ・ポートで実行できる責務に限定して検討します。同じDB／ポートを共有した並列化や、時間短縮の推測値を実績とは扱いません。
+
+### 計測ファイル
+
+- `verification/acceptance-native/fixture-phases.tsv`：publish、fixture起動、ブラウザー全体。
+- `verification/acceptance-native/acceptance-phases.json`：初期登録、最初の全ディレクトリ復元、各実行ヘルパーの所要時間とsuccess/failure/running。中断時のrunningは成功ではありません。失敗は元の例外のまま伝播します。
+- 結果に記録するのは固定フェーズ名、時間、状態だけです。URL・宛先・actor・Cookie・DB・鍵・要求本文・例外内容は追加しません。Actionsの公開artifactは従来結果JSONと上記2ファイルだけの許可リストです。同じ固定フェーズ名・時間・状態をActionsのnoticeにも出し、非秘密の計測結果を取得できるようにします。
+
+### PRごとの時間・品質記録
+
+基準は[完了run #198](https://github.com/jp-raub/sem/actions/runs/39392219780)：critical path 22分19秒、integration 13分53秒、browser 22分19秒。単一標本であり中央値や恒常値ではありません。生のAPI応答ではなく[非秘密の集計](verification/ci-policy-baseline-20261021.json)を保存しました。
+
+`scripts/ci-run-metrics.py --run run.json --jobs jobs.json --output summary.json` はActionsの公開run／完全なjobs一覧JSONから、初回jobまでの待機、critical path、最初の完了jobまで、全job合計、attemptを計算します。最初の完了jobは有用な結果までの時間の**代理値**であり、最初のassertの時刻とは混同しません。job合計とcritical pathも別です。未完了・別run混在・ページ省略・時刻逆転は拒否します。
+
+各対象PRの最終コメントには、対象headとPR/mainのrun・attempt・計測結果に加え、以下を記録します。
+
+1. 再試行と不安定失敗（未評価は0件と記録しない）
+2. CIが検出した不具合と診断。失敗したjob数を製品不具合数と断定しない
+3. ユーザー受入で見つかったデグレ（未受入は未評価）
+4. データ保全／復元／利用可能性の結果
+5. 手元確認の具体的な依頼数と負担。計測だけの今回の変更には新しい手元操作を依頼しない
+
+品質低下が見られた責務は広い検証へ戻します。計測の導入自体を速度向上や次の並列化の成功として数えません。

@@ -1,0 +1,33 @@
+{
+  "schema": 1,
+  "run_id": 39392219780,
+  "head_sha": "18498bfbbcd1e81835d0e937e63eeea39090ae73",
+  "attempt": 1,
+  "conclusion": "success",
+  "queue_to_first_job_seconds": 3.0,
+  "critical_path_seconds": 1339.0,
+  "created_to_last_result_seconds": 1342.0,
+  "first_completed_job_feedback_seconds": 841.0,
+  "summed_job_seconds": 2172.0,
+  "rerun_observed": false,
+  "jobs": [
+    {
+      "name": "integration-checks",
+      "conclusion": "success",
+      "seconds": 833.0
+    },
+    {
+      "name": "acceptance-browser",
+      "conclusion": "success",
+      "seconds": 1339.0
+    }
+  ],
+  "quality": {
+    "flaky_failures": "not_assessed",
+    "ci_detected_defects": "not_assessed",
+    "user_acceptance_regressions": "not_assessed",
+    "data_retention_result": "not_assessed",
+    "manual_confirmation_burden": "Historical baseline; not measured retrospectively"
+  },
+  "interpretation": "Single run; first completed job is a feedback proxy, not a measured assertion timestamp. No median or speedup inferred."
+}
