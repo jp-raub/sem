@@ -32,6 +32,7 @@ node --check src/Sem.Web/wwwroot/account-passkeys.js
 node --check scripts/account-passkeys-native-checks.cjs
 node scripts/account-passkeys-ui-checks.mjs 2>&1 | tee verification/account-passkeys-ui.log
 node scripts/profile-account-navigation-checks.mjs 2>&1 | tee verification/profile-account-navigation-ui.log
+node scripts/e2e-request-pacing-checks.cjs 2>&1 | tee verification/e2e-request-pacing.log
 node --check scripts/settings-pages-checks.cjs
 node scripts/legacy-passkey-url-checks.mjs 2>&1 | tee verification/legacy-passkey-url.log
 node scripts/dialog-lifecycle-checks.mjs 2>&1 | tee verification/dialog-lifecycle-ui.log

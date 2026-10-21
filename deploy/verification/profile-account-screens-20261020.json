@@ -53,5 +53,18 @@
     "sem-next-v4-field-help-browser-checks.log": "8252870f8f7aedd1ac0d0e7bb8a7865a9ca01c2ee9b89fbe801dc37b1b84ec6e",
     "sem-next-v4-operation-feedback-browser-checks.log": "566fa32b67a725ab428f938ce8b93e9425a38feb2e222078fc41982523cfd3ca",
     "sem-next-v4-service-navigation-lifecycle-checks.log": "b8a6819594fc5e8b4ccfb95750604ec3b23df67593b2bb3a079bf993af025101"
+  },
+  "ci_followup": {
+    "prior_local_results_scope": "The recorded 79 suites/17 synthetic scripts/native376/focused81 apply to initial head 4cf6c0a6340128009633b4a46f9e626237a0607d; product sources unchanged by this test-only followup. They are not a new local full run of the followup.",
+    "initial_pr_run": 39464908026,
+    "initial_pr_integration": "success",
+    "initial_pr_browser": "cancelled: configured 25-minute job timeout",
+    "web_interval_ms_before": 500,
+    "web_interval_ms_after": 375,
+    "api_interval_ms_unchanged": 1100,
+    "pacing_synthetic_checks_passed": 15,
+    "product_rate_limits_unchanged": true,
+    "coverage_and_job_timeout_unchanged": true,
+    "followup_verification": "New-head PR and main CI required; no success inferred from initial partial CI"
   }
 }
