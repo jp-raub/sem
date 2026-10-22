@@ -48,6 +48,12 @@ if (args.Length == 1 && args[0] == "--profile-image-self-test")
     }
     return;
 }
+// Offline inspection of the exact product assembly, including in a network-isolated image.
+if (args.Length == 1 && args[0] == "--build-info")
+{
+    Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(RuntimeBuildInfo.Current.Payload(null)));
+    return;
+}
 var builder = WebApplication.CreateBuilder(args);
 var deployment = builder.AddSemDeployment();
 // Exclude offline emergency maintenance before migrations, HTTP, or workers start.
@@ -118,6 +124,7 @@ await app.InitializeSemStorageAsync();
 app.Use(async (context, next) =>
 {
     context.Response.Headers["Referrer-Policy"] = "no-referrer";
+    if (context.Request.Path == "/about") context.Response.Headers.CacheControl = "no-store";
     if (context.Request.Path.Equals("/workspace", StringComparison.OrdinalIgnoreCase) || context.Request.Path.Equals("/service/manual-push", StringComparison.OrdinalIgnoreCase) || context.Request.Path.Value?.EndsWith("/manual-notification", StringComparison.OrdinalIgnoreCase) == true) context.Response.Headers.CacheControl = "no-store";
     context.Response.Headers["X-Content-Type-Options"] = "nosniff";
     context.Response.Headers["X-Frame-Options"] = "DENY";
@@ -146,7 +153,7 @@ app.UseAntiforgery();
 // emits an unhashed framework URL. Keep it after all origin/HTTPS/rate guards.
 app.UseStaticFiles();
 app.MapGet("/health/live", () => Results.Ok(new { status = "alive" }));
-app.MapGet("/health/ready", async (ApplicationDbContext db) => await db.Database.CanConnectAsync() ? Results.Ok(new { status = "storage-ready" }) : Results.StatusCode(503));
+app.MapRuntimeVersion();
 app.MapSem();
 app.MapAccountPasskeys();
 app.MapApplicationJoin();

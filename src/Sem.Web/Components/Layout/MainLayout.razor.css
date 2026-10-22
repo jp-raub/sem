@@ -96,3 +96,5 @@ main {
         right: 0.75rem;
         top: 0.5rem;
     }
+
+.runtime-version-footer { padding: 1rem; text-align: center; font-size: .875rem; overflow-wrap: anywhere; }

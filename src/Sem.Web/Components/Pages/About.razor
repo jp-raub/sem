@@ -1,0 +1,23 @@
+@page "/about"
+@using Sem.Web.Runtime
+<PageTitle>このアプリについて・稼働版</PageTitle>
+<h1>このアプリについて</h1>
+<section class="panel" aria-labelledby="runtime-version-heading">
+    <h2 id="runtime-version-heading">応答しているアプリの稼働版</h2>
+    <p>このページを表示したアプリ自身のビルド情報です。「最新版」や全機能の動作確認済みを意味しません。</p>
+    @if (Build.Published)
+    {
+        <dl class="runtime-build-details">
+            <dt>コミット</dt><dd><a href="@Build.SourceUrl">@Build.Commit</a></dd>
+            <dt>ビルドID</dt><dd>@Build.BuildId</dd>
+        </dl>
+    }
+    else
+    {
+        <p>開発版（稼働版の識別情報なし）。正式な配布版との自動照合には使えません。</p>
+    }
+    <p>同じコミットでもビルドIDが異なれば別のビルドです。これはビルドの識別情報であり、デプロイ完了日時ではありません。</p>
+    <p><a href="/api/version" data-enhance-nav="false">自動照合用のバージョン情報（JSON）</a></p>
+    <p><a href="/" data-enhance-nav="false">トップページへ戻る</a></p>
+</section>
+@code { private static RuntimeBuildInfo Build => RuntimeBuildInfo.Current; }

@@ -5,6 +5,18 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
   </PropertyGroup>
+  <!-- Explicit build-time provenance only. Runtime environment is never a version source. -->
+  <ItemGroup>
+    <AssemblyMetadata Include="SemCommit" Value="$(SemCommit)" />
+    <AssemblyMetadata Include="SemPublicationRun" Value="$(SemPublicationRun)" />
+    <AssemblyMetadata Include="SemPublicationAttempt" Value="$(SemPublicationAttempt)" />
+  </ItemGroup>
+  <Target Name="ValidateSemBuildIdentity" BeforeTargets="GenerateAssemblyInfo"
+          Condition="'$(SemCommit)$(SemPublicationRun)$(SemPublicationAttempt)' != ''">
+    <Error Condition="!$([System.Text.RegularExpressions.Regex]::IsMatch('$(SemCommit)', '\A[0-9a-f]{40}\z'))" Text="Invalid SemCommit build identity." />
+    <Error Condition="!$([System.Text.RegularExpressions.Regex]::IsMatch('$(SemPublicationRun)', '\A[1-9][0-9]{0,19}\z'))" Text="Invalid SemPublicationRun build identity." />
+    <Error Condition="!$([System.Text.RegularExpressions.Regex]::IsMatch('$(SemPublicationAttempt)', '\A[1-9][0-9]{0,9}\z'))" Text="Invalid SemPublicationAttempt build identity." />
+  </Target>
   <ItemGroup>
     <PackageReference Include="HtmlSanitizer" Version="9.2.1039" />
     <PackageReference Include="Markdig" Version="1.4.1" />
