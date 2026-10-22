@@ -127,3 +127,11 @@ sudo sem-cd resume
 復旧は[BACKUP.md](BACKUP.md)に従い、非公開statusのbackup先、`data.tar`、`old-image.tar`、`container.private.json`、`compose-resolved.private.json`を対応付ける。新スキーマに旧イメージだけを適用しない。必要な復旧・原因対処を終えてからpause状態で`sudo sem-cd acknowledge-failure`し、明示resumeする。acknowledgeは復旧の代行や安全確認ではない。
 
 updater自体の更新は、検査済み固定版のinstallを再実行する。実行中更新があれば失敗し、先に完了を待つ。既存の秘密設定・失敗状態は上書きせず、制御コード更新後はpausedになるため確認後にresumeする。アプリの通常CDでrootのupdaterコードをリモート置換する仕組みは設けない。
+
+### 公開ゲートのAPI反映待ち
+
+CI全体の完了通知後、runがcompleted/successでもjobs明細が一時的に未完了を返すことがある。公開側は同じrun id・attempt・SHA・workflow・repositoryを固定し、必須jobの未反映だけを最大7 snapshot（5秒待ちを最大6回）で読み直す。HTTP/authエラー、失敗・取消・skip、重複job、別run／attempt、切断されたjob一覧は再試行で成功扱いにしない。current mainが変わった場合も旧候補を公開しない。最終snapshotで従来と同じ両job成功を検証し、成功確定前にeligible=trueを書かない。ゲートjobの3分上限も維持する。
+
+失敗時はCD_GATE_API_PENDING_TIMEOUT、CD_GATE_REQUIRED_JOB_FAILED、CD_GATE_RUN_IDENTITY、CD_GATE_JOB_IDENTITY等の固定分類だけをAnnotationsへ出し、HTTP応答本文・認証値・イベント原文を出さない。DXP updaterの検証や保全・切替・復元手順は変更しない。既存ホストupdaterの再インストールは不要。
+
+PR106統合main f784f642は両CI成功（39811519540）だが、CD39816112634のgate失敗で公開が止まった。読取側でもrun完了とjobs未完了の一時的不整合を観測した一方、失敗したgateの具体的例外は取得できていないため、根本原因確定とはしない。この変更はその再現可能な状態への安全な対処と診断追加であり、配備済みの証拠ではない。
