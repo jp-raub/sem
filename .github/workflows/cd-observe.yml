@@ -1,0 +1,39 @@
+name: CD public runtime observation
+on:
+  workflow_run:
+    workflows: [CD verified image]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: sem-public-runtime-observation
+  cancel-in-progress: true
+jobs:
+  observe:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'workflow_run' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      # Trusted main only, never a PR artifact, branch or remote script.
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Verify eligible publication then observe public build and readiness
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/cd/observe.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: public-runtime-observation
+          path: verification/runtime-observation.json
+          retention-days: 7

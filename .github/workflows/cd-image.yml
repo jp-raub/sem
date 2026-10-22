@@ -10,6 +10,11 @@ on:
       - '.github/workflows/cd-image.yml'
       - 'scripts/cd/**'
       - 'deploy/CD*'
+      - 'deploy/Dockerfile'
+      - 'src/Sem.Web/Runtime/RuntimeBuildInfo.cs'
+      - 'src/Sem.Web/Runtime/RuntimeVersionEndpoints.cs'
+      - 'src/Sem.Web/Sem.Web.csproj'
+      - '.github/workflows/cd-observe.yml'
       - 'deploy/cd-policy.json'
 permissions:
   contents: read
@@ -27,6 +32,7 @@ jobs:
       - run: |
           python3 scripts/cd/release_gate_checks.py
           python3 scripts/cd/updater_checks.py
+          python3 scripts/cd/observe_checks.py
           bash -n scripts/cd/image-smoke.sh scripts/cd/install.sh scripts/cd/sem-cd
 
   image-validation:
@@ -41,7 +47,12 @@ jobs:
         with:
           persist-credentials: false
       - name: Build PR image without registry permissions
-        run: docker build --platform linux/amd64 -t sem-cd:pr -f deploy/Dockerfile .
+        run: |
+          docker build --platform linux/amd64 --build-arg SEM_COMMIT="$GITHUB_SHA" \
+            --build-arg SEM_PUBLICATION_RUN="$GITHUB_RUN_ID" \
+            --build-arg SEM_PUBLICATION_ATTEMPT="$GITHUB_RUN_ATTEMPT" \
+            -t sem-cd:pr -f deploy/Dockerfile .
+          python3 scripts/cd/check_image_build.py sem-cd:pr "$GITHUB_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"
       - name: Check non-root startup and restart
         run: bash scripts/cd/image-smoke.sh sem-cd:pr
       - name: Check initial capture, update, backup and restore
@@ -96,7 +107,11 @@ jobs:
           docker build --platform linux/amd64 \
             --label org.opencontainers.image.source=https://github.com/jp-raub/sem \
             --label org.opencontainers.image.revision="$SOURCE_SHA" \
+            --build-arg SEM_COMMIT="$SOURCE_SHA" \
+            --build-arg SEM_PUBLICATION_RUN="$GITHUB_RUN_ID" \
+            --build-arg SEM_PUBLICATION_ATTEMPT="$GITHUB_RUN_ATTEMPT" \
             -t sem-cd:tested -f deploy/Dockerfile .
+          python3 scripts/cd/check_image_build.py sem-cd:tested "$SOURCE_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"
           bash scripts/cd/image-smoke.sh sem-cd:tested
       - name: Authenticate to GHCR
         env:

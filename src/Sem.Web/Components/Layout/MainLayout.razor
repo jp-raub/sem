@@ -1,4 +1,7 @@
 @inherits LayoutComponentBase
 <ServiceNavigation />
 <main class="app-main">@Body</main>
+<footer class="runtime-version-footer" aria-label="アプリの稼働版">
+    <a href="/about" data-enhance-nav="false">SEM 稼働版：@Sem.Web.Runtime.RuntimeBuildInfo.Current.Display</a>
+</footer>
 <div id="blazor-error-ui">エラーが発生しました。<a href="/">再読み込み</a></div>

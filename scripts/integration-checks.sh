@@ -35,8 +35,10 @@ node scripts/profile-account-navigation-checks.mjs 2>&1 | tee verification/profi
 node scripts/acceptance-phase-checks.cjs
 python3 tests/ci-run-metrics-checks.py
 python3 tests/ci-measurement-coverage-checks.py
+python3 scripts/cd/observe_checks.py
 node scripts/e2e-request-pacing-checks.cjs 2>&1 | tee verification/e2e-request-pacing.log
 node --check scripts/settings-pages-checks.cjs
+node --check scripts/runtime-version-checks.cjs
 node scripts/legacy-passkey-url-checks.mjs 2>&1 | tee verification/legacy-passkey-url.log
 node scripts/dialog-lifecycle-checks.mjs 2>&1 | tee verification/dialog-lifecycle-ui.log
 node --check src/Sem.Web/wwwroot/operation-feedback.js
