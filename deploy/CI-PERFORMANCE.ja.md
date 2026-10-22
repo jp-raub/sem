@@ -73,3 +73,5 @@ suiteの実行は引き続き逐次です。`--no-build --no-restore`で直前�
 両ブラウザーcontextに30秒の既定待機上限を設定し、従来無期限だったwaitForFunction等は条件未達なら失敗させる。assertionを弱めず、元の例外とphase failureを維持する。CIの中断時も既存の非秘密な失敗位置要約を実行対象にする。jobの30分上限、full fixtureの全flag、2回の一式復元、公開artifact許可リストは維持する。
 
 これは依存取得と失敗診断の改善であり、実測前に高速化達成とは扱わない。cold cache・system依存の時間やrunner差は引き続き計測する。再実行の最終headでPR/mainのfull CIを確認するまで公開完了にはしない。
+
+ブラウザー依存キャッシュ追加の初回head e1dff230はjobレベルenvで利用できないrunnerコンテキストを使い、ジョブ開始前のworkflow評価で失敗した（run39804474338、jobs 0件）。成功や試験実行に数えず、実行stepでGITHUB_ENVへRUNNER_TEMPのパスを設定する形へ訂正した。

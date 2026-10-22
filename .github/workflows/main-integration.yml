@@ -47,8 +47,6 @@ jobs:
           retention-days: 7
 
   acceptance-browser:
-    env:
-      PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/sem-browser-cache
     runs-on: ubuntu-latest
     timeout-minutes: 30 # Includes newly enabled public-answer browser coverage; no checks are skipped.
     steps:
@@ -69,6 +67,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Set isolated browser dependency path
+        run: echo "PLAYWRIGHT_BROWSERS_PATH=$RUNNER_TEMP/sem-browser-cache" >> "$GITHUB_ENV"
       - name: Cache pinned browser dependencies only (never application state)
         continue-on-error: true # A cache miss or outage still installs and tests.
         uses: actions/cache@v4

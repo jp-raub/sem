@@ -28,7 +28,8 @@ class Checks(unittest.TestCase):
         self.assertIn("REQUIRED = {'integration-checks', 'acceptance-browser'}",gate)
     def test_browser_preparation_caches_only_pinned_dependencies_and_never_skips_install(self):
         s=(root/'.github/workflows/main-integration.yml').read_text().split('  acceptance-browser:',1)[1]
-        self.assertIn('PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/sem-browser-cache',s)
+        self.assertIn('PLAYWRIGHT_BROWSERS_PATH=$RUNNER_TEMP/sem-browser-cache',s)
+        self.assertNotIn('PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}',s) # runner context is unavailable in job-level env.
         self.assertIn('path: ${{ runner.temp }}/sem-browser-cache',s)
         self.assertIn('playwright-1.56.1-headless-v1',s)
         self.assertIn('playwright@1.56.1',s)
