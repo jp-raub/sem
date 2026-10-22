@@ -67,10 +67,18 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Set isolated browser dependency path
+        run: echo "PLAYWRIGHT_BROWSERS_PATH=$RUNNER_TEMP/sem-browser-cache" >> "$GITHUB_ENV"
+      - name: Cache pinned browser dependencies only (never application state)
+        continue-on-error: true # A cache miss or outage still installs and tests.
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/sem-browser-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-playwright-1.56.1-headless-v1
       - name: Install isolated browser dependencies
         run: |
           npm install --prefix "$RUNNER_TEMP/sem-browser" --no-save playwright@1.56.1
-          "$RUNNER_TEMP/sem-browser/node_modules/.bin/playwright" install --with-deps chromium
+          "$RUNNER_TEMP/sem-browser/node_modules/.bin/playwright" install --with-deps chromium --only-shell
       - name: Verify keyboard and touch field help above dialogs
         env:
           NODE_PATH: ${{ runner.temp }}/sem-browser/node_modules
@@ -83,7 +91,7 @@ jobs:
           NODE_PATH: ${{ runner.temp }}/sem-browser/node_modules
         run: bash scripts/acceptance-browser-fixture.sh
       - name: Summarize failed acceptance location without private logs
-        if: failure()
+        if: ${{ failure() || cancelled() }}
         run: |
           python3 - <<'PYCODE'
           import json,pathlib,re

@@ -62,3 +62,16 @@ suiteの実行は引き続き逐次です。`--no-build --no-restore`で直前�
 5. 手元確認の具体的な依頼数と負担。計測だけの今回の変更には新しい手元操作を依頼しない
 
 品質低下が見られた責務は広い検証へ戻します。計測の導入自体を速度向上や次の並列化の成功として数えません。
+
+
+## PR106のブラウザー準備時間と中断対策
+
+初回run 39774267411 attempt1はintegration-checks成功、acceptance-browserは30分で中断した。公開job情報ではブラウザー依存インストールが11:56:04〜12:06:01（597秒）、full fixtureのstepが12:06:07〜12:25:54（1187秒）。10フェーズの成功通知だけでfull成功や中断箇所の原因を断定しない。既存1MiB画像のfocused fixtureはローカルで40検査・初回一式復元が成功したが、fullの状態依存を否定する証拠にはしない。
+
+ブラウザーは既定のheadless launchを使い、channel指定やheadless=falseはない。Playwright 1.56.1は維持し、`install --with-deps chromium --only-shell` で使用するheadless shellと必要なsystem依存を取得する。未使用の通常版Chromiumを取得せず、バージョン・OS・architecture別の依存バイナリだけをrunner.temp配下へcacheする。毎回installを実行し、cache hitでも検査を省略しない。DB・鍵・Cookie・ブラウザーの利用者profile・アプリbuildをcacheしない。
+
+両ブラウザーcontextに30秒の既定待機上限を設定し、従来無期限だったwaitForFunction等は条件未達なら失敗させる。assertionを弱めず、元の例外とphase failureを維持する。CIの中断時も既存の非秘密な失敗位置要約を実行対象にする。jobの30分上限、full fixtureの全flag、2回の一式復元、公開artifact許可リストは維持する。
+
+これは依存取得と失敗診断の改善であり、実測前に高速化達成とは扱わない。cold cache・system依存の時間やrunner差は引き続き計測する。再実行の最終headでPR/mainのfull CIを確認するまで公開完了にはしない。
+
+ブラウザー依存キャッシュ追加の初回head e1dff230はjobレベルenvで利用できないrunnerコンテキストを使い、ジョブ開始前のworkflow評価で失敗した（run39804474338、jobs 0件）。成功や試験実行に数えず、実行stepでGITHUB_ENVへRUNNER_TEMPのパスを設定する形へ訂正した。

@@ -265,17 +265,6 @@ public static class SemEndpoints
         }
         if (action == "read-message" && post) { var messageId = Text("id", 64); var m = await db.Messages.FirstOrDefaultAsync(m => m.Id == messageId && m.UserId == user.Id); if (m is not null) { m.ReadAt = Now; await db.SaveChangesAsync(); } await Reply(new { message = "既読にしました。" }); return; }
         if (action == "test-email" && post) { Admin(); if (!notify.EmailConfigured) throw new ValidationException("SMTP未設定です。"); notify.Email(db, user.Id, "SEM テストメール", "実際のSMTP配信テストです。"); await db.SaveChangesAsync(); await Reply(new { message = "テストメールを送信待ちに登録しました。" }); return; }
-        if (action == "subscribe" && post)
-        {
-            if (!notify.PushConfigured) throw new ValidationException("Push配信鍵が未設定です。");
-            var endpoint = Text("endpoint", 2048); if (!Sem.Web.Core.PushBinding.AllowedEndpoint(endpoint)) throw new ValidationException("許可されていないPush接続先です。");
-            var existing = await db.PushDevices.FirstOrDefaultAsync(d => d.Endpoint == endpoint);
-            if (existing is not null && existing.UserId != user.Id) db.PushDevices.Remove(existing);
-            if (existing is null || existing.UserId != user.Id) { existing = new PushDevice { UserId = user.Id, Endpoint = endpoint }; db.PushDevices.Add(existing); }
-            existing.SecurityStamp=user.SecurityStamp; existing.SessionHash=Hash(c.User.FindFirstValue(PasskeyAdditionService.SessionClaim)??throw new UnauthorizedAccessException());
-            existing.P256dh = Text("p256dh", 512); existing.Auth = Text("auth", 512); await db.SaveChangesAsync(); await Reply(new { message = "端末を登録しました。" }); return;
-        }
-        if (action == "unsubscribe" && post) { var endpoint = Text("endpoint", 2048); await db.PushDevices.Where(d => d.UserId == user.Id && d.Endpoint == endpoint).ExecuteDeleteAsync(); await Reply(new { message = "端末の通知を解除しました。" }); return; }
         if (action == "test-push" && post) { if (!notify.PushConfigured) throw new ValidationException("Push未設定です。"); notify.Message(db, user.Id, "SEM テスト通知", "Pushをタップしてメッセージボックスへ戻ることを確認してください。"); await db.SaveChangesAsync(); await Reply(new { message = "通知を送信待ちに登録しました。" }); return; }
         if (post && action is "create-event" or "publish-event" or "join-event")
         {

@@ -20,6 +20,14 @@ public static class DeviceNotificationEndpoints
         app.MapMethods("/api/core/device-notifications/{action}", AllMethods,
             (HttpContext context, DeviceNotificationService service, IAntiforgery csrf, DeploymentSettings settings) =>
                 HandleAction(context, service, csrf, settings));
+        // Exact routes take precedence over the legacy catch-all. Keep the old
+        // browser contract, but never retain a second subscription mutation path.
+        app.MapMethods("/api/subscribe", AllMethods,
+            (HttpContext context, DeviceNotificationService service, IAntiforgery csrf, DeploymentSettings settings) =>
+                HandleAction(context, service, csrf, settings, "register"));
+        app.MapMethods("/api/unsubscribe", AllMethods,
+            (HttpContext context, DeviceNotificationService service, IAntiforgery csrf, DeploymentSettings settings) =>
+                HandleAction(context, service, csrf, settings, "unregister"));
     }
 
     private static async Task HandleRoot(HttpContext context, DeviceNotificationService service,
@@ -43,10 +51,10 @@ public static class DeviceNotificationEndpoints
     }
 
     private static async Task HandleAction(HttpContext context, DeviceNotificationService service,
-        IAntiforgery csrf, DeploymentSettings settings)
+        IAntiforgery csrf, DeploymentSettings settings, string? legacyAction = null)
     {
         context.Response.Headers.CacheControl = "no-store";
-        var action = context.Request.RouteValues["action"]?.ToString();
+        var action = legacyAction ?? context.Request.RouteValues["action"]?.ToString();
         context.Response.Headers["Allow"] = "POST";
         if (action is not ("status" or "register" or "unregister"))
         { context.Response.StatusCode = 404; return; }
@@ -54,15 +62,26 @@ public static class DeviceNotificationEndpoints
         try
         {
             var query = context.Request.Query;
-            if (query.Count != 1 || !query.TryGetValue("expectedActor", out var expected) || expected.Count != 1 ||
-                string.IsNullOrWhiteSpace(expected[0]) || expected[0]!.Length > 128 || expected[0]!.Any(char.IsControl))
-                throw new ValidationException("expectedActorを確認してください。");
+            string? expectedActor = null;
+            if (legacyAction is not null)
+            {
+                // The old sem.js does not send expectedActor. Its mutation still
+                // requires the live actor, CSRF and stored subscription key proof.
+                if (query.Count != 0) throw new ValidationException("クエリパラメーターは指定できません。");
+            }
+            else
+            {
+                if (query.Count != 1 || !query.TryGetValue("expectedActor", out var expected) || expected.Count != 1 ||
+                    string.IsNullOrWhiteSpace(expected[0]) || expected[0]!.Length > 128 || expected[0]!.Any(char.IsControl))
+                    throw new ValidationException("expectedActorを確認してください。");
+                expectedActor = expected[0];
+            }
             if (context.Request.Headers.Origin.Count != 1 ||
                 context.Request.Headers.Origin.ToString() != settings.PublicUrl.TrimEnd('/'))
                 throw new UnauthorizedAccessException();
 
             var actor = await service.RequireActorAsync(context, context.RequestAborted);
-            if (!string.Equals(expected[0], actor.User.Id, StringComparison.Ordinal)) throw new UnauthorizedAccessException();
+            if (expectedActor is not null && !string.Equals(expectedActor, actor.User.Id, StringComparison.Ordinal)) throw new UnauthorizedAccessException();
             CheckBodyEnvelope(context);
             var csrfHeader = context.Request.Headers["X-CSRF-TOKEN"];
             if (csrfHeader.Count != 1 || string.IsNullOrWhiteSpace(csrfHeader[0]))
@@ -84,7 +103,18 @@ public static class DeviceNotificationEndpoints
                 "unregister" => await service.UnregisterAsync(context, endpoint, context.RequestAborted),
                 _ => throw new ValidationException("操作を確認してください.")
             };
-            await context.Response.WriteAsJsonAsync(result, context.RequestAborted);
+            if (legacyAction is null) await context.Response.WriteAsJsonAsync(result, context.RequestAborted);
+            else await context.Response.WriteAsJsonAsync(new
+            {
+                result.ActorId, result.Registered,
+                message = action == "register" ? "端末を登録しました。" : "端末の通知を解除しました。"
+            }, context.RequestAborted);
+        }
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException)
+        {
+            // Match the old mutation endpoint's sanitized conflict response.
+            context.Response.StatusCode = 409;
+            await context.Response.WriteAsJsonAsync(new { error = "変更を確定できません。最新状態を取得してください。" }, context.RequestAborted);
         }
         catch (UnauthorizedAccessException) { context.Response.StatusCode = 401; }
         catch (AntiforgeryValidationException) { await BadRequest(context, "CSRFトークンを確認してください。"); }
