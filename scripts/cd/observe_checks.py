@@ -100,6 +100,12 @@ class Checks(unittest.TestCase):
     def test_no_arbitrary_url_or_probe(self):
         for path,probe in [('https://evil.invalid','a'*32),('/api/version','bad')]:
             with self.assertRaises(observe.ObservationError):observe.fresh_json(path,probe)
+    def test_existing_error_ui_styles_are_preserved(self):
+        root=Path(__file__).resolve().parents[2]
+        styles=(root/'src/Sem.Web/Components/Layout/MainLayout.razor.css').read_text()
+        self.assertIn('#blazor-error-ui',styles)
+        self.assertIn('display: none;',styles)
+        self.assertIn('.runtime-version-footer',styles)
     def test_workflows_keep_publication_independent_and_embed_build(self):
         root=Path(__file__).resolve().parents[2]
         publish=(root/'.github/workflows/cd-image.yml').read_text()
