@@ -26,6 +26,21 @@ class Checks(unittest.TestCase):
         self.assertIn('run: bash scripts/acceptance-browser-fixture.sh',s)
         gate=(root/'scripts/cd/release_gate.py').read_text()
         self.assertIn("REQUIRED = {'integration-checks', 'acceptance-browser'}",gate)
+    def test_browser_preparation_caches_only_pinned_dependencies_and_never_skips_install(self):
+        s=(root/'.github/workflows/main-integration.yml').read_text().split('  acceptance-browser:',1)[1]
+        self.assertIn('PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/sem-browser-cache',s)
+        self.assertIn('path: ${{ runner.temp }}/sem-browser-cache',s)
+        self.assertIn('playwright-1.56.1-headless-v1',s)
+        self.assertIn('playwright@1.56.1',s)
+        self.assertIn('install --with-deps chromium --only-shell',s)
+        self.assertNotIn('cache-hit',s) # Dependency hits cannot skip install or verification.
+        self.assertIn('if: ${{ failure() || cancelled() }}',s)
+    def test_both_browser_actors_have_bounded_selector_and_function_waits(self):
+        s=(root/'scripts/e2e.cjs').read_text()
+        self.assertIn('ctx.setDefaultTimeout(30_000);',s)
+        self.assertIn('guest.setDefaultTimeout(30_000);',s)
+        self.assertEqual(s.count('.setDefaultTimeout(30_000)'),2)
+        self.assertNotIn('channel:',s) # Default headless launch uses the installed shell.
     def test_browser_artifacts_allowlist(self):
         s=(root/'.github/workflows/main-integration.yml').read_text().split('name: acceptance-browser-results',1)[1]
         paths=[line.strip() for line in s.splitlines() if 'verification/' in line]
