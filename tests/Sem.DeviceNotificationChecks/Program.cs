@@ -30,7 +30,8 @@ builder.Services.AddIdentityCore<ApplicationUser>(options =>
         options.Stores.SchemaVersion = IdentitySchemaVersions.Version3;
         options.User.RequireUniqueEmail = true;
     })
-    .AddEntityFrameworkStores<ApplicationDbContext>();
+    .AddEntityFrameworkStores<ApplicationDbContext>()
+    .AddSignInManager();
 builder.Services.AddDataProtection();
 builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
 {
@@ -40,6 +41,8 @@ builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
 builder.Services.AddSingleton(new DeploymentSettings { PublicUrl = Origin + "/" });
 builder.Services.AddScoped<NotificationService>();
 builder.Services.AddScoped<DeviceNotificationService>();
+builder.Services.AddScoped<PasskeyAdditionService>();
+builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
 builder.Services.AddAntiforgery(options =>
 {
     options.HeaderName = "X-CSRF-TOKEN";
@@ -69,6 +72,7 @@ app.Use(async (context, next) =>
 });
 app.MapGet("/fixture/csrf", (HttpContext context, IAntiforgery csrf) =>
     Results.Json(new { token = csrf.GetAndStoreTokens(context).RequestToken }));
+app.MapSem(); // Include the production catch-all to prove exact legacy routes win.
 app.MapDeviceNotifications();
 var started = false;
 var checks = 0;
@@ -305,6 +309,98 @@ try
         var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         Check(!await db.PushDevices.AnyAsync(x => x.Endpoint == endpoint), "unregister removes only the caller's current binding");
     }
+    // Exercise actual compatibility routes, not just the shared service. No
+    // outbound Push client is registered or invoked by these HTTP operations.
+    const string legacyEndpoint = "https://fcm.googleapis.com/send/legacy-fixture";
+    var legacyBody = JsonSerializer.Serialize(new { endpoint = legacyEndpoint, p256dh = pkey, auth });
+    var legacyRemove = JsonSerializer.Serialize(new { endpoint = legacyEndpoint });
+    foreach (var route in new[] { "/api/subscribe", "/api/unsubscribe" })
+    {
+        using (var response = await client.GetAsync(route))
+            Check(response.StatusCode == HttpStatusCode.MethodNotAllowed, route + " rejects GET");
+        using (var response = await Post(route, legacyBody, "member", memberCsrf.Token, memberCsrf.Cookie,
+                   origin: "https://foreign.invalid"))
+            Check(response.StatusCode == HttpStatusCode.Unauthorized, route + " rejects foreign Origin");
+        using (var response = await Post(route, legacyBody, "member", "", memberCsrf.Cookie))
+            Check(response.StatusCode == HttpStatusCode.BadRequest, route + " requires CSRF");
+        using (var response = await Post(route + "?unexpected=1", legacyBody, "member", memberCsrf.Token, memberCsrf.Cookie))
+            Check(response.StatusCode == HttpStatusCode.BadRequest, route + " rejects ambiguous query");
+        foreach (var actor in new[] { "member-stale", "member-revoked", "unknown" })
+        {
+            using var response = await Post(route, legacyBody, actor, memberCsrf.Token, memberCsrf.Cookie);
+            Check(response.StatusCode == HttpStatusCode.Unauthorized, route + " rejects " + actor);
+        }
+        using (var response = await Post(route, new string('x', 17 * 1024), "member", memberCsrf.Token, memberCsrf.Cookie))
+            Check((int)response.StatusCode == 413, route + " limits body to 16 KiB");
+    }
+    using (var response = await Post("/api/subscribe",
+               JsonSerializer.Serialize(new { endpoint = legacyEndpoint, p256dh = offCurvePkey, auth }),
+               "member", memberCsrf.Token, memberCsrf.Cookie))
+        Check(response.StatusCode == HttpStatusCode.BadRequest, "legacy register validates P-256 point");
+    using (var response = await Post("/api/subscribe", legacyBody, "member", memberCsrf.Token, memberCsrf.Cookie))
+    {
+        var result = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        Check(response.IsSuccessStatusCode && result.GetProperty("registered").GetBoolean() &&
+              result.GetProperty("message").GetString() == "端末を登録しました。", "legacy register keeps sem.js success message");
+    }
+    using (var response = await Post("/api/subscribe",
+               JsonSerializer.Serialize(new { endpoint = legacyEndpoint, p256dh = pkey, auth = differentAuth }),
+               "other", otherCsrf.Token, otherCsrf.Cookie))
+        Check(response.StatusCode == HttpStatusCode.BadRequest, "legacy cross-user replacement without both keys rejected");
+    using (var response = await Post("/api/subscribe", legacyRemove, "other", otherCsrf.Token, otherCsrf.Cookie))
+        Check(response.StatusCode == HttpStatusCode.BadRequest, "legacy endpoint-only takeover rejected");
+    using (var response = await Post("/api/unsubscribe", legacyRemove, "member-other-session", otherSessionCsrf.Token, otherSessionCsrf.Cookie))
+        Check(response.IsSuccessStatusCode, "legacy different-session removal is idempotent no-op");
+    await using (var scope = app.Services.CreateAsyncScope())
+    {
+        var row = await scope.ServiceProvider.GetRequiredService<ApplicationDbContext>().PushDevices.SingleAsync(x => x.Endpoint == legacyEndpoint);
+        Check(row.UserId == "member" && row.SessionHash == SemEndpoints.Hash("member-session") && row.Auth == auth,
+            "legacy rejected transfer and other-session removal preserve original binding");
+    }
+    using (var response = await Post("/api/core/device-notifications/register?expectedActor=other", legacyBody,
+               "other", otherCsrf.Token, otherCsrf.Cookie))
+        Check(response.IsSuccessStatusCode, "modern route can rebind a legacy binding with exact key proof");
+    using (var response = await Post("/api/unsubscribe", legacyRemove, "member", memberCsrf.Token, memberCsrf.Cookie))
+        Check(response.IsSuccessStatusCode, "legacy former owner removal is harmless after modern transfer");
+    await using (var scope = app.Services.CreateAsyncScope())
+        Check(await scope.ServiceProvider.GetRequiredService<ApplicationDbContext>().PushDevices.AnyAsync(x =>
+            x.Endpoint == legacyEndpoint && x.UserId == "other"), "modern owner preserved across legacy removal attempt");
+    using (var response = await Post("/api/subscribe", legacyBody, "member", memberCsrf.Token, memberCsrf.Cookie))
+        Check(response.IsSuccessStatusCode, "legacy route can explicitly rebind modern binding with exact proof");
+    using (var response = await Post("/api/unsubscribe", legacyRemove, "member", memberCsrf.Token, memberCsrf.Cookie))
+    {
+        var result = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        Check(response.IsSuccessStatusCode && result.GetProperty("message").GetString() == "端末の通知を解除しました。",
+            "legacy current-session removal keeps sem.js success message");
+    }
+    await using (var scope = app.Services.CreateAsyncScope())
+        Check(!await scope.ServiceProvider.GetRequiredService<ApplicationDbContext>().PushDevices.AnyAsync(x => x.Endpoint == legacyEndpoint),
+            "legacy current binding is removed");
+    const string racedEndpoint = "https://fcm.googleapis.com/send/raced-legacy-fixture";
+    var raceBodies = new[] {
+        JsonSerializer.Serialize(new { endpoint = racedEndpoint, p256dh = pkey, auth }),
+        JsonSerializer.Serialize(new { endpoint = racedEndpoint, p256dh = P256PublicKey(), auth = differentAuth })
+    };
+    var races = await Task.WhenAll(
+        Post("/api/subscribe", raceBodies[0], "member", memberCsrf.Token, memberCsrf.Cookie),
+        Post("/api/core/device-notifications/register?expectedActor=other", raceBodies[1], "other", otherCsrf.Token, otherCsrf.Cookie));
+    try
+    {
+        Check(races.Count(x => x.IsSuccessStatusCode) == 1 && races.All(x => x.IsSuccessStatusCode ||
+              x.StatusCode is HttpStatusCode.BadRequest or HttpStatusCode.Conflict),
+            "concurrent legacy and modern registration admits only one owner without shared key proof");
+        await using var scope = app.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var row = await db.PushDevices.SingleAsync(x => x.Endpoint == racedEndpoint);
+        var winner = races[0].IsSuccessStatusCode ? 0 : 1;
+        var submitted = JsonDocument.Parse(raceBodies[winner]).RootElement;
+        Check(row.UserId == (winner == 0 ? "member" : "other") &&
+              row.P256dh == submitted.GetProperty("p256dh").GetString() && row.Auth == submitted.GetProperty("auth").GetString(),
+            "concurrent registration leaves one complete winner binding, not mixed key material");
+        Check(!await db.Messages.AnyAsync() && !await db.Deliveries.AnyAsync(),
+            "compatibility subscription operations enqueue no notifications");
+    }
+    finally { foreach (var response in races) response.Dispose(); }
     Console.WriteLine($"PASS {checks} device-notification checks");
 }
 finally
