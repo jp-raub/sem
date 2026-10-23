@@ -15,9 +15,9 @@ async Task<string> Render(PublicQuestionSummary question) => await renderer.Disp
 PublicAnswerGroup Group(string? value, int count) => new(value, count, [new PublicRespondent("user/id", "Member <img src=x> & Co")]);
 var question = new PublicQuestionSummary("question", "Question <script>alert(1)</script>", "YesNo", false, 4, [Group("YES", 3), Group("NO", 1)]);
 var html = await Render(question);
-Check(Regex.Matches(html, "class=\"public-answer-bar\"").Count == 2, "Both YES and NO bars render");
-Check(html.Contains("width:75%") && html.Contains("width:25%"), "Bars use the saved answered-count denominator");
-Check(html.Contains("3 件") && html.Contains("1 件"), "Exact counts stay visible beside bars");
+Check(Regex.Matches(html, "class=\"public-answer-bar\"").Count == 2, "Both YES and NO segments render");
+Check(html.Contains("width:75%") && html.Contains("width:25%"), "Segments use the sum of saved YES/NO respondents");
+Check(html.Contains("3 人") && html.Contains("1 人"), "Exact counts stay visible beside bars");
 Check(html.Contains("YES") && html.Contains("NO"), "Answer labels stay visible");
 Check(Regex.Matches(html, "aria-expanded=\"false\"").Count == 2, "Collapsed state uses explicit ARIA strings");
 Check(Regex.Matches(html, "aria-controls=\"public-chart-[a-f0-9]{32}-[01]\"").Count == 2, "Every button has an instance-scoped control identifier");
@@ -29,6 +29,11 @@ Check(!html.Contains("<form") && !html.Contains("/api/"), "Chart introduces no w
 var privateQuestion = question with { Type = "Text", PublicText = false, Groups = [Group("PRIVATE-MUST-NOT-RENDER", 4)] };
 html = await Render(privateQuestion);
 Check(!html.Contains("PRIVATE-MUST-NOT-RENDER") && System.Net.WebUtility.HtmlDecode(html).Contains("回答済み"), "Private text stays hidden even if a malformed DTO contains a value");
+html = await Render(question with { AnsweredCount = 99 });
+Check(html.Contains("width:75%") && html.Contains("width:25%"), "Ratio ignores unrelated or stale answered-count totals");
+Check(html.Contains("is-ratio") && html.Contains("public-answer-plot") && html.Contains("75%"), "YES/NO uses one labelled ratio plot");
+html = await Render(question with { Type = "Text", PublicText = true, AnsweredCount = 99 });
+Check(html.Contains("is-text") && html.Contains("width:100%") && html.Contains("width:33%"), "Public text scales each group against the largest group, not all responses");
 html = await Render(privateQuestion with { PublicText = true });
 Check(html.Contains("PRIVATE-MUST-NOT-RENDER"), "Explicitly public text preserves its label");
 html = await Render(question with { AnsweredCount = 0, Groups = [] });

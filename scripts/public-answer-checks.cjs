@@ -18,6 +18,7 @@ module.exports=async({p,g,ok})=>{
   ok((await privateChart.innerText()).includes('回答済み')&&!(await privateChart.textContent()).includes('PRIVATE-NATIVE-BODY'),'Private text chart uses a count-only label without private body in hidden content');
   await w.setViewportSize({width:1280,height:900});await noBar.hover();await noBar.locator('.public-answer-tooltip').waitFor({state:'visible'});
   ok((await noBar.locator('.public-answer-tooltip').innerText()).includes(result.body.questions[0].groups.find(x=>x.value==='NO').respondents[0].displayName),'Mouse hover displays the saved public respondent name');
+  const popupBounds=await noBar.locator('.public-answer-tooltip').boundingBox();ok(popupBounds&&popupBounds.x>=0&&popupBounds.y>=0&&popupBounds.x+popupBounds.width<=1280&&popupBounds.y+popupBounds.height<=900,'Cursor respondent popup stays inside the desktop viewport');ok(await yesChart.locator('.public-answer-plot').evaluate(e=>getComputedStyle(e).display)==='flex','YES/NO uses one horizontal ratio band');
   await noBar.click();await w.waitForFunction(()=>document.querySelector('[data-answer-group="1"] .public-answer-bar[aria-expanded="true"]'));
   const panel=yesChart.locator('[data-answer-group="1"] .public-answer-respondents');await panel.waitFor({state:'visible'});
   ok(await panel.locator('a').count()===1&&(await panel.locator('a').getAttribute('href')).startsWith('/profiles/'),'Expanded chart keeps a real profile link without a write operation');

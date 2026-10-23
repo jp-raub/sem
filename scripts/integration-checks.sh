@@ -37,6 +37,7 @@ node scripts/acceptance-phase-checks.cjs
 python3 tests/ci-run-metrics-checks.py
 python3 tests/ci-measurement-coverage-checks.py
 python3 scripts/cd/observe_checks.py
+node scripts/public-answer-position-checks.mjs
 node scripts/e2e-request-pacing-checks.cjs 2>&1 | tee verification/e2e-request-pacing.log
 node --check scripts/settings-pages-checks.cjs
 node --check scripts/runtime-version-checks.cjs
