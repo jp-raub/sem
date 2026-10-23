@@ -99,4 +99,26 @@ class Checks(unittest.TestCase):
             with self.assertRaises(m.ResumeError):m.restore(SHA,root,lambda _:bundle())
             self.assertEqual(lock.read_text(),'another writer');self.assertFalse(root.exists())
 
+class RunnerChecks(unittest.TestCase):
+    def setUp(self):
+        spec=importlib.util.spec_from_file_location('runner',Path(__file__).resolve().parents[1]/'scripts/dev/run_in_workspace.py')
+        self.runner=importlib.util.module_from_spec(spec);spec.loader.exec_module(self.runner)
+    def test_missing_workspace_never_executes(self):
+        with tempfile.TemporaryDirectory() as d:
+            self.assertEqual(self.runner.run(Path(d)/'missing',['anything'],lambda *a,**k:self.fail('executed')),2)
+    def test_child_failure_is_returned_without_retry(self):
+        import subprocess
+        calls=[]
+        def invoke(cmd,**kwargs):calls.append((cmd,kwargs));return subprocess.CompletedProcess(cmd,23)
+        with tempfile.TemporaryDirectory() as d:
+            self.assertEqual(self.runner.run(d,['literal','a b'],invoke),23)
+        self.assertEqual(len(calls),1);self.assertEqual(calls[0][0],['literal','a b']);self.assertFalse(calls[0][1]['check'])
+    def test_start_error_is_not_retried(self):
+        calls=[]
+        def invoke(*a,**k):calls.append(1);raise OSError('private path')
+        with tempfile.TemporaryDirectory() as d:self.assertEqual(self.runner.run(d,['x'],invoke),2)
+        self.assertEqual(len(calls),1)
+    def test_missing_command_does_not_execute(self):
+        with tempfile.TemporaryDirectory() as d:self.assertEqual(self.runner.run(d,[],lambda *a,**k:self.fail('executed')),2)
+
 if __name__=='__main__':unittest.main()
