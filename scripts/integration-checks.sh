@@ -5,6 +5,7 @@ printf 'phase\tseconds\n' > verification/timings.tsv
 phase_started=$SECONDS
 bash -n scripts/integration-checks.sh scripts/build-integration-projects.sh
 python3 tests/ci-build-graph-checks.py
+python3 tests/workspace-resume-checks.py
 printf 'Checked commit: %s\nTree: %s\n' "$(git rev-parse HEAD)" "$(git rev-parse HEAD^{tree})" | tee verification/source.txt
 if [[ ! -f src/Sem.Web/Sem.Web.csproj ]]; then
   if [[ -n $(git log -1 --format=%H -- src/Sem.Web/Sem.Web.csproj) ]]; then
