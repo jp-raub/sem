@@ -5,8 +5,9 @@ using Microsoft.Extensions.Logging;
 using Sem.Web.Components.Shared;
 using Sem.Web.Core;
 using System.Text.RegularExpressions;
+using Microsoft.JSInterop;
 
-var services = new ServiceCollection().AddLogging().BuildServiceProvider();
+var services = new ServiceCollection().AddLogging().AddSingleton<IJSRuntime, NoBrowserJS>().BuildServiceProvider();
 await using var renderer = new HtmlRenderer(services, services.GetRequiredService<ILoggerFactory>());
 var checks = 0;
 void Check(bool value, string label) { if (!value) throw new InvalidOperationException(label); checks++; Console.WriteLine("PASS " + label); }
@@ -57,3 +58,9 @@ Check(!PublicAnswerRefreshPolicy.SavedAnswers("Release", Result(new Participatio
 Check(!PublicAnswerRefreshPolicy.SavedAnswers("Spectate", Result(new ParticipationItem("user", false, "AlreadySpectator"))), "Existing spectator without a write does not trigger refresh");
 Check(PublicAnswerRefreshPolicy.SavedAnswers("Answers", Result(new ParticipationItem("user", true, "AnswersUpdated")) with { Replayed = true }), "Confirmed idempotent replay refreshes the saved result");
 Console.WriteLine($"Public answer chart and refresh checks passed: {checks}");
+
+sealed class NoBrowserJS : IJSRuntime
+{
+    public ValueTask<TValue> InvokeAsync<TValue>(string identifier, object?[]? args) => throw new InvalidOperationException("Static rendering must not invoke JavaScript");
+    public ValueTask<TValue> InvokeAsync<TValue>(string identifier, CancellationToken cancellationToken, object?[]? args) => InvokeAsync<TValue>(identifier, args);
+}

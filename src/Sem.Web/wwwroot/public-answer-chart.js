@@ -1,4 +1,4 @@
-// Position only; public, encoded answer data remains owned by Razor.
+// Position and dismissal only; public encoded data and expanded state remain owned by Razor.
 export function clampPosition(x, y, width, height, viewportWidth, viewportHeight) {
     return { x: Math.max(8, Math.min(x + 12, viewportWidth - width - 8)),
         y: Math.max(8, Math.min(y + 12, viewportHeight - height - 8)) };
@@ -23,4 +23,35 @@ if (typeof document !== 'undefined') {
     document.addEventListener('pointerdown', position, {passive:true});
     document.addEventListener('focusin', position);
     document.addEventListener('click', position);
+}
+
+// Each chart owns its subscription. Never mutate hidden/ARIA or synthesize a toggle.
+const dismissalBindings = new WeakMap();
+export function releaseDismiss(root) {
+    const binding = dismissalBindings.get(root);
+    if (!binding) return;
+    document.removeEventListener('pointerdown', binding.outside, true);
+    document.removeEventListener('focusin', binding.outside, true);
+    root.removeEventListener('focusout', binding.blur);
+    binding.observer.disconnect();
+    dismissalBindings.delete(root);
+}
+export function bindDismiss(root, reference) {
+    if (!root?.isConnected || dismissalBindings.has(root)) return;
+    const dismissOutside = target => {
+        const bar = root.querySelector('.public-answer-bar[aria-expanded="true"]');
+        const group = bar?.closest('.public-answer-group');
+        // Keep pointer/focus on the trigger and all panel links usable. A different
+        // group, another chart, a non-focusable background, or null focus dismisses.
+        if (!group || (target && group.contains(target))) return;
+        reference.invokeMethodAsync('Dismiss', root.dataset.popupGeneration).catch(() => {});
+    };
+    const outside = event => dismissOutside(event.target);
+    const blur = event => dismissOutside(event.relatedTarget);
+    const observer = new MutationObserver(() => { if (!root.isConnected) releaseDismiss(root); });
+    observer.observe(document.body, {childList:true, subtree:true});
+    document.addEventListener('pointerdown', outside, true);
+    document.addEventListener('focusin', outside, true);
+    root.addEventListener('focusout', blur);
+    dismissalBindings.set(root, {outside, blur, observer});
 }
