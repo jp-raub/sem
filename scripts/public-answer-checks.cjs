@@ -24,12 +24,30 @@ module.exports=async({p,g,ok})=>{
   ok(await panel.locator('a').count()===1&&(await panel.locator('a').getAttribute('href')).startsWith('/profiles/'),'Expanded chart keeps a real profile link without a write operation');
   await noBar.press('Escape');await panel.waitFor({state:'hidden'});await noBar.locator('.public-answer-tooltip').waitFor({state:'hidden'});
   ok(await noBar.getAttribute('aria-expanded')==='false'&&await noBar.evaluate(e=>e===document.activeElement),'Escape dismisses the respondent display and preserves keyboard focus');
-  await noBar.press('Enter');await panel.waitFor({state:'visible'});await noBar.press('Space');await panel.waitFor({state:'hidden'});
+  await noBar.press('Enter');await panel.waitFor({state:'visible'});
+  await panel.locator('a').focus();await panel.waitFor({state:'visible'});
+  ok(await noBar.getAttribute('aria-expanded')==='true','Focus inside the respondent profile link keeps the panel open');
+  await w.locator('#public-answers-refresh').focus();await panel.waitFor({state:'hidden'});
+  ok(await noBar.getAttribute('aria-expanded')==='false','Keyboard focus leaving the panel closes the Razor expanded state');
+  await noBar.focus();await noBar.press('Enter');await panel.waitFor({state:'visible'});await noBar.press('Space');await panel.waitFor({state:'hidden'});
   ok(await noBar.getAttribute('aria-expanded')==='false','Enter and Space open and close the chart without navigation');
   for(const scheme of ['light','dark']){await w.emulateMedia({colorScheme:scheme});await w.setViewportSize({width:390,height:844});ok(await w.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'Public chart has no page overflow at 390px in '+scheme);}
   ok(await w.locator('.public-answer-chart img').count()===0,'Respondent names in charts do not create injected images');
   const touch=await g.context().browser().newContext({storageState:await g.context().storageState(),hasTouch:true,ignoreHTTPSErrors:true,viewport:{width:390,height:844}});
-  try{const t=await touch.newPage();await t.goto('https://localhost:18443/events/'+id+'/public-answers');const tb=t.locator('[data-public-question="'+yes.id+'"] .public-answer-chart[data-interactive="true"] [data-answer-group="1"] .public-answer-bar');await tb.waitFor();await tb.tap();await t.waitForFunction(()=>document.querySelector('[data-answer-group="1"] .public-answer-bar[aria-expanded="true"]'));ok(await t.locator('[data-public-question="'+yes.id+'"] [data-answer-group="1"] .public-answer-respondents').isVisible(),'Real touch context opens the respondent list with a tap');await tb.tap();await t.waitForFunction(()=>document.querySelector('[data-answer-group="1"] .public-answer-bar[aria-expanded="false"]'));ok(true,'Second tap closes the respondent list');}finally{await touch.close();}
+  try{const t=await touch.newPage();await t.goto('https://localhost:18443/events/'+id+'/public-answers');const tb=t.locator('[data-public-question="'+yes.id+'"] .public-answer-chart[data-interactive="true"] [data-answer-group="1"] .public-answer-bar');await tb.waitFor();await tb.tap();await t.waitForFunction(()=>document.querySelector('[data-answer-group="1"] .public-answer-bar[aria-expanded="true"]'));ok(await t.locator('[data-public-question="'+yes.id+'"] [data-answer-group="1"] .public-answer-respondents').isVisible(),'Real touch context opens the respondent list with a tap');await tb.tap();await t.waitForFunction(()=>document.querySelector('[data-answer-group="1"] .public-answer-bar[aria-expanded="false"]'));ok(true,'Second tap closes the respondent list');
+   const tp=t.locator('[data-public-question="'+yes.id+'"] [data-answer-group="1"] .public-answer-respondents');
+   await tb.tap();await tp.waitFor({state:'visible'});
+   await t.locator('h1').tap();await tp.waitFor({state:'hidden'});
+   ok(await tb.getAttribute('aria-expanded')==='false','Touching a non-focusable heading outside dismisses the respondent state');
+   await tb.tap();await tp.waitFor({state:'visible'});ok(true,'A dismissed touch panel opens with one tap, without a stale toggle');
+   const other=t.locator('[data-public-question="'+text.id+'"] .public-answer-bar').first();
+   await other.tap();await tp.waitFor({state:'hidden'});
+   const otherPanel=t.locator('[data-public-question="'+text.id+'"] .public-answer-respondents').first();await otherPanel.waitFor({state:'visible'});
+   ok(await tb.getAttribute('aria-expanded')==='false'&&await other.getAttribute('aria-expanded')==='true','Switching charts with touch closes the old panel and opens the new one');
+   await t.locator('h1').tap();await otherPanel.waitFor({state:'hidden'});
+   await tb.tap();await tp.waitFor({state:'visible'});
+   const href=await tp.locator('a').first().getAttribute('href');await tp.locator('a').first().tap();await t.waitForURL(url=>url.pathname===href);
+   ok(true,'Touching a profile link inside the panel still navigates normally');}finally{await touch.close();}
   // The event detail owns the save-to-summary signal; no global timer or private draft is shared.
   await w.goto('https://localhost:18443/events/'+id);
   const embedded=w.locator('#event-public-answers-section');
