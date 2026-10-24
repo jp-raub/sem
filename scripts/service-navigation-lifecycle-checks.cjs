@@ -7,7 +7,7 @@ const {chromium}=require('playwright');
  const server=http.createServer((req,res)=>{
   if(req.url==='/service-navigation.js'){res.setHeader('Content-Type','text/javascript');res.end(fs.readFileSync('src/Sem.Web/wwwroot/service-navigation.js'));return;}
   if(req.url==='/sem.css'){res.setHeader('Content-Type','text/css');res.end(fs.readFileSync('src/Sem.Web/wwwroot/sem.css'));return;}
-  res.end('<!doctype html><html lang="ja"><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/sem.css"></head><body>'+markup+'<main><h1>合成画面</h1><button id="outside">画面操作</button><div id="draft"></div></main><script type="module" src="/service-navigation.js"></script></body></html>');
+  res.end('<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/sem.css"></head><body>'+markup+'<main><h1>合成画面</h1><button id="outside">画面操作</button><div id="draft"></div></main><script type="module" src="/service-navigation.js"></script></body></html>');
  });
  await new Promise(r=>server.listen(0,'127.0.0.1',r));
  const browser=await chromium.launch({executablePath:process.env.SEM_CHROMIUM||undefined,args:['--no-sandbox']});let count=0;
@@ -20,6 +20,10 @@ const {chromium}=require('playwright');
   await p.locator('#navigation-toggle').click();await p.waitForSelector('#navigation-panel:visible');
   check(await p.locator('#navigation-service').isVisible(),'Current global admin can access service link');
   check(await p.locator('#navigation-audit').isVisible() && await p.locator('#navigation-audit').getAttribute('href') === '/service/audit','Global admin has a direct audit link in the common menu');
+  check((await p.locator('#navigation-panel > a, #navigation-panel > button').allTextContents()).map(x=>x.trim()).join('|')==='サービス管理|イベント一覧|プロフィール管理|アカウント管理|通知管理|招待管理|ログアウト','Approved main menu order ends with logout');
+  check((await p.locator('.navigation-auxiliary a').allTextContents()).join('|')==='表示設定|監査ログ','Appearance and audit stay discoverable in a separate auxiliary group');
+  for(const width of [320,390,768,1440]){await p.setViewportSize({width,height:900});check(await p.locator('#navigation-panel').evaluate(e=>{const b=e.getBoundingClientRect();return b.left>=0&&b.right<=innerWidth&&e.scrollWidth<=e.clientWidth;}),'Menu remains within viewport '+width);}
+  await p.setViewportSize({width:390,height:844});
   await p.keyboard.press('Escape');check(await p.locator('#navigation-toggle').evaluate(e=>e===document.activeElement),'Escape returns focus');
   response={...response,isAdmin:false,unreadCount:0};await p.locator('#navigation-toggle').click();await p.waitForSelector('#navigation-panel:visible');
   check(await p.locator('#navigation-service').isHidden(),'Permission removal applied before opening menu');

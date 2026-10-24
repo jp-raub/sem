@@ -1,16 +1,21 @@
 @page "/events/{EventId}/part-start-preferences"
 @rendermode InteractiveServer
+@implements IDisposable
 @using Sem.Web.Core
 @inject AuthenticationStateProvider Authentication
 @inject CoreFoundationService Core
-<PageTitle>タイムパート開始通知</PageTitle>
-<h1>タイムパート開始通知：@View?.Title</h1>
-<p><a href="@($"/events/{EventId}/timetable")">タイムテーブルへ戻る</a></p>
+@if (!Embedded)
+{
+ <PageTitle>タイムパート開始通知</PageTitle>
+ <h1>タイムパート開始通知：@View?.Title</h1>
+ <p><a href="@($"/events/{EventId}/timetable")">タイムテーブルへ戻る</a> ／ <a href="/notifications">通知管理へ</a></p>
+}
+else { <h3>タイムパート開始通知：@View?.Title</h3> }
 <p>自分が通知を希望するパートを選択します。初期状態はOFFです。予定時刻のリマインダーではなく、実際の開始記録に連動する通知です。</p>
 <p>端末ごとの通知許可・登録も必要です。この設定は端末の通知許可を変更しません。</p>
 <p id="part-start-error" role="alert">@Error</p><p id="part-start-message" role="status">@Message</p>
 @if(View is not null){
- <section id="part-start-settings" data-interactive="@Ready.ToString().ToLowerInvariant()" data-connected="@View.DeliveryConnected.ToString().ToLowerInvariant()">
+ <section id="part-start-settings" data-event-id="@View.EventId" data-interactive="@Ready.ToString().ToLowerInvariant()" data-connected="@View.DeliveryConnected.ToString().ToLowerInvariant()">
  <p>実Startの記録後、現在もON・閲覧可能・有効な端末登録である場合に送信します。実Startから10分後と実Endの早い方まで有効です。ON前の開始は遡って通知しません。配信サービス受理と端末受信は別です。</p>
  @if(!View.PushConfigured){<p role="status">ホストのPush配信鍵は未設定です。この状態では送信しません。</p>}
  <button id="part-start-refresh" disabled="@(Busy||!Ready)" @onclick="Load">最新状態を取得</button>
@@ -20,9 +25,28 @@
 }
 @code{
  [Parameter]public string EventId{get;set;}="";
- Sem.Web.Core.PartStartPreferences?View;bool Busy,Ready;string Error="",Message="";
+ [Parameter]public bool Embedded{get;set;}
+ [Parameter]public EventCallback<bool> BusyChanged{get;set;}
+ Sem.Web.Core.PartStartPreferences?View;bool Busy,Ready,Disposed;long Generation;string Error="",Message="";string? LoadedEventId;
  protected override void OnAfterRender(bool firstRender){if(firstRender){Ready=true;StateHasChanged();}}
- protected override async Task OnParametersSetAsync(){View=null;Message="";await Load();}
- async Task Load(){try{View=await Core.ReadPartStartPreferencesAsync((await Authentication.GetAuthenticationStateAsync()).User,EventId);Error="";}catch{View=null;Error="ログイン状態とイベント閲覧権限を確認してください。";}}
- async Task Toggle(PartStartOption part){if(Busy||!Ready||View is null)return;Busy=true;Error=Message="";try{await Core.SavePartStartPreferenceAsync((await Authentication.GetAuthenticationStateAsync()).User,EventId,new(part.PartId,!part.Enabled,part.Version,View.EventVersion));await Load();if(View is not null)Message="設定を保存しました。";}catch(CoreConflictException e){await Load();Error=e.Message;}catch(UnauthorizedAccessException){View=null;Error="再ログインとイベント閲覧権限を確認してください。";}catch(System.ComponentModel.DataAnnotations.ValidationException e){await Load();Error=e.Message;}catch{View=null;Error="保存結果を確認できません。再読込して確認してください。";}finally{Busy=false;}}
+ protected override async Task OnParametersSetAsync(){if(LoadedEventId==EventId)return;LoadedEventId=EventId;Generation++;View=null;Message="";await Load();}
+ async Task Read(string eventId,long generation)
+ {
+  try{var actor=(await Authentication.GetAuthenticationStateAsync()).User;var view=await Core.ReadPartStartPreferencesAsync(actor,eventId);if(Disposed||generation!=Generation)return;View=view;Error="";}
+  catch{if(!Disposed&&generation==Generation){View=null;Error="ログイン状態とイベント閲覧権限を確認してください。";}}
+ }
+ async Task Load(){if(Busy||Disposed)return;Busy=true;await BusyChanged.InvokeAsync(true);try{await Read(EventId,Generation);}finally{Busy=false;if(!Disposed)await BusyChanged.InvokeAsync(false);}}
+ async Task Toggle(PartStartOption part)
+ {
+  if(Busy||!Ready||View is null||Disposed)return;
+  var eventId=EventId;var generation=Generation;var eventVersion=View.EventVersion;
+  Busy=true;Error=Message="";await BusyChanged.InvokeAsync(true);
+  try{await Core.SavePartStartPreferenceAsync((await Authentication.GetAuthenticationStateAsync()).User,eventId,new(part.PartId,!part.Enabled,part.Version,eventVersion));await Read(eventId,generation);if(!Disposed&&generation==Generation&&View is not null)Message="設定を保存しました。";}
+  catch(CoreConflictException e){await Read(eventId,generation);if(!Disposed&&generation==Generation)Error=e.Message;}
+  catch(UnauthorizedAccessException){if(!Disposed&&generation==Generation){View=null;Error="再ログインとイベント閲覧権限を確認してください。";}}
+  catch(System.ComponentModel.DataAnnotations.ValidationException e){await Read(eventId,generation);if(!Disposed&&generation==Generation)Error=e.Message;}
+  catch{if(!Disposed&&generation==Generation){View=null;Error="保存結果を確認できません。再読込して確認してください。";}}
+  finally{Busy=false;if(!Disposed)await BusyChanged.InvokeAsync(false);}
+ }
+ public void Dispose(){Disposed=true;Generation++;}
 }
