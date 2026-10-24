@@ -1,12 +1,10 @@
 @page "/events/{EventId}/phases"
 @rendermode InteractiveServer
+@inherits EventManagementComponent
 @using Sem.Web.Core
 @using System.Globalization
-@inject AuthenticationStateProvider Authentication
 @inject CoreFoundationService Core
-<PageTitle>フェーズ管理</PageTitle>
-<h1>フェーズ管理：@Plan?.Title</h1>
-<p><a href="/workspace">業務基盤へ戻る</a></p>
+@if(!Embedded){<PageTitle>フェーズ管理</PageTitle><h1>フェーズ管理：@Plan?.Title</h1><p><a href="/workspace">業務基盤へ戻る</a></p>}else{<h2 id="event-phase-heading">フェーズ</h2>}
 <p>登録曲数上限と受付期間を設定します。参加登録はイベント画面から行い、この画面の保存では登録は発生しません。</p>
 
 <DraftNavigationGuard Protected="@(Editing && (Busy || FeedbackUnknown || PageDirty || ModalDirty))" />
@@ -15,7 +13,7 @@
 @if(Plan is not null)
 {
  <p id="phase-mode">@(Plan.ManualOverride ? "手動優先（自動切替停止中）" : "自動（実際のサーバー時刻で評価）")</p>
- @if(!Editing) { <button id="phase-edit" @onclick="Edit">編集</button> <button id="phase-refresh" @onclick="Load">最新状態を取得</button> }
+ @if(!Editing) { <button id="phase-edit" disabled="@Busy" @onclick="Edit">編集</button> <button id="phase-refresh" disabled="@Busy" @onclick="Load">最新状態を取得</button> }
  else { <p>変更は下書きです。最後の保存まで共有されません。</p>
   <label><input id="phase-manual" type="checkbox" @bind="Manual" disabled="@(Busy||Modal)" />手動優先<FieldHelp HelpKey="phase.manual" Label="手動優先" /></label>
   <button type="button" id="phase-add" disabled="@(Busy||Modal)" @onclick="New">カスタムフェーズを追加</button>
@@ -56,20 +54,26 @@
 
  long FeedbackRevision; bool FeedbackUnknown;
 
- [Parameter] public string EventId {get;set;}="";
+ 
  PhasePlanView? Plan; List<PhaseView> Rows=[]; PhaseView? Selected;
  bool Editing,Busy,Modal,Manual;string Active="",Name="",Starts="",Ends="",Error="",Message="";int Maximum=2;
  static TimeZoneInfo Zone=>TimeZoneInfo.FindSystemTimeZoneById("Asia/Tokyo");
  static string Japan(string value)=>TimeZoneInfo.ConvertTime(DateTimeOffset.Parse(value,CultureInfo.InvariantCulture),Zone).ToString("yyyy/MM/dd HH:mm:ss");
  static string Local(string? value)=>value is null?"":TimeZoneInfo.ConvertTime(DateTimeOffset.Parse(value,CultureInfo.InvariantCulture),Zone).ToString("yyyy-MM-ddTHH:mm:ss");
  static DateTimeOffset? Parse(string value){if(string.IsNullOrWhiteSpace(value))return null;if(!DateTime.TryParseExact(value,["yyyy-MM-ddTHH:mm","yyyy-MM-ddTHH:mm:ss"],CultureInfo.InvariantCulture,DateTimeStyles.None,out var time))throw new System.ComponentModel.DataAnnotations.ValidationException("日時を確認してください。");return new DateTimeOffset(time,Zone.GetUtcOffset(time));}
- protected override async Task OnParametersSetAsync(){Editing=Modal=false;await Load();}
- async Task Load(){try{Plan=await Core.ReadPhasePlanAsync((await Authentication.GetAuthenticationStateAsync()).User,EventId);Rows=Plan.Phases.ToList();Active=Rows.Single(p=>p.IsActive).Id;Manual=Plan.ManualOverride;Error="";}catch{Plan=null;Rows=[];Error="ログイン状態とイベント管理権限を確認してください。";}}
+ protected override void ClearPrivateState(){Plan=null;Rows=[];Selected=null;Editing=Busy=Modal=Manual=false;Active=Name=Starts=Ends=Error=Message=PageBaseline=ModalBaseline="";Maximum=2;FeedbackUnknown=false;}
+ protected override Task LoadCurrentAsync()=>Load();
+ async Task Load(){var ticket=await BeginOperation();if(ticket is null)return;try{var plan=await Core.ReadPhasePlanAsync(ticket.Principal,ticket.EventId);if(!Current(ticket))return;Plan=plan;Rows=plan.Phases.ToList();Active=Rows.Single(p=>p.IsActive).Id;Manual=plan.ManualOverride;Error="";}catch(UnauthorizedAccessException){if(!Current(ticket))return;ClearPrivateState();Error="現在のイベント管理権限を確認してください。";await NotifyAccessDenied(ticket);}catch{if(!Current(ticket))return;ClearPrivateState();Error="管理情報を取得できませんでした。再取得してください。";}}
  void Edit(){Editing=true;Message="";PageBaseline=PageSnapshot();}
  void Cancel(){if(Busy||Modal||Plan is null)return;FeedbackUnknown=false;Editing=Modal=false;Rows=Plan!.Phases.ToList();Active=Rows.Single(p=>p.IsActive).Id;Manual=Plan.ManualOverride;Error="";Message="下書きを取り消しました。";}
  void New(){if(Busy||Modal||!Editing)return;Selected=null;Name=Starts=Ends="";Maximum=2;Modal=true;ModalBaseline=ModalSnapshot();}
  void Open(PhaseView p){if(Busy||Modal||!Editing)return;Selected=p;Name=p.Name;Maximum=p.MaxPicks;Starts=Local(p.ActivateAt);Ends=Local(p.DeactivateAt);Modal=true;ModalBaseline=ModalSnapshot();}
  void Apply(){if(Busy||!Editing||!Modal)return;try{var start=Parse(Starts);var end=Parse(Ends);if(string.IsNullOrWhiteSpace(Name)||Name.Length>100||Maximum< -1||start is not null&&end is not null&&end<=start)throw new System.ComponentModel.DataAnnotations.ValidationException("名前／曲数／有効期間を確認してください。");var p=new PhaseView(Selected?.Id??Guid.NewGuid().ToString(),"Custom",Name.Trim(),Maximum,start?.ToUniversalTime().ToString("O"),end?.ToUniversalTime().ToString("O"),false);if(Selected is not null)Rows[Rows.IndexOf(Selected)]=p;else Rows.Add(p);Modal=false;Error="";}catch(Exception e){Error=e.Message;}}
  void Delete(){if(Busy||!Editing||!Modal)return;if(Selected is not null&&Selected.Id!=Active){Rows.Remove(Selected);Modal=false;}}
- async Task Save(){if(Busy||Modal||!Editing||Plan is null)return;FeedbackRevision++;FeedbackUnknown=false;Busy=true;Error="";try{var edit=new PhasePlanEdit(Plan!.RowVersion,Manual,Active,Rows.Where(p=>p.Kind=="Custom").Select(p=>new CustomPhaseEdit(p.Id,p.Name,p.MaxPicks,p.ActivateAt is null?null:DateTimeOffset.Parse(p.ActivateAt),p.DeactivateAt is null?null:DateTimeOffset.Parse(p.DeactivateAt))).ToArray());await Core.SavePhasePlanAsync((await Authentication.GetAuthenticationStateAsync()).User,EventId,edit);Editing=Modal=false;Message="保存しました。";await Load();}catch(UnauthorizedAccessException){Plan=null;Rows=[];Editing=Modal=false;Error="再ログインと管理権限を確認してください。";}catch(Exception e)when(e is CoreConflictException or System.ComponentModel.DataAnnotations.ValidationException){Error=e.Message;}catch{FeedbackUnknown=true;Error="保存結果を確認できませんでした。再送前に最新状態を確認してください。";}finally{Busy=false;}}
+ async Task Save(){if(Busy||Modal||!Editing||Plan is null)return;var ticket=await BeginOperation();if(ticket is null)return;FeedbackRevision++;FeedbackUnknown=false;Busy=true;Error="";try{var edit=new PhasePlanEdit(Plan.RowVersion,Manual,Active,Rows.Where(p=>p.Kind=="Custom").Select(p=>new CustomPhaseEdit(p.Id,p.Name,p.MaxPicks,p.ActivateAt is null?null:DateTimeOffset.Parse(p.ActivateAt),p.DeactivateAt is null?null:DateTimeOffset.Parse(p.DeactivateAt))).ToArray());await Core.SavePhasePlanAsync(ticket.Principal,ticket.EventId,edit);
+ if(!Current(ticket))return;Editing=Modal=false;await Load();if(SameContext(ticket)){Message="保存しました。";await NotifySaved(ticket);}
+ }catch(UnauthorizedAccessException){if(!Current(ticket))return;ClearPrivateState();Error="再ログインと管理権限を確認してください。";await NotifyAccessDenied(ticket);}
+ catch(Exception e)when(e is CoreConflictException or System.ComponentModel.DataAnnotations.ValidationException){if(Current(ticket))Error=e.Message;}
+ catch{if(Current(ticket)){FeedbackUnknown=true;Error="保存結果を確認できませんでした。下書きを保持しています。再送前に最新状態を確認してください。";}}
+ finally{if(SameContext(ticket))Busy=false;}}
 }

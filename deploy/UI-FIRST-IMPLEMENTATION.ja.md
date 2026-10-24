@@ -15,8 +15,8 @@
 |共通ヘッダー・メニュー|ServiceNavigation / service-navigation.js|今回: 採用順を service → events → profile → account → notification → invitation → logout とし、表示設定・監査を補助群へ。通知数、権限による非表示、Escape・外側・フォーカス、ログアウトの保護は維持。320pxでの幅計算も検証する。|
 |通知管理|DeviceNotifications / PartStartPreferences|今回: 現在ブラウザーのPush登録と閲覧可能イベントの本人設定を同じ入口へ。初期状態で変更せず、選択したイベントの実状態を読む。旧URL維持。全端末管理・テスト送信は段階承認の対象外。|
 |一覧・概要・タブ|Workspace / EventOverview / Timetable / Participation / PublicAnswers|概要配置・テーマ初回移動・参加表と回答集計には既存の版別受入がある。全体一致には流用しない。タブ保持・権限喪失時の戻り先、管理導線の最終順序を後続で実描画照合。|
-|イベント管理導線|Phases / Questions / EventPushRules / AdminAudit 等|独立画面を詳細の管理導線へまとめる残差。権限と保存所有者を保持し、旧URLを残す。部分保存を一括保存と偽らない。|
-|曲・タイムテーブル編集|Songs / Timetable / DraftEditDialog|今回の変更候補: 曲／進行を共通下書きで追加・編集・取消・並べ替えし、最終保存で一括確定する。旧曲APIは互換維持。競合・占有削除保護・秒精度を保持。検証と公開の完了は対象commitの記録で判定する。|
+|イベント管理導線|Phases / Questions / EventPushRules / AdminAudit 等|今回: フェーズ・設問・WebPushを詳細へ埋込み、採用順と管理者編集入口・イベント限定監査を接続する。権限・独立保存・旧URLを保持。[契約](EVENT-MANAGEMENT-UI.ja.md)。公開の成否は対象PRの固定版記録で判定する。|
+|曲・タイムテーブル編集|Songs / Timetable / DraftEditDialog|PR116／117、main145d614aで曲／進行の共通下書きと一括保存を公開済み。旧曲API・競合・占有削除保護・秒精度を保持。[契約](TIMETABLE-EDITOR.ja.md)。今回の管理区画統合でも保護する。|
 |パート定義|Definitions|ドラッグ＋上下移動の並べ替え差分を残件として扱う。元のサービス定義コピーとイベント独立保存を維持。静的棚卸しで見つかった文字化けラベルもこの画面の対応で修正する。|
 |フェーズ・設問|Phases / Questions|編集欄だけの取消と離脱保護・中央確認は既存受入済み。詳細への配置、ラジオ／カスタム編集の最終見た目、既定・稼働中の削除不可を後続で照合。既存受入を繰り返し人に依頼しない。|
 |当日進行|Progress / ShorteningPanel|元／最新／実績のグループ、開始・終了状態の一体表示、遅延段階と現在の遅れの表示差分が残る。定数短縮の既存保護を維持。静的棚卸しで見つかった文字化け説明も同じ対応へ。|
