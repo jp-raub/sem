@@ -54,6 +54,14 @@ jobs:
         run: |
           npm install --prefix "$RUNNER_TEMP/sem-browser" --no-save playwright@1.56.1
           "$RUNNER_TEMP/sem-browser/node_modules/.bin/playwright" install --with-deps chromium --only-shell
+      - name: Verify keyboard and touch field help above dialogs
+        env:
+          NODE_PATH: ${{ runner.temp }}/sem-browser/node_modules
+        run: |
+          node scripts/field-help-browser-checks.cjs
+          node scripts/operation-feedback-browser-checks.cjs
+          node scripts/service-navigation-lifecycle-checks.cjs
+          node scripts/theme-lifecycle-browser-checks.cjs
       - name: Verify unified timetable UI in an independent fresh fixture
         env:
           NODE_PATH: ${{ runner.temp }}/sem-browser/node_modules
@@ -110,14 +118,6 @@ jobs:
         run: |
           npm install --prefix "$RUNNER_TEMP/sem-browser" --no-save playwright@1.56.1
           "$RUNNER_TEMP/sem-browser/node_modules/.bin/playwright" install --with-deps chromium --only-shell
-      - name: Verify keyboard and touch field help above dialogs
-        env:
-          NODE_PATH: ${{ runner.temp }}/sem-browser/node_modules
-        run: |
-          node scripts/field-help-browser-checks.cjs
-          node scripts/operation-feedback-browser-checks.cjs
-          node scripts/service-navigation-lifecycle-checks.cjs
-          node scripts/theme-lifecycle-browser-checks.cjs
       - name: Verify populated local acceptance and whole-directory restore
         env:
           NODE_PATH: ${{ runner.temp }}/sem-browser/node_modules
