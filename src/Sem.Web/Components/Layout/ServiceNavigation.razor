@@ -8,14 +8,16 @@
         <nav id="navigation-panel" class="navigation-panel" aria-label="共通メニュー" hidden>
             <p id="navigation-user"></p>
             <a id="navigation-service" href="/workspace#core-service" hidden>サービス管理</a>
-            <a id="navigation-audit" href="/service/audit" hidden>監査ログ</a>
             <a href="/workspace#core-events">イベント一覧</a>
             <a href="/profile/settings#profile-edit-heading">プロフィール管理</a>
             <a href="/settings/account#account-passkeys">アカウント管理</a>
             <a id="navigation-notifications-link" href="/notifications" data-enhance-nav="false">通知管理</a>
-            <a href="/appearance">表示設定</a>
             <a id="navigation-invitations-link" href="/invitations" data-enhance-nav="false">招待管理</a>
             <button id="navigation-logout" type="button">ログアウト</button>
+            <div class="navigation-auxiliary" role="group" aria-label="補助メニュー">
+                <a href="/appearance">表示設定</a>
+                <a id="navigation-audit" href="/service/audit" hidden>監査ログ</a>
+            </div>
         </nav>
     </div>
     <p id="navigation-status" role="status" class="navigation-status"></p>

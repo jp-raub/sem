@@ -5,9 +5,10 @@
 @inject IJSRuntime JS
 
 <PageTitle>通知管理</PageTitle>
+<h1>通知管理</h1>
 <section id="device-notifications-page" @ref="Root" aria-labelledby="device-notifications-title">
-    <h1 id="device-notifications-title">このブラウザーの通知設定</h1>
-    <p>このページは、現在使用しているブラウザーのPush登録だけを管理します。端末・ブラウザーごとに登録してください。ページを開いただけでは通知許可を求めず、Push登録・更新もしません。</p>
+    <h2 id="device-notifications-title">このブラウザーの通知設定</h2>
+    <p>この欄は、現在使用しているブラウザーのPush登録を管理します。端末・ブラウザーごとに登録してください。ページを開いただけでは通知許可を求めず、Push登録・更新もしません。</p>
     <p>登録は「このブラウザーでPushを登録」ボタンを押したときだけ開始します。ブラウザーの通知許可が未決定の場合、その操作中に許可を確認します。</p>
     <p id="device-notifications-capability" role="status" aria-live="polite">ブラウザー機能を確認しています。</p>
     <p id="device-notifications-permission">通知許可状態を確認しています。</p>
@@ -22,6 +23,8 @@
     <p id="device-notifications-guidance">ブラウザーの通知許可は、Push登録を解除しても取り消されません。ログアウト時にはサーバー側の端末紐付けが解除されます。再ログイン後、このページで改めて明示的に登録してください。</p>
     <p>ここではテスト通知を送信しません。テスト送信はアカウント全体へ影響するため、この端末だけの管理画面には含めていません。</p>
 </section>
+
+<EventNotificationSettings />
 
 @code {
     private ElementReference Root;

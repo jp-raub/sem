@@ -8,7 +8,7 @@ body{margin:0;font-family:system-ui,sans-serif;color:#172b22;background:#f6f8f6}
 .navigation-controls{display:flex;align-items:center;flex-shrink:0;gap:8px}
 .navigation-controls a,.navigation-controls button,.navigation-panel a,.navigation-panel button{box-sizing:border-box;min-height:44px;min-width:44px;padding:10px 12px;border-radius:6px;color:#1767ad;font:inherit;text-decoration:none;margin:0}
 .navigation-controls a{border:1px solid #d8ded9}.navigation-controls button{background:#f6f8f6;border:1px solid #d8ded9}
-.navigation-panel{position:absolute;right:16px;top:calc(100% + 4px);z-index:1000;width:min(300px,calc(100vw - 32px));background:#fff;border:1px solid #d8ded9;border-radius:8px;box-shadow:0 8px 24px #172b2220;padding:8px}
+.navigation-panel{box-sizing:border-box;position:absolute;right:16px;top:calc(100% + 4px);z-index:1000;width:min(300px,calc(100vw - 32px));background:#fff;border:1px solid #d8ded9;border-radius:8px;box-shadow:0 8px 24px #172b2220;padding:8px}
 .navigation-panel a,.navigation-panel button{display:block;width:100%;text-align:left;overflow-wrap:anywhere}.navigation-panel button{background:transparent;border:0}.navigation-panel p{margin:8px 12px;padding-bottom:8px;border-bottom:1px solid #d8ded9;overflow-wrap:anywhere}
 .navigation-panel a:hover,.navigation-panel button:hover{background:#eef4f9}
 .service-navigation :focus-visible{outline:3px solid #1767ad;outline-offset:3px}
@@ -46,3 +46,7 @@ body{margin:0;font-family:system-ui,sans-serif;color:#172b22;background:#f6f8f6}
 @media(forced-colors:active){.admin-account-table-wrap,.admin-account-table th,.admin-account-table td,.account-role-tag,.admin-account-dialog{border:1px solid CanvasText}.account-name-button{color:LinkText}.admin-account-dialog :focus-visible,.account-name-button:focus-visible,.admin-account-table-wrap:focus-visible{outline-color:Highlight}}
 @media(max-width:700px){.app-main{padding:25px 4% 40px}.service-navigation-inner{padding:12px 4%}.navigation-status{padding:0 4%}}
 @media(min-width:1051px){.app-main{max-width:1920px;padding-left:24px;padding-right:24px}.service-navigation-inner,.navigation-status{padding-left:24px;padding-right:24px}}
+
+.navigation-auxiliary{border-top:1px solid var(--border,#c4d4ca);margin-top:8px;padding-top:8px}
+
+#notification-events select{box-sizing:border-box;max-width:100%}
