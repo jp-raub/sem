@@ -61,7 +61,15 @@
             </section>
         }
 
-        <section id="event-timetable-section" class="event-journey-section" aria-labelledby="event-timetable-heading">
+        @if(View.Available.Contains("notifications")){
+            <nav class="event-management-index" aria-label="イベント管理の情報順">
+              @foreach(var target in ManagementSections){<a href="@("#event-"+target.Id+"-section")">@target.Label</a>}
+            </nav>
+            <section id="event-phase-section" class="event-journey-section event-management-panel" data-event-management-section="phases" aria-labelledby="event-phase-heading">
+              <Phases AccessDenied="OnManagementSaved" Saved="OnManagementSaved" @key="EditorContextKey" EventId="@EventId" Embedded="true" ContextGeneration="@ContextGeneration" ContextIdentityKey="@ContextIdentityKey" />
+            </section>
+        }
+        <section data-event-management-section="@(View.Available.Contains("notifications")?"timetable":null)" id="event-timetable-section" class="event-journey-section" aria-labelledby="event-timetable-heading">
             <Timetable EventId="@EventId"
                        Embedded="true"
                        ContextGeneration="@ContextGeneration"
@@ -79,18 +87,38 @@
                            TimedRows="@TimedRows"
                            TimetableClockFormat="@TimetableClockFormat"
                            TimetableDurationFormat="@TimetableDurationFormat"
-                           AnswersSaved="OnAnswersSaved" />
+                           AnswersSaved="OnAnswersSaved">
+                <BeforeSpectators>
+                    <section id="event-public-answers-section" class="panel" data-event-management-section="@(View.Available.Contains("notifications")?"public-answers":null)" aria-labelledby="event-public-answers-heading">
+                        <PublicAnswers @key="EditorContextKey" EventId="@EventId" Embedded="true" RefreshRevision="@PublicAnswersRevision" />
+                    </section>
+                </BeforeSpectators>
+            </Participation>
         </section>
 
-        <section id="event-public-answers-section" class="panel" aria-labelledby="event-public-answers-heading">
-            <PublicAnswers @key="EditorContextKey" EventId="@EventId" Embedded="true" RefreshRevision="@PublicAnswersRevision" />
-        </section>
+        @if(View.Available.Contains("notifications")){
+          <section id="event-question-section" class="event-journey-section event-management-panel" data-event-management-section="questions" aria-labelledby="event-question-heading">
+            <Questions AccessDenied="OnManagementSaved" Saved="OnManagementSaved" @key="EditorContextKey" EventId="@EventId" Embedded="true" ContextGeneration="@ContextGeneration" ContextIdentityKey="@ContextIdentityKey" />
+          </section>
+          <section id="event-managers-section" class="event-journey-section" data-event-management-section="managers" aria-labelledby="event-managers-heading">
+            <h2 id="event-managers-heading">イベント限定管理者</h2>
+            @if(View.ManagerNames is {Length:>0}){<ul>@foreach(var name in View.ManagerNames){<li>@name</li>}</ul>}else{<p>イベント限定管理者は設定されていません。全体管理者の権限は別です。</p>}
+            <a href="#event-management">概要・管理者の編集へ</a><p>変更は概要編集の最後の保存で確定します。他の編集欄の下書きとは別です。</p>
+          </section>
+          <section id="event-push-section" class="event-journey-section event-management-panel" data-event-management-section="push" aria-labelledby="event-push-heading">
+            <EventPushRules AccessDenied="OnManagementSaved" Saved="OnManagementSaved" @key="EditorContextKey" EventId="@EventId" Embedded="true" ContextGeneration="@ContextGeneration" ContextIdentityKey="@ContextIdentityKey" />
+          </section>
+          <section id="event-audit-section" class="event-journey-section" data-event-management-section="audit" aria-labelledby="event-audit-heading">
+            <EventAudit AccessDenied="OnManagementSaved" @key="EditorContextKey" EventId="@EventId" Embedded="true" ContextGeneration="@ContextGeneration" ContextIdentityKey="@ContextIdentityKey" />
+          </section>
+        }
 
         <p class="event-back-link"><a data-enhance-nav="false" href="/workspace#core-events">イベント一覧へ戻る</a></p>
     }
 </section>
 
 @code {
+    static readonly (string Id,string Label)[] ManagementSections=[("phase","フェーズ"),("timetable","タイムテーブル"),("public-answers","公開設問の回答状況"),("spectators","観覧申込み"),("comments","コメント"),("question","イベント設問"),("managers","イベント限定管理者"),("push","Web Push通知設定"),("audit","監査ログ")];
     [Parameter] public string EventId { get; set; } = "";
     EventTabsView? View;
     IReadOnlyList<TimedPart>? TimedRows;
@@ -111,6 +139,7 @@
     string EditorMessage = "";
     long EditorFeedbackRevision;
     long PublicAnswersRevision;
+    async Task OnManagementSaved(string eventId){if(Disposed||eventId!=EventId)return;var identity=BoundIdentity;var principal=(await Authentication.GetAuthenticationStateAsync()).User;if(Disposed||identity!=BindingFor(principal))return;await RefreshContextAsync(eventId,principal);if(!Disposed&&EventId==eventId&&BoundIdentity==identity)PublicAnswersRevision++;}
     void OnAnswersSaved(string eventId) { if (!Disposed && eventId == EventId) PublicAnswersRevision++; }
     string EditorContextKey => $"{EventId}:{ContextGeneration}:{ContextIdentityKey}";
     void BeginEdit() { EditingOverview = true; EditorMessage = ""; }

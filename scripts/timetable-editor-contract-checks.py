@@ -27,7 +27,7 @@ def verify(w,f,d):
  assert 'run: bash scripts/integration-checks.sh' in integration
  assert 'run: bash scripts/acceptance-browser-fixture.sh' in browser
  assert 'SEM_ACCEPTANCE_FOCUS:' not in browser
- assert 'timetable-editor-ui) export SEM_TIMETABLE_EDITOR_UI_CHECKS=1 SEM_EDIT_GUARD_CHECKS=1 ;;' in f
+ assert 'timetable-editor-ui) export SEM_TIMETABLE_EDITOR_UI_CHECKS=1 SEM_EDIT_GUARD_CHECKS=1 SEM_EVENT_MANAGEMENT_UI_CHECKS=1 ;;' in f
  full=re.search(r'(?m)^ full\)(.*);;',f).group(1)
  for flag in ['NOTIFICATION_UI','THEME_NAVIGATION','PUBLIC_ANSWER','EVENT_HEADER','EVENT_DESCRIPTION','EVENT_LOCATION','EVENT_MATRIX','COMMENT','ACCEPTANCE_WORKFLOW']:
   assert 'SEM_'+flag+'_CHECKS=1' in full
@@ -36,6 +36,7 @@ def verify(w,f,d):
  assert 'SEM_ACCEPTANCE_RETENTION_COMMAND="$run/restore.sh"' in full
  assert 'export SEM_STORAGE_UPGRADE_COMMAND="$run/restore.sh"' in f
  assert "if(process.env.SEM_TIMETABLE_EDITOR_UI_CHECKS)await phase('timetable-editor-ui-checks',()=>require('./timetable-editor-ui-checks.cjs')({p,g,ok}));" in d
+ assert "if(process.env.SEM_EVENT_MANAGEMENT_UI_CHECKS)await phase('event-management-ui-checks',()=>require('./event-management-ui-checks.cjs')({p,g,ok}));" in d
  assert 'exit "$status"' in f
  assert '!verification/acceptance-native/**' in integration
  for private in ['e2e-error.txt','host.log','data.db','key.pem']:
@@ -50,4 +51,7 @@ for w in mutations:
 try:verify(workflow,fixture.replace('SEM_TIMETABLE_EDITOR_UI_CHECKS=1 SEM_EDIT_GUARD_CHECKS=1','SEM_TIMETABLE_EDITOR_UI_CHECKS=1'),driver)
 except AssertionError:pass
 else:raise AssertionError('Dropped relocated edit guard coverage accepted')
-print('Unified timetable coverage contract passed: actual workflow + 8 unsafe mutations rejected')
+try:verify(workflow,fixture.replace('SEM_EDIT_GUARD_CHECKS=1 SEM_EVENT_MANAGEMENT_UI_CHECKS=1','SEM_EDIT_GUARD_CHECKS=1'),driver)
+except AssertionError:pass
+else:raise AssertionError('Dropped management UI coverage accepted')
+print('Unified timetable coverage contract passed: actual workflow + 9 unsafe mutations rejected')

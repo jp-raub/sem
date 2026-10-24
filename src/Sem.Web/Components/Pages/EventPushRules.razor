@@ -1,11 +1,9 @@
 @page "/events/{EventId}/event-push-rules"
 @rendermode InteractiveServer
+@inherits EventManagementComponent
 @using Sem.Web.Core
-@inject AuthenticationStateProvider Authentication
 @inject CoreFoundationService Core
-<PageTitle>イベント通知ルール</PageTitle>
-<h1>イベント通知ルール：@View?.Title</h1>
-<p><a href="@($"/events/{EventId}/notification-plan")">通知予定へ戻る</a></p>
+@if(!Embedded){<PageTitle>イベント通知ルール</PageTitle><h1>イベント通知ルール：@View?.Title</h1><p><a href="@($"/events/{EventId}/notification-plan")">通知予定へ戻る</a></p>}else{<h2 id="event-push-heading">Web Push通知設定</h2><p>このルール切替は独立して即時保存します。他の編集欄の下書きを保存・取消しません。</p><a href="@($"/events/{EventId}/notification-plan")">通知予定・予約を確認</a>}
 <p>既定はOFFです。ONにする前から期限が到来していた通知は送信対象にしません。再有効化の前に発生した実績も遡って通知しません。</p>
 <p>開催前＝正式な演奏参加者＋観覧登録者、曲準備＝その曲の演奏枠登録者。本人の任意パート開始通知は別の設定です。</p>
 <p id="event-push-rule-error" role="alert">@Error</p><p id="event-push-rule-message" role="status">@Message</p>
@@ -20,12 +18,17 @@
  </section>
 }
 @code{
- [Parameter]public string EventId{get;set;}="";
+ 
  EventPushRulesView?View;bool Busy,Ready;string Error="",Message="";
  protected override void OnAfterRender(bool firstRender){if(firstRender){Ready=true;StateHasChanged();}}
- protected override async Task OnParametersSetAsync(){View=null;Message="";await Load();}
+ protected override void ClearPrivateState(){View=null;Busy=false;Error=Message="";}
+ protected override Task LoadCurrentAsync()=>Load();
  static string Name(string kind)=>kind=="OpeningReminder"?"開催120分前通知":"曲準備通知";
  static string State(string state)=>state switch{"Disabled"=>"無効","Planned"=>"予定","Eligible"=>"送信条件成立（配信結果ではない）","WaitingActual"=>"実績待ち","BeforeActivation"=>"有効化前のため対象外","TargetStarted"=>"開始済み・取消対象","Expired"=>"破棄期限超過",_=>"要確認・送信不可"};
- async Task Load(){try{View=await Core.ReadEventPushRulesAsync((await Authentication.GetAuthenticationStateAsync()).User,EventId);Error="";}catch{View=null;Error="ログイン状態・管理権限・予定データを確認してください。";}}
- async Task Toggle(EventPushRuleView rule){if(Busy||!Ready||View is null)return;Busy=true;Error=Message="";try{await Core.SaveEventPushRuleAsync((await Authentication.GetAuthenticationStateAsync()).User,EventId,new(rule.Kind,!rule.Enabled,rule.Version,View.EventVersion));await Load();if(View is not null)Message="通知ルールを保存しました。";}catch(CoreConflictException e){await Load();Error=e.Message;}catch(System.ComponentModel.DataAnnotations.ValidationException e){await Load();Error=e.Message;}catch(UnauthorizedAccessException){View=null;Error="再ログインと管理権限を確認してください。";}catch{View=null;Error="保存結果を確認できません。再読込して確認してください。";}finally{Busy=false;}}
+ async Task Load(){var ticket=await BeginOperation();if(ticket is null)return;try{var view=await Core.ReadEventPushRulesAsync(ticket.Principal,ticket.EventId);if(Current(ticket)){View=view;Error="";}}catch(UnauthorizedAccessException){if(Current(ticket)){View=null;Error="現在のイベント管理権限を確認してください。";await NotifyAccessDenied(ticket);}}catch{if(Current(ticket)){View=null;Error="管理情報を取得できませんでした。再取得してください。";}}}
+ async Task Toggle(EventPushRuleView rule){if(Busy||!Ready||View is null)return;var ticket=await BeginOperation();if(ticket is null)return;var edit=new EventPushRuleEdit(rule.Kind,!rule.Enabled,rule.Version,View.EventVersion);Busy=true;Error=Message="";try{await Core.SaveEventPushRuleAsync(ticket.Principal,ticket.EventId,edit);if(!Current(ticket))return;await Load();if(SameContext(ticket)&&View is not null){Message="通知ルールを保存しました。";await NotifySaved(ticket);}}
+ catch(Exception e)when(e is CoreConflictException or System.ComponentModel.DataAnnotations.ValidationException){if(!Current(ticket))return;await Load();if(SameContext(ticket))Error=e.Message;}
+ catch(UnauthorizedAccessException){if(Current(ticket)){View=null;Error="再ログインと管理権限を確認してください。";await NotifyAccessDenied(ticket);}}
+ catch{if(Current(ticket)){View=null;Error="保存結果を確認できません。再読込して確認してください。";}}
+ finally{if(SameContext(ticket))Busy=false;}}
 }

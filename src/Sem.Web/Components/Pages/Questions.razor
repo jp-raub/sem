@@ -1,17 +1,16 @@
 @page "/events/{EventId}/questions"
 @rendermode InteractiveServer
+@inherits EventManagementComponent
 @using Sem.Web.Core
-@inject AuthenticationStateProvider Authentication
 @inject CoreFoundationService Core
-<PageTitle>イベント設問管理</PageTitle>
-<h1>イベント設問管理：@Plan?.Title</h1><p><a href="/workspace">業務基盤へ戻る</a></p>
+@if(!Embedded){<PageTitle>イベント設問管理</PageTitle><h1>イベント設問管理：@Plan?.Title</h1><p><a href="/workspace">業務基盤へ戻る</a></p>}else{<h2 id="event-question-heading">イベント設問</h2>}
 <p>設問の定義と回答の公開範囲を管理します。申込み・回答入力はイベント画面、集計は公開回答画面から確認できます。この画面の保存では回答は送信されません。</p>
 
 <DraftNavigationGuard Protected="@(Editing && (Busy || FeedbackUnknown || PageDirty || ModalDirty))" />
 <OperationFeedback Revision="FeedbackRevision" Busy="Busy" Success="@Message" Error="@Error" Unknown="FeedbackUnknown" />
 <p id="question-error" role="alert">@Error</p><p id="question-message" role="status">@Message</p>
 @if(Plan is not null){
- @if(!Editing){<button id="question-edit" @onclick="Edit">編集</button><button id="question-refresh" @onclick="Load">最新状態を取得</button>}
+ @if(!Editing){<button id="question-edit" disabled="@Busy" @onclick="Edit">編集</button><button id="question-refresh" disabled="@Busy" @onclick="Load">最新状態を取得</button>}
  else{<p>変更は下書きです。最後の保存まで共有されません。</p><button id="question-add" disabled="@(Busy||Modal)" @onclick="New">設問を追加</button>}
  <p class="manual-order-note">並び順：手動。列見出しでは変更しません。編集時の順序操作で保存順を変更します。</p>
  <table><thead><tr><th>質問文</th><th>形式</th><th>必須／状態</th><th>公開設定</th><th>回答レコード数</th><th>順序</th></tr></thead><tbody>
@@ -40,13 +39,14 @@
 
  long FeedbackRevision; bool FeedbackUnknown;
 
- [Parameter]public string EventId{get;set;}="";
+ 
  EventQuestionPlan?Plan;List<EventQuestionView>Rows=[];EventQuestionView?Selected;bool Editing,Busy,Modal,Required,Disabled,PublicText;string QuestionText="",Error="",Message="";
  string _kind="YesNo";bool _public;
  string Kind{get=>_kind;set{_kind=value;if(value!="Text")PublicText=false;}}
  bool Public{get=>_public;set{_public=value;if(!value)PublicText=false;}}
- protected override async Task OnParametersSetAsync(){Editing=Modal=false;await Load();}
- async Task Load(){try{Plan=await Core.ReadQuestionsAsync((await Authentication.GetAuthenticationStateAsync()).User,EventId);Rows=Plan.Questions.ToList();Error="";}catch{Plan=null;Rows=[];Editing=Modal=false;Error="ログイン状態とイベント管理権限を確認してください。";}}
+ protected override void ClearPrivateState(){Plan=null;Rows=[];Selected=null;Editing=Busy=Modal=Required=Disabled=PublicText=false;QuestionText=Error=Message=PageBaseline=ModalBaseline="";Kind="YesNo";Public=false;FeedbackUnknown=false;}
+ protected override Task LoadCurrentAsync()=>Load();
+ async Task Load(){var ticket=await BeginOperation();if(ticket is null)return;try{var plan=await Core.ReadQuestionsAsync(ticket.Principal,ticket.EventId);if(!Current(ticket))return;Plan=plan;Rows=plan.Questions.ToList();Error="";}catch(UnauthorizedAccessException){if(!Current(ticket))return;ClearPrivateState();Error="現在のイベント管理権限を確認してください。";await NotifyAccessDenied(ticket);}catch{if(!Current(ticket))return;ClearPrivateState();Error="管理情報を取得できませんでした。再取得してください。";}}
  void Edit(){if(Busy)return;Editing=true;Message="";PageBaseline=PageSnapshot();}
  void Cancel(){if(Busy||Modal||Plan is null)return;FeedbackUnknown=false;Rows=Plan!.Questions.ToList();Editing=Modal=false;Error="";Message="下書きを取り消しました。";}
  void New(){if(Busy||Modal||!Editing)return;if(Busy||Modal)return;Selected=null;QuestionText="";Kind="YesNo";Required=Disabled=Public=PublicText=false;Modal=true;ModalBaseline=ModalSnapshot();}
@@ -54,5 +54,10 @@
  void Move(EventQuestionView row,int change){if(Busy||Modal)return;var index=Rows.FindIndex(x=>x.Id==row.Id);if(index<0)return;var next=index+change;if(next>=0&&next<Rows.Count)(Rows[index],Rows[next])=(Rows[next],Rows[index]);}
  void Apply(){if(Busy||!Editing||!Modal)return;var text=QuestionText.Trim();if(text.Length is <1 or >200){Error="質問文を1〜200文字で指定してください。";return;}var row=new EventQuestionView(Selected?.Id??Guid.NewGuid().ToString(),text,Kind,Required,Disabled,Public,PublicText,Selected?.AnswerCount??0);if(Selected is not null)Rows[Rows.IndexOf(Selected)]=row;else Rows.Add(row);Modal=false;Error="";}
  void Delete(){if(Busy||!Editing||!Modal)return;if(Selected is not null&&Selected.AnswerCount==0){Rows.Remove(Selected);Modal=false;}}
- async Task Save(){if(Busy||Modal||!Editing||Plan is null)return;if(Busy)return;FeedbackRevision++;FeedbackUnknown=false;Busy=true;Error="";try{await Core.SaveQuestionsAsync((await Authentication.GetAuthenticationStateAsync()).User,EventId,new(Plan!.RowVersion,Rows.Select(x=>new EventQuestionEdit(x.Id,x.Text,x.Type,x.Required,x.Disabled,x.Public,x.PublicText)).ToArray()));Editing=Modal=false;Message="保存しました。";await Load();}catch(UnauthorizedAccessException){Plan=null;Rows=[];Editing=Modal=false;Error="再ログインと管理権限を確認してください。";}catch(Exception e)when(e is CoreConflictException or System.ComponentModel.DataAnnotations.ValidationException){Error=e.Message;}catch{FeedbackUnknown=true;Error="保存結果を確認できませんでした。下書きを保持しています。再送前に最新状態を確認してください。";}finally{Busy=false;}}
+ async Task Save(){if(Busy||Modal||!Editing||Plan is null)return;var ticket=await BeginOperation();if(ticket is null)return;FeedbackRevision++;FeedbackUnknown=false;Busy=true;Error="";try{await Core.SaveQuestionsAsync(ticket.Principal,ticket.EventId,new(Plan.RowVersion,Rows.Select(x=>new EventQuestionEdit(x.Id,x.Text,x.Type,x.Required,x.Disabled,x.Public,x.PublicText)).ToArray()));
+ if(!Current(ticket))return;Editing=Modal=false;await Load();if(SameContext(ticket)){Message="保存しました。";await NotifySaved(ticket);}
+ }catch(UnauthorizedAccessException){if(!Current(ticket))return;ClearPrivateState();Error="再ログインと管理権限を確認してください。";await NotifyAccessDenied(ticket);}
+ catch(Exception e)when(e is CoreConflictException or System.ComponentModel.DataAnnotations.ValidationException){if(Current(ticket))Error=e.Message;}
+ catch{if(Current(ticket)){FeedbackUnknown=true;Error="保存結果を確認できませんでした。下書きを保持しています。再送前に最新状態を確認してください。";}}
+ finally{if(SameContext(ticket))Busy=false;}}
 }

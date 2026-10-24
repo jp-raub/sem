@@ -67,7 +67,6 @@ else
     @foreach(var p in FallbackSlots){<tr data-participation-slot="@p.Id"><td><input data-participation-select="@p.Id" type="checkbox" checked="@Selected.Contains(p.Id)" disabled="@SlotDisabled(p)" @onchange="a=>Toggle(p.Id,a.Value is true)" /></td><td>@p.Title</td><td>@p.PartName（@(p.Category=="Sing"?"声":"楽器")）</td><td>@if(p.AssignedUserId is not null){<button type="button" data-participation-profile="@p.Id" @onclick="()=>OpenProfile(p.AssignedUserId)">@p.AssignedName</button>}else{<span>空き枠</span>}</td></tr>}
     </tbody></table></div>
    }
-   @if(Embedded){<section class="participation-comments" aria-labelledby="event-comments-heading"><Comments EventId="@EventId" Embedded="true" /></section>}
  @if(Plan.CanManage){<details class="participation-admin-tools"><summary>管理者操作（対象者・登録解除・人数上限）</summary><section class="panel"><h3>管理者操作</h3><label>対象者<FieldHelp HelpKey="admin.target" Label="対象者" /><select id="participation-subject" value="@(Subject??CurrentId)" @onchange="ChangeSubject" disabled="@Busy">@foreach(var u in Members){<option value="@u.UserId">@u.DisplayName</option>}</select></label>
  <label><input id="participation-exception" type="checkbox" @bind="Exception" disabled="@Busy" />声／楽器の兼務制約の例外登録<FieldHelp HelpKey="admin.exception" Label="例外登録" /></label><label><input id="participation-release-mode" type="checkbox" @bind="ReleaseMode" disabled="@Busy" />登録解除モード</label><label>例外／解除理由<FieldHelp HelpKey="admin.reason" Label="例外・解除理由" /><input id="participation-reason" @bind="Reason" @bind:event="oninput" maxlength="500" /></label><p>例外は兼務制約のみ。現在の受付フェーズ・曲数・人数上限を回避しません。他人の保存済み回答は表示しません。</p>
  <label>参加人数上限（空欄は制限なし）<FieldHelp HelpKey="event.capacity" Label="参加人数上限" /><input id="participation-capacity" @bind="Capacity" @bind:event="oninput" /></label><button id="participation-capacity-save" disabled="@(Busy||NeedsDraftReview)" @onclick="SaveCapacity">人数上限を保存</button></section></details>}
@@ -104,7 +103,9 @@ else
    @if(Last is not null){<ul id="participation-results">@foreach(var item in Last.Items){<li>@(item.Success?"成功":"未登録")：@Code(item.Code)</li>}</ul>}
   </aside>
  </div>
- <section><h2>観覧のみの申込み</h2>@foreach(var s in Plan.Spectators){<p>@s.Name @if(Plan.CanManage){<button data-participation-remove-spectator="@s.UserId" disabled="@Busy" @onclick="()=>RemoveSpectator(s.UserId)">管理者による削除</button>}</p>}</section>
+ @BeforeSpectators
+ <section id="event-spectators-section" data-event-management-section="@(Embedded&&Plan.CanManage?"spectators":null)"><h2>観覧のみの申込み</h2>@foreach(var s in Plan.Spectators){<p>@s.Name @if(Plan.CanManage){<button data-participation-remove-spectator="@s.UserId" disabled="@Busy" @onclick="()=>RemoveSpectator(s.UserId)">管理者による削除</button>}</p>}</section>
+ @if(Embedded){<section class="participation-comments" id="event-comments-section" data-event-management-section="@(Plan.CanManage?"comments":null)" aria-labelledby="event-comments-heading"><Comments EventId="@EventId" Embedded="true" /></section>}
  <p><a href="@($"/events/{EventId}/public-answers")">公開回答集計を見る</a>。<a href="@(Embedded?"#event-comments-heading":$"/events/{EventId}/comments")">コメントのみ投稿・一覧へ</a>。通知・進行はそれぞれの専用画面で確認してください。</p>
  </fieldset>
  @if(Uncertain){<p role="alert">送信結果が未確認です。同じ操作IDで結果を確認します。入力は変更しないでください。</p><button id="participation-retry" disabled="@Busy" @onclick="Submit">同じ操作IDで結果を確認／再試行</button>}
@@ -118,6 +119,7 @@ else
 
  [Parameter]public string EventId{get;set;}="";
  [Parameter]public bool Embedded{get;set;}
+ [Parameter]public RenderFragment? BeforeSpectators{get;set;}
  [Parameter]public EventCallback<string> AnswersSaved{get;set;}
  [Parameter]public string? EventDate{get;set;}
  [Parameter]public long ContextGeneration{get;set;}
