@@ -67,11 +67,11 @@ module.exports=async({p,ok})=>{
    ok(true,prefix+': final save persists once and releases navigation guard');
    await w.goto(url);await w.waitForSelector('#'+prefix+'-edit');await w.waitForSelector('[data-draft-interactive=true]',{state:'attached'});
    await w.locator('#'+prefix+'-edit').click();await w.locator('#'+prefix+'-add').click();await w.locator('#'+input).fill('Conflicting '+prefix+' draft');await w.locator('#'+apply).click();await w.waitForSelector('[data-draft-dialog]',{state:'detached'});
-   const newer=action==='phases'?{rowVersion:saved.rowVersion,manualOverride:saved.manualOverride,activePhaseId:saved.phases.find(x=>x.isActive).id,customPhases:saved.phases.filter(x=>x.kind==='Custom')}:
+   const newer=action==='phases'?{rowVersion:saved.rowVersion,manualOverride:saved.manualOverride,activePhaseId:saved.phases.find(x=>x.isActive).id,customPhases:saved.phases.filter(x=>x.kind==='Custom').map(({id,name,maxPicks,activateAt,deactivateAt})=>({id,name,maxPicks,activateAt,deactivateAt}))}:
     action==='definitions'?{rowVersion:saved.rowVersion,definitions:saved.definitions.map(({id,name,category})=>({id,name,category}))}:
     action==='questions'?{rowVersion:saved.rowVersion,questions:saved.questions.map(({id,text,type,required,disabled,public:pub,publicText})=>({id,text,type,required,disabled,public:pub,publicText}))}:
     {rowVersion:saved.rowVersion,defaultPrepSeconds:saved.defaultPrepSeconds,songs:saved.songs.map(x=>({id:x.id,title:x.title,artist:x.artist,performanceSeconds:x.performanceSeconds,prepSeconds:x.prepSeconds,definitionIds:x.parts.map(y=>y.definitionId)}))};
-   const changed=await api(action,newer,q);assert.equal(changed.status,200);
+   const changed=await api(action,newer,q);assert.equal(changed.status,200,JSON.stringify(changed.body));
    await w.locator('#'+prefix+'-save').click();await resultClose();
    ok((await w.locator('tbody').innerText()).includes('Conflicting '+prefix+' draft'),prefix+': conflict keeps local rows');
    await w.getByRole('link',{name:'業務基盤へ戻る',exact:true}).click();await w.waitForSelector('.draft-navigation-warning').catch(async error=>{throw new Error(error.message+'; navigation diagnostic: '+w.url());});assert.equal(w.url(),url);
