@@ -74,6 +74,7 @@ bash -n scripts/acceptance-browser-fixture.sh
 python3 scripts/timetable-editor-contract-checks.py
 node --check scripts/timetable-editor-ui-checks.cjs
 node --check scripts/event-management-ui-checks.cjs
+node --check scripts/definition-order-ui-checks.cjs
 node --check scripts/event-matrix-checks.cjs
 node --check scripts/participation-layout-checks.cjs
 node --check scripts/entry-summary-checks.cjs

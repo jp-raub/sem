@@ -63,7 +63,7 @@ else if (!Embedded)
  <p class="manual-order-note">並び順：手動。列見出しでは変更しません。編集時の順序操作で保存順を変更します。</p>
   <div class="timetable-table-scroll"><table><thead><tr><th>曲・進行</th><th>準備開始</th><th>演奏／進行開始</th><th class="timetable-duration">曲長／進行時間</th><th>終了</th>@if(Editing){<th>順序</th>}</tr></thead><tbody>
   @foreach(var timed in preview.Rows){var draft=Parts.SingleOrDefault(x=>x.Id==timed.Id);
-   <tr data-timetable-part="@timed.Id" draggable="@(Editing&&draft is not null&&!Modal&&!Busy)" @ondragstart="()=>Drag=timed.Id" @ondragover:preventDefault @ondrop="()=>Drop(timed.Id)">
+   <tr data-timetable-part="@timed.Id" draggable="@((Editing&&draft is not null&&!Modal&&!Busy).ToString().ToLowerInvariant())" @ondragstart="()=>Drag=timed.Id" @ondragover:preventDefault @ondrop="()=>Drop(timed.Id)">
     <td>@if(Editing&&draft is not null){<button data-timetable-title="@timed.Id" disabled="@(Busy||Modal)" @onclick="()=>Open(draft)">@timed.Icon @timed.Title</button>}else{@timed.Icon @timed.Title}<small style="display:block;text-align:right">@timed.Artist</small></td>
     <td style="text-align:right;font-variant-numeric:tabular-nums">@(timed.PrepStart is DateTimeOffset prep?DisplayClock(prep):"—")</td>
     <td style="text-align:right;font-variant-numeric:tabular-nums">@DisplayClock(timed.Start)</td><td class="timetable-duration">@if(timed.Kind=="Song"){<span>準備 @TimetableCalculator.Duration(timed.ConfiguredPrepSeconds ?? 0,DurationFormat)</span><br /><span>曲 @TimetableCalculator.Duration(timed.LengthSeconds,DurationFormat)</span>}else{@TimetableCalculator.Duration(timed.LengthSeconds,DurationFormat)}</td>
