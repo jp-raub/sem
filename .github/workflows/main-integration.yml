@@ -86,6 +86,7 @@ jobs:
           node scripts/field-help-browser-checks.cjs
           node scripts/operation-feedback-browser-checks.cjs
           node scripts/service-navigation-lifecycle-checks.cjs
+          node scripts/theme-lifecycle-browser-checks.cjs
       - name: Verify populated local acceptance and whole-directory restore
         env:
           NODE_PATH: ${{ runner.temp }}/sem-browser/node_modules

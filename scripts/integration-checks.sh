@@ -45,6 +45,9 @@ node scripts/legacy-passkey-url-checks.mjs 2>&1 | tee verification/legacy-passke
 node scripts/draft-navigation-guard-checks.mjs
 node scripts/draft-edit-dialog-checks.mjs
 node --check scripts/edit-guard-checks.cjs
+node --check scripts/theme-navigation-checks.cjs
+node --check scripts/theme-lifecycle-browser-checks.cjs
+node scripts/theme-appearance-checks.mjs
 node scripts/dialog-lifecycle-checks.mjs 2>&1 | tee verification/dialog-lifecycle-ui.log
 node --check src/Sem.Web/wwwroot/operation-feedback.js
 node --check src/Sem.Web/wwwroot/operation-result-presenter.js

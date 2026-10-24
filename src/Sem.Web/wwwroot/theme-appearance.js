@@ -75,11 +75,13 @@ function readEndpoint(url, limit, signal) {
 async function loadContext({manual=false}={}) {
   const myGeneration = ++generation; activeController?.abort(); const controller = new AbortController(); activeController = controller;
   const timer = setTimeout(()=>controller.abort(),25000);
-  eventId = currentEventId();
+  const requestedEvent = currentEventId();
+  eventId = requestedEvent;
   try {
-    const url = new URL(API+'theme-appearance', location.origin); if (eventId !== null) url.searchParams.set('id',eventId);
+    const url = new URL(API+'theme-appearance', location.origin); if (requestedEvent !== null) url.searchParams.set('id',requestedEvent);
     const envelope = await readEndpoint(url, MAX_JSON, controller.signal);
-    if (!isObject(envelope) || (eventId === null ? envelope.eventId !== null : envelope.eventId !== eventId) || myGeneration !== generation || !validateDto(envelope.appearance,eventId)) throw new Error('表示設定の応答を検証できませんでした。');
+    if (myGeneration !== generation || currentEventId() !== requestedEvent) return false;
+    if (!isObject(envelope) || envelope.eventId !== requestedEvent || !validateDto(envelope.appearance,requestedEvent)) throw new Error('表示設定の応答を検証できませんでした。');
     snapshot = {...envelope.appearance,eventId:envelope.eventId}; applyResolved(); unknownOutcome = false;
     if (manual && document.getElementById('appearance-editor')) setStatus('最新の設定を読み込みました。変更は行っていません。');
     if (document.getElementById('appearance-editor')) renderEditor();
@@ -240,18 +242,24 @@ async function deleteCatalog(t) {
   await mutate(endpoint('theme-catalog-delete',{id:t.id}),{rowVersion:t.rowVersion},'テーマを削除しました。',x=>isObject(x)&&typeof x.message==='string');
 }
 function attachPage() { bindEditor(); if (snapshot) renderEditor(); }
-function init() {
-  const nextEvent=currentEventId(); if(nextEvent!==eventId||!snapshot) {
+function init({refresh=false}={}) {
+  const nextEvent=currentEventId(); if(nextEvent!==eventId||!snapshot||refresh) {
     if(nextEvent!==eventId){snapshot=null;draft=null;for(const k of ['accent','background','surface','text'])document.documentElement.style.removeProperty('--appearance-'+k);delete document.documentElement.dataset.appearanceMode;const ed=document.getElementById('appearance-editor'),cat=document.getElementById('appearance-catalog');if(ed)ed.hidden=true;if(cat)cat.hidden=true;}
     eventId=nextEvent; loadContext();
   }
+  // Enhanced navigation can replace <html> attributes, even in the same context.
+  if (snapshot) applyResolved();
   const appearanceLink=document.querySelector('#navigation-panel a[href^="/appearance"]');
   if(appearanceLink) appearanceLink.href=nextEvent?'/appearance?eventId='+encodeURIComponent(nextEvent):'/appearance';
   attachPage();
 }
 modeQuery.addEventListener('change',()=>{ if(snapshot){applyResolved();} });
-document.addEventListener('DOMContentLoaded',init,{once:true});
-document.addEventListener('enhancedload',init);
-document.addEventListener('blazor:navigation-end',init);
-window.addEventListener('popstate',init);
-if(document.readyState!=='loading') init();
+// Blazor enhancedload is dispatched on Blazor, not on document. Modules only
+// execute once across enhanced pages, so every completed navigation must attach
+// the new editor and validate the current server-owned context again.
+window.Blazor?.addEventListener('enhancedload',()=>init({refresh:true}));
+document.addEventListener('blazor:navigation-end',()=>init({refresh:true}));
+window.addEventListener('popstate',()=>init({refresh:true}));
+window.addEventListener('pageshow',event=>{if(event.persisted)init({refresh:true});});
+if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',()=>init(),{once:true});
+else init();
