@@ -1,0 +1,55 @@
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+<dialog @ref="Dialog" class="panel draft-edit-dialog" role="dialog" aria-modal="true" aria-label="@Label" data-draft-dialog>
+    @if (ConfirmCancel)
+    {
+        <section role="alertdialog" aria-label="この編集の取消確認">
+            <h2>この編集だけ取り消しますか？</h2>
+            <p>この編集欄で変更した内容だけを破棄します。すでに画面の下書きへ反映した変更は残り、サーバーへの保存は行いません。</p>
+            <button type="button" data-draft-keep autofocus @onclick="Keep">編集を続ける</button>
+            <button type="button" data-draft-discard @onclick="Discard">この編集だけ取り消す</button>
+        </section>
+    }
+    else
+    {
+        @ChildContent
+    }
+    <button type="button" hidden data-draft-cancel @onclick="RequestCancel">この編集を取消</button>
+</dialog>
+@code {
+    [Parameter, EditorRequired] public string Label { get; set; } = "編集";
+    [Parameter] public bool Dirty { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+    ElementReference Dialog;
+    IJSObjectReference? Module;
+    bool ConfirmCancel, Disposed, Closing;
+    public Task RequestCancel()
+    {
+        if (Disposed || Closing) return Task.CompletedTask;
+        if (ConfirmCancel) { ConfirmCancel = false; StateHasChanged(); return Task.CompletedTask; }
+        if (Dirty) { ConfirmCancel = true; StateHasChanged(); return Task.CompletedTask; }
+        return Discard();
+    }
+    void Keep() => ConfirmCancel = false;
+    async Task Discard()
+    {
+        if (Disposed || Closing) return;
+        Closing = true;
+        try { await OnCancel.InvokeAsync(); }
+        finally { Closing = false; }
+    }
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (Disposed) return;
+        Module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./" + Assets["draft-edit-dialog.js"]);
+        if (!Disposed) await Module.InvokeVoidAsync("sync", Dialog, ConfirmCancel);
+    }
+    public async ValueTask DisposeAsync()
+    {
+        Disposed = true;
+        if (Module is null) return;
+        try { await Module.InvokeVoidAsync("release", Dialog); await Module.DisposeAsync(); }
+        catch (Exception e) when (e is JSDisconnectedException or JSException or TaskCanceledException) { }
+    }
+}

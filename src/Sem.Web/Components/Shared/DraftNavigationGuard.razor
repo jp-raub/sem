@@ -1,0 +1,22 @@
+<span hidden data-draft-interactive="@(Interactive ? "true" : "false")"></span>
+<NavigationLock ConfirmExternalNavigation="@Protected" OnBeforeInternalNavigation="BeforeNavigation" />
+@if (Blocked && Protected)
+{
+    <p class="draft-navigation-warning" role="alert">未保存の下書き、または処理中・結果未確認の保存があります。入力を保持しました。保存結果を確認し、保存または画面全体の取消をしてから移動してください。</p>
+}
+@code {
+    [Parameter] public bool Protected { get; set; }
+    bool Blocked, Interactive;
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender) { Interactive = true; StateHasChanged(); }
+    }
+    protected override void OnParametersSet() { if (!Protected) Blocked = false; }
+    void BeforeNavigation(LocationChangingContext context)
+    {
+        if (!Protected) return;
+        context.PreventNavigation();
+        Blocked = true;
+        StateHasChanged();
+    }
+}
