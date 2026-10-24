@@ -39,11 +39,42 @@ jobs:
             ${{ runner.os }}-dotnet10-nuget-v1-integration-
       - name: Verify exact merged tree without deployment
         run: bash scripts/integration-checks.sh
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Set isolated browser dependency path
+        run: echo "PLAYWRIGHT_BROWSERS_PATH=$RUNNER_TEMP/sem-browser-cache" >> "$GITHUB_ENV"
+      - name: Cache pinned browser dependencies only (never application state)
+        continue-on-error: true # A cache miss or outage still installs and tests.
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/sem-browser-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-playwright-1.56.1-headless-v1
+      - name: Install isolated browser dependencies
+        run: |
+          npm install --prefix "$RUNNER_TEMP/sem-browser" --no-save playwright@1.56.1
+          "$RUNNER_TEMP/sem-browser/node_modules/.bin/playwright" install --with-deps chromium --only-shell
+      - name: Verify unified timetable UI in an independent fresh fixture
+        env:
+          NODE_PATH: ${{ runner.temp }}/sem-browser/node_modules
+          SEM_ACCEPTANCE_FOCUS: timetable-editor-ui
+        run: bash scripts/acceptance-browser-fixture.sh
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: main-integration-verification
-          path: verification/
+          path: |
+            verification/
+            !verification/acceptance-native/**
+          retention-days: 7
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: timetable-editor-browser-results
+          path: |
+            verification/acceptance-native/e2e-result.json
+            verification/acceptance-native/acceptance-phases.json
+            verification/acceptance-native/fixture-phases.tsv
           retention-days: 7
 
   acceptance-browser:
