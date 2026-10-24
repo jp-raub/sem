@@ -4,7 +4,7 @@ export function sync(dialog, confirmation, returnFocusSelector, lifecycleKey) {
   if (!(dialog instanceof HTMLDialogElement) || !dialog.isConnected) return;
   let state = states.get(dialog);
   if (!state) {
-    state = { target: (returnFocusSelector ? document.querySelector(returnFocusSelector) : null) ?? document.activeElement, confirmation: null, previous: null };
+    state = { selector: returnFocusSelector, target: (returnFocusSelector ? document.querySelector(returnFocusSelector) : null) ?? document.activeElement, confirmation: null, previous: null };
     const cancel = event => { event.preventDefault(); dialog.querySelector('[data-draft-cancel]')?.click(); };
     const outside = event => {
       if (event.target !== dialog) return false;
@@ -35,7 +35,13 @@ export function release(dialog) {
   if (state.key) lifecycles.delete(state.key);
   if (dialog.open) dialog.close();
   // Parent renders away the modal; the original trigger may be replaced on save.
-  if (state.target?.isConnected) state.target.focus();
+  const restore = () => {
+    const target = (state.selector ? document.querySelector(state.selector) : null) ?? state.target;
+    if (target?.isConnected && !target.disabled) target.focus();
+  };
+  restore();
+  // Native dialog removal and the parent render may finish after disposal interop.
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(restore);
 }
 
 // Blazor may remove the DOM element before DisposeAsync; retain it only until release.

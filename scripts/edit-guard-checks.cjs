@@ -40,13 +40,14 @@ module.exports=async({p,ok})=>{
    ok(true,prefix+': backdrop also asks before discarding and retains input on continue');
    await w.locator('#'+prefix+'-close').click();await w.locator('[data-draft-discard]').click();
    await w.waitForSelector('[data-draft-dialog]',{state:'detached'});
-   await w.waitForFunction(sel=>document.activeElement===document.querySelector(sel),'#'+prefix+'-add');
+   await w.waitForFunction(sel=>document.activeElement===document.querySelector(sel),'#'+prefix+'-add').catch(async error=>{throw new Error(error.message+'; focus diagnostic: '+JSON.stringify(await w.evaluate(sel=>({active:document.activeElement?.outerHTML,trigger:document.querySelector(sel)?.outerHTML}), '#'+prefix+'-add')));});
    assert.deepEqual((await api(action,undefined,q)).body,before.body);
    ok(true,prefix+': modal-only discard restores focus and writes nothing');
    await w.locator('#'+prefix+'-add').click();await w.locator('#'+input).fill(local);await w.locator('#'+apply).click();
    await w.waitForSelector('[data-draft-dialog]',{state:'detached'});
-   await w.getByRole('link',{name:'業務基盤へ戻る',exact:true}).click();await w.waitForSelector('.draft-navigation-warning');
+   await w.getByRole('link',{name:'業務基盤へ戻る',exact:true}).click();await w.waitForSelector('.draft-navigation-warning').catch(async error=>{throw new Error(error.message+'; navigation diagnostic: '+w.url());});
    assert.equal(w.url(),url);ok(true,prefix+': changed page blocks internal navigation without losing its draft');
+   let historyWarned=false;const historyHandler=async dialog=>{assert.equal(dialog.type(),'beforeunload');historyWarned=true;await dialog.dismiss();};w.on('dialog',historyHandler);await w.evaluate(()=>history.back());await w.waitForTimeout(1000);w.off('dialog',historyHandler);assert.equal(w.url(),url);assert((await w.locator('tbody').innerText()).includes(local));ok(true,prefix+': declined browser history traversal preserves the draft');
    let warned=false;const handler=async d=>{assert.equal(d.type(),'beforeunload');warned=true;await d.dismiss();};w.once('dialog',handler);
    await w.reload({timeout:5000}).catch(e=>{if(!warned)throw e;});assert.equal(warned,true);
    ok((await w.locator('tbody').innerText()).includes(local),prefix+': dismissed browser reload preserves the draft');
@@ -58,7 +59,7 @@ module.exports=async({p,ok})=>{
 
    await w.locator('#'+prefix+'-edit').click();await w.locator('#'+prefix+'-add').click();
    await w.locator('#'+input).fill('Saved '+prefix+' draft');await w.locator('#'+apply).click();await w.waitForSelector('[data-draft-dialog]',{state:'detached'});
-   await w.locator('#'+prefix+'-save').dblclick();await w.waitForSelector('#'+prefix+'-edit');
+   await w.locator('#'+prefix+'-save').dblclick();await w.waitForSelector('#'+prefix+'-edit');await resultClose();
    const saved=(await api(action,undefined,q)).body;
    const collection=action==='phases'?'phases':action==='definitions'?'definitions':action==='questions'?'questions':'songs';
    assert.equal(saved[collection].filter(x=>x[key]==='Saved '+prefix+' draft').length,1);
@@ -73,7 +74,7 @@ module.exports=async({p,ok})=>{
    const changed=await api(action,newer,q);assert.equal(changed.status,200);
    await w.locator('#'+prefix+'-save').click();await resultClose();
    ok((await w.locator('tbody').innerText()).includes('Conflicting '+prefix+' draft'),prefix+': conflict keeps local rows');
-   await w.getByRole('link',{name:'業務基盤へ戻る',exact:true}).click();await w.waitForSelector('.draft-navigation-warning');assert.equal(w.url(),url);
+   await w.getByRole('link',{name:'業務基盤へ戻る',exact:true}).click();await w.waitForSelector('.draft-navigation-warning').catch(async error=>{throw new Error(error.message+'; navigation diagnostic: '+w.url());});assert.equal(w.url(),url);
    assert(!JSON.stringify((await api(action,undefined,q)).body).includes('Conflicting '+prefix+' draft'));
    await w.locator('#'+prefix+'-cancel').click();await w.waitForSelector('#'+prefix+'-edit');
 
