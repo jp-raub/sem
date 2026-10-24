@@ -1,5 +1,6 @@
 const states = new WeakMap();
-export function sync(dialog, confirmation, returnFocusSelector) {
+const lifecycles = new Map();
+export function sync(dialog, confirmation, returnFocusSelector, lifecycleKey) {
   if (!(dialog instanceof HTMLDialogElement) || !dialog.isConnected) return;
   let state = states.get(dialog);
   if (!state) {
@@ -16,6 +17,7 @@ export function sync(dialog, confirmation, returnFocusSelector) {
     dialog.addEventListener('cancel', cancel);
     dialog.addEventListener('pointerdown', down); dialog.addEventListener('pointerup', up);
     states.set(dialog, state);
+    if (lifecycleKey) { state.key = lifecycleKey; lifecycles.set(lifecycleKey, dialog); }
   }
   if (!dialog.open) dialog.showModal();
   if (state.confirmation !== confirmation) {
@@ -30,7 +32,14 @@ export function release(dialog) {
   dialog.removeEventListener('cancel', state.cancel);
   dialog.removeEventListener('pointerdown', state.down); dialog.removeEventListener('pointerup', state.up);
   states.delete(dialog);
+  if (state.key) lifecycles.delete(state.key);
   if (dialog.open) dialog.close();
   // Parent renders away the modal; the original trigger may be replaced on save.
   if (state.target?.isConnected) state.target.focus();
+}
+
+// Blazor may remove the DOM element before DisposeAsync; retain it only until release.
+export function releaseKey(key) {
+  const dialog = lifecycles.get(key);
+  if (dialog) release(dialog);
 }

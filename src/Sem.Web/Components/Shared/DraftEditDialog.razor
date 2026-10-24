@@ -24,6 +24,7 @@
     [Parameter] public EventCallback OnCancel { get; set; }
     ElementReference Dialog;
     IJSObjectReference? Module;
+    readonly string LifecycleKey = Guid.NewGuid().ToString("N");
     bool ConfirmCancel, Disposed, Closing;
     public Task RequestCancel()
     {
@@ -44,13 +45,13 @@
     {
         if (Disposed) return;
         Module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./" + Assets["draft-edit-dialog.js"]);
-        if (!Disposed) await Module.InvokeVoidAsync("sync", Dialog, ConfirmCancel, ReturnFocusSelector);
+        if (!Disposed) await Module.InvokeVoidAsync("sync", Dialog, ConfirmCancel, ReturnFocusSelector, LifecycleKey);
     }
     public async ValueTask DisposeAsync()
     {
         Disposed = true;
         if (Module is null) return;
-        try { await Module.InvokeVoidAsync("release", Dialog); await Module.DisposeAsync(); }
+        try { await Module.InvokeVoidAsync("releaseKey", LifecycleKey); await Module.DisposeAsync(); }
         catch (Exception e) when (e is JSDisconnectedException or JSException or TaskCanceledException) { }
     }
 }

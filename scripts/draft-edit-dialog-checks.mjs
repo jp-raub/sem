@@ -27,4 +27,5 @@ d.dispatchEvent(new Event('cancel',{cancelable:true}));assert.equal(clicks,2);
 const detached=new Dialog();detached.isConnected=false;module.sync(detached,false);assert.equal(opens,1);
 let explicit=0;document.activeElement={};document.querySelector=s=>s==='#trigger'?{isConnected:true,focus(){explicit++;}}:null;
 const restored=new Dialog();module.sync(restored,false,'#trigger');module.release(restored);assert.equal(explicit,1,'Explicit trigger survives disabled-button focus loss during render');
-console.log('Draft edit dialog checks passed: 17');
+const removed=new Dialog();module.sync(removed,false,'#trigger','removed');removed.isConnected=false;module.releaseKey('removed');assert.equal(explicit,2);assert.equal(removed.removes,3);module.releaseKey('removed');assert.equal(explicit,2);
+console.log('Draft edit dialog checks passed: 20');
