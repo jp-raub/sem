@@ -32,7 +32,7 @@
  @if(Editing){<button id="phase-save" disabled="@(Busy || Modal)" @onclick="Save">保存</button><button id="phase-cancel" disabled="@(Busy||Modal)" @onclick="Cancel">取消</button>}
  @if(Modal)
  {
-  <DraftEditDialog @ref="EditDialog" Label="カスタムフェーズ編集" Dirty="ModalDirty" OnCancel="CancelModal">
+  <DraftEditDialog @ref="EditDialog" Label="カスタムフェーズ編集" Dirty="ModalDirty" OnCancel="CancelModal" ReturnFocusSelector="@(Selected is null ? "#phase-add" : $"[data-phase-name='{Selected.Id}']")">
    <h2>カスタムフェーズ編集</h2>
    <label>名前<FieldHelp HelpKey="phase.name" Label="フェーズ名" /><input id="phase-name" @bind="Name" @bind:event="oninput" maxlength="100" /></label>
    <label>最大登録曲数（-1=無制限）<FieldHelp HelpKey="phase.maxPicks" Label="最大登録曲数" /><input id="phase-max" type="number" @bind="Maximum" min="-1" /></label>

@@ -20,7 +20,7 @@
  @foreach(var row in Rows){<tr data-definition="@row.Id"><td>@if(Editing){<button data-definition-name="@row.Id" disabled="@(Busy||Modal)" @onclick="()=>Open(row)">@row.Name</button>}else{@row.Name}</td><td>@(row.Category=="Sing"?"Sing（声）":"Play（楽器）")</td><td>@if(Editing){<button data-definition-up="@row.Id" disabled="@(Busy||Modal||Rows.IndexOf(row)==0)" @onclick="()=>Move(row,-1)">↑</button><button data-definition-down="@row.Id" disabled="@(Busy||Modal||Rows.IndexOf(row)==Rows.Count-1)" @onclick="()=>Move(row,1)">↓</button>}</td></tr>}
  </tbody></table>
  @if(Editing){<button id="definition-save" disabled="@(Busy||Modal)" @onclick="Save">保存</button><button id="definition-cancel" disabled="@(Busy||Modal)" @onclick="Cancel">取消</button>}
- @if(Modal){<DraftEditDialog @ref="EditDialog" Label="パート定義編集" Dirty="ModalDirty" OnCancel="CancelModal"><h2>パート定義編集</h2>
+ @if(Modal){<DraftEditDialog @ref="EditDialog" Label="パート定義編集" Dirty="ModalDirty" OnCancel="CancelModal" ReturnFocusSelector="@(Selected is null ? "#definition-add" : $"[data-definition-name='{Selected.Id}']")"><h2>パート定義編集</h2>
  <label>パート名<FieldHelp HelpKey="part.name" Label="パート名" /><input id="definition-name" @bind="Name" @bind:event="oninput" maxlength="40" /></label><label>分類<FieldHelp HelpKey="part.category" Label="分類" /><select id="definition-category" @bind="Category"><option value="Sing">Sing（声）</option><option value="Play">Play（楽器）</option></select></label>
  <button id="definition-apply" @onclick="Apply">下書きに反映</button><button id="definition-close" @onclick="RequestModalCancel">この編集を取消</button>
  @if(Selected is not null){<button id="definition-delete" @onclick="Delete">下書きから削除</button>}

@@ -1,9 +1,9 @@
 const states = new WeakMap();
-export function sync(dialog, confirmation) {
+export function sync(dialog, confirmation, returnFocusSelector) {
   if (!(dialog instanceof HTMLDialogElement) || !dialog.isConnected) return;
   let state = states.get(dialog);
   if (!state) {
-    state = { target: document.activeElement, confirmation: null, previous: null };
+    state = { target: (returnFocusSelector ? document.querySelector(returnFocusSelector) : null) ?? document.activeElement, confirmation: null, previous: null };
     const cancel = event => { event.preventDefault(); dialog.querySelector('[data-draft-cancel]')?.click(); };
     const outside = event => {
       if (event.target !== dialog) return false;

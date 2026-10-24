@@ -19,7 +19,7 @@
  </tbody></table>
  @if(Rows.Count==0){<p>設問はありません。</p>}
  @if(Editing){<button id="question-save" disabled="@(Busy||Modal)" @onclick="Save">保存</button><button id="question-cancel" disabled="@(Busy||Modal)" @onclick="Cancel">取消</button>}
- @if(Modal){<DraftEditDialog @ref="EditDialog" Label="イベント設問編集" Dirty="ModalDirty" OnCancel="CancelModal"><h2>イベント設問編集</h2>
+ @if(Modal){<DraftEditDialog @ref="EditDialog" Label="イベント設問編集" Dirty="ModalDirty" OnCancel="CancelModal" ReturnFocusSelector="@(Selected is null ? "#question-add" : $"[data-question-text='{Selected.Id}']")"><h2>イベント設問編集</h2>
  <label>質問文<FieldHelp HelpKey="question.text" Label="設問文" /><input id="question-text" @bind="QuestionText" @bind:event="oninput" maxlength="200" /></label><label>回答形式<FieldHelp HelpKey="question.type" Label="回答形式" /><select id="question-type" @bind="Kind" disabled="@(Selected is not null)"><option value="YesNo">YES / NO</option><option value="Text">自由記述</option></select></label>
  <label><input id="question-required" type="checkbox" @bind="Required" />必須回答<FieldHelp HelpKey="question.required" Label="必須" /></label><label><input id="question-disabled" type="checkbox" @bind="Disabled" />使用停止<FieldHelp HelpKey="question.disabled" Label="無効" /></label>
  <label><input id="question-public" type="checkbox" @bind="Public" />回答数と回答者をイベント閲覧者へ公開<FieldHelp HelpKey="question.public" Label="回答数と回答者を公開" /></label><label><input id="question-public-text" type="checkbox" @bind="PublicText" disabled="@(Kind!="Text"||!Public)" />自由記述の回答本文を公開<FieldHelp HelpKey="question.publicText" Label="自由記述本文を公開" /></label>

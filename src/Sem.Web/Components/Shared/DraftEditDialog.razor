@@ -18,6 +18,7 @@
 </dialog>
 @code {
     [Parameter, EditorRequired] public string Label { get; set; } = "編集";
+    [Parameter] public string? ReturnFocusSelector { get; set; }
     [Parameter] public bool Dirty { get; set; }
     [Parameter] public RenderFragment? ChildContent { get; set; }
     [Parameter] public EventCallback OnCancel { get; set; }
@@ -43,7 +44,7 @@
     {
         if (Disposed) return;
         Module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./" + Assets["draft-edit-dialog.js"]);
-        if (!Disposed) await Module.InvokeVoidAsync("sync", Dialog, ConfirmCancel);
+        if (!Disposed) await Module.InvokeVoidAsync("sync", Dialog, ConfirmCancel, ReturnFocusSelector);
     }
     public async ValueTask DisposeAsync()
     {
