@@ -59,7 +59,7 @@ module.exports=async({p,ok})=>{
 
    await w.locator('#'+prefix+'-edit').click();await w.locator('#'+prefix+'-add').click();
    await w.locator('#'+input).fill('Saved '+prefix+' draft');await w.locator('#'+apply).click();await w.waitForSelector('[data-draft-dialog]',{state:'detached'});
-   await w.locator('#'+prefix+'-save').dblclick();await w.waitForSelector('#'+prefix+'-edit');await resultClose();
+   await w.locator('#'+prefix+'-save').dblclick();await w.waitForSelector('#'+prefix+'-edit');
    const saved=(await api(action,undefined,q)).body;
    const collection=action==='phases'?'phases':action==='definitions'?'definitions':action==='questions'?'questions':'songs';
    assert.equal(saved[collection].filter(x=>x[key]==='Saved '+prefix+' draft').length,1);
