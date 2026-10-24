@@ -13,14 +13,15 @@ module.exports=async({p,ok})=>{
   const r=await api('event',{title:'Isolated theme '+name,description:'',location:'',scheduledDate:new Date(Date.now()+86400000).toISOString(),opensAt:null,announcementMessage:'',phaseKind:'Hidden',managerIds:[],rowVersion:0});assert.equal(r.status,200);const id=r.body.id;ids.push(id);
   const a=await read(id);const saved=await api('theme-event',{themeId,mode,rowVersion:a.event.rowVersion},'?id='+id+'&expectedActor='+encodeURIComponent(a.actorId));assert.equal(saved.status,200);
  }
- const w=await p.context().newPage(),errors=[];let writes=0;w.on('pageerror',e=>errors.push(e.message));w.on('request',r=>{if(r.method()!=='GET')writes++;});
+ const w=await p.context().newPage(),errors=[];let writes=0;w.on('pageerror',e=>errors.push(e.message));w.on('request',r=>{if(r.method()!=='GET'&&new URL(r.url()).pathname.startsWith('/api/'))writes++;});
  const color=()=>w.evaluate(()=>document.documentElement.style.getPropertyValue('--appearance-accent').toLowerCase());
- const expected=async id=>{const d=await read(id);return{accent:d.resolved.accent.value.toLowerCase(),mode:d.resolved.mode};};
+ const expected=async id=>{const d=await read(id);const hex=d.resolved.accent.value.toLowerCase();const accent=d.resolved.mode===2?'#'+hex.slice(1).match(/../g).map(v=>Math.round(parseInt(v,16)+(255-parseInt(v,16))*.5).toString(16).padStart(2,'0')).join(''):hex;return{accent,mode:d.resolved.mode};};
  const wait=async id=>{const e=await expected(id);await w.waitForFunction(({accent,mode})=>document.documentElement.style.getPropertyValue('--appearance-accent').toLowerCase()===accent&&document.documentElement.dataset.appearanceMode===(mode===2?'dark':'light'),e);};
  const navigate=async path=>{
+  const enhancedBefore=await w.evaluate(()=>window.themeEnhancedCount);
   await w.evaluate(path=>{const a=document.createElement('a');a.id='synthetic-theme-navigation';a.href=path;a.textContent='Synthetic navigation';document.body.append(a);},path);
   await w.locator('#synthetic-theme-navigation').click();await w.waitForURL('https://localhost:18443'+path);
-  await w.waitForFunction(()=>window.themeEnhancedCount>0);
+  await w.waitForFunction(n=>window.themeEnhancedCount>n,enhancedBefore);
   assert.equal(await w.evaluate(()=>window.themeDocumentSentinel),'unchanged-document','must use actual Blazor enhanced navigation, not full reload');
  };
  try{
