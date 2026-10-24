@@ -1,5 +1,6 @@
 @page "/events/{EventId}/timetable"
 @rendermode InteractiveServer
+@implements IDisposable
 @using Sem.Web.Core
 @using Sem.Web.Runtime
 @using System.Globalization
@@ -40,14 +41,16 @@ else if (!Embedded)
 <OperationFeedback Revision="FeedbackRevision" Busy="Busy" Success="@Message" Error="@Error" Unknown="FeedbackUnknown" />
 <p id="timetable-error" role="alert">@Error</p><p id="timetable-message" role="status">@Message</p>
 @if(Plan is not null){
- @if(!Editing){<button id="timetable-refresh" @onclick="Load">最新状態を取得</button>@if(Plan.CanManage){<button id="timetable-edit" @onclick="()=>Editing=true">編集</button>@if(!Embedded){<a href="@($"/events/{EventId}/songs")">曲・枠の追加／編集</a><a id="notification-plan-link" href="@($"/events/{EventId}/notification-plan")">通知予定プレビュー</a>}}}
+ @if(!Editing){<button id="timetable-refresh" @onclick="Load">最新状態を取得</button>@if(Plan.CanManage){<button id="timetable-edit" @onclick="BeginEdit">編集</button>@if(!Embedded){<a href="@($"/events/{EventId}/songs")">曲・枠の追加／編集</a><a id="notification-plan-link" href="@($"/events/{EventId}/notification-plan")">通知予定プレビュー</a>}}}
  else{
-  <p>変更は下書きです。曲名・曲長・準備時間は曲・枠管理で編集し、この画面では混在順序・進行・表示設定を編集します。開場・開始はイベント概要から変更します。</p>
-  <label><input id="timetable-round" type="checkbox" @bind="Round" @bind:after="Invalidate" />曲の準備開始・演奏開始だけ分境界へ切上げ</label>
-  <label>時刻表示<select id="timetable-clock" @bind="ClockFormat" @bind:after="Invalidate"><option value="seconds">HH:mm:ss</option><option value="minutes">HH:mm（秒は保持）</option></select></label>
-  <label>所要時間<select id="timetable-duration-format" @bind="DurationFormat" @bind:after="Invalidate"><option value="units">単位表示</option><option value="colon">m:ss / h:mm:ss</option></select></label>
-  <label>曲の既定アイコン<select id="timetable-icon" @bind="Icon" @bind:after="Invalidate">@foreach(var icon in TimetableCalculator.Icons){<option value="@icon">@icon</option>}</select></label>
-  <label>終了予定（任意・日本時間 yyyy/MM/dd HH:mm）<FieldHelp HelpKey="event.plannedEnd" Label="終了予定" /><input id="timetable-planned-end" @bind="PlannedEnd" @bind:after="Invalidate" placeholder="2026/11/01 17:00" /></label>
+  <p>曲と進行の変更は共通の下書きです。最後の保存でまとめて確定し、取消では共有データを変更しません。曲・進行名を押して編集できます。開場・開始はイベント概要から変更します。</p>
+  <label>曲の既定準備時間（m:ss / h:mm:ss）<FieldHelp HelpKey="event.defaultPrep" Label="既定準備時間" /><input id="timetable-default-prep" @bind="DefaultPrep" @bind:event="oninput" @bind:after="Invalidate" disabled="@(Busy||Modal)" /></label>
+  <label><input id="timetable-round" disabled="@(Busy||Modal)" type="checkbox" @bind="Round" @bind:after="Invalidate" />曲の準備開始・演奏開始だけ分境界へ切上げ</label>
+  <label>時刻表示<select id="timetable-clock" disabled="@(Busy||Modal)" @bind="ClockFormat" @bind:after="Invalidate"><option value="seconds">HH:mm:ss</option><option value="minutes">HH:mm（秒は保持）</option></select></label>
+  <label>所要時間<select id="timetable-duration-format" disabled="@(Busy||Modal)" @bind="DurationFormat" @bind:after="Invalidate"><option value="units">単位表示</option><option value="colon">m:ss / h:mm:ss</option></select></label>
+  <label>曲の既定アイコン<select id="timetable-icon" disabled="@(Busy||Modal)" @bind="Icon" @bind:after="Invalidate">@foreach(var icon in TimetableCalculator.Icons){<option value="@icon">@icon</option>}</select></label>
+  <label>終了予定（任意・日本時間 yyyy/MM/dd HH:mm）<FieldHelp HelpKey="event.plannedEnd" Label="終了予定" /><input id="timetable-planned-end" disabled="@(Busy||Modal)" @bind="PlannedEnd" @bind:after="Invalidate" placeholder="2026/11/01 17:00" /></label>
+  <button id="timetable-add-song" disabled="@(Busy||Modal||Plan.SongEditor is null||Plan.SongEditor.Definitions.Length==0)" @onclick="NewSong">曲を追加</button>
   <button id="timetable-add" disabled="@(Busy||Modal)" @onclick="New">進行パートを追加</button>
  }
  var preview=Preview();
@@ -55,7 +58,7 @@ else if (!Embedded)
   <summary>タイムテーブルの時刻計算・詳細@(Embedded && !Editing ? "（補足）" : "")</summary>
   @if(Embedded && Editing){<p>この編集下書きは保存後に参加登録matrixへ反映されます。参加枠の選択・登録は参加登録欄で行います。</p>}
   @if(preview is not null){
-  <p>イベント開始：@TimetableCalculator.Clock(TimetableCalculator.Instant(Plan.ScheduledDate),ClockFormat) ／ 既定準備：@SongDuration.Format(Plan.DefaultPrepSeconds) ／ 計算上の終了：<span id="timetable-end">@TimetableCalculator.Clock(preview.End,ClockFormat)</span></p>
+  <p>イベント開始：@TimetableCalculator.Clock(TimetableCalculator.Instant(Plan.ScheduledDate),ClockFormat) ／ 既定準備：@(Editing?DefaultPrep:SongDuration.Format(Plan.DefaultPrepSeconds)) ／ 計算上の終了：<span id="timetable-end">@TimetableCalculator.Clock(preview.End,ClockFormat)</span></p>
   @if(preview.OverrunSeconds>0){<p id="timetable-overrun" role="alert">終了予定超過：@preview.OverrunSeconds 秒（表示で秒を隠しても計算には保持）</p>}
  <p class="manual-order-note">並び順：手動。列見出しでは変更しません。編集時の順序操作で保存順を変更します。</p>
   <div class="timetable-table-scroll"><table><thead><tr><th>曲・進行</th><th>準備開始</th><th>演奏／進行開始</th><th class="timetable-duration">曲長／進行時間</th><th>終了</th>@if(Editing){<th>順序</th>}</tr></thead><tbody>
@@ -63,7 +66,7 @@ else if (!Embedded)
    <tr data-timetable-part="@timed.Id" draggable="@(Editing&&draft is not null&&!Modal&&!Busy)" @ondragstart="()=>Drag=timed.Id" @ondragover:preventDefault @ondrop="()=>Drop(timed.Id)">
     <td>@if(Editing&&draft is not null){<button data-timetable-title="@timed.Id" disabled="@(Busy||Modal)" @onclick="()=>Open(draft)">@timed.Icon @timed.Title</button>}else{@timed.Icon @timed.Title}<small style="display:block;text-align:right">@timed.Artist</small></td>
     <td style="text-align:right;font-variant-numeric:tabular-nums">@(timed.PrepStart is DateTimeOffset prep?DisplayClock(prep):"—")</td>
-    <td style="text-align:right;font-variant-numeric:tabular-nums">@DisplayClock(timed.Start)</td><td class="timetable-duration">@TimetableCalculator.Duration(timed.LengthSeconds,DurationFormat)</td>
+    <td style="text-align:right;font-variant-numeric:tabular-nums">@DisplayClock(timed.Start)</td><td class="timetable-duration">@if(timed.Kind=="Song"){<span>準備 @TimetableCalculator.Duration(timed.ConfiguredPrepSeconds ?? 0,DurationFormat)</span><br /><span>曲 @TimetableCalculator.Duration(timed.LengthSeconds,DurationFormat)</span>}else{@TimetableCalculator.Duration(timed.LengthSeconds,DurationFormat)}</td>
     <td style="text-align:right;font-variant-numeric:tabular-nums">@DisplayClock(timed.End)</td>
     @if(Editing){<td>@if(draft is not null){<button data-timetable-up="@draft.Id" disabled="@(Busy||Modal||Parts.IndexOf(draft)==0)" @onclick="()=>Move(draft,-1)">↑</button><button data-timetable-down="@draft.Id" disabled="@(Busy||Modal||Parts.IndexOf(draft)==Parts.Count-1)" @onclick="()=>Move(draft,1)">↓</button>}</td>}
    </tr>
@@ -71,13 +74,23 @@ else if (!Embedded)
   </tbody></table></div>
   }
  </details>
- @if(Editing){@if(preview?.OverrunSeconds>0){<label><input id="timetable-ack" type="checkbox" @bind="Acknowledge" />表示された超過を確認し、このまま保存する</label>}<button id="timetable-save" disabled="@(Busy||Modal)" @onclick="Save">保存</button><button id="timetable-cancel" disabled="@Busy" @onclick="Cancel">取消</button>}
- @if(Modal){<section role="dialog" aria-modal="true" aria-label="タイムパート編集" class="panel"><h2>タイムパート編集</h2>
-  @if(Selected?.Kind=="Song"){<p>曲名・曲長・枠・準備時間は曲・枠管理で変更してください。担当者や申込みはこの編集で変更しません。</p><label>曲別アイコン<select id="timetable-row-icon" @bind="RowIcon"><option value="">イベント既定を継承</option>@foreach(var icon in TimetableCalculator.Icons){<option value="@icon">@icon</option>}</select></label>}
-  else{<label>進行名<FieldHelp HelpKey="transition.title" Label="進行名" /><input id="timetable-name" @bind="Name" maxlength="200" /></label><label>所要時間（0秒以上・m:ss / h:mm:ss）<FieldHelp HelpKey="transition.duration" Label="進行の所要時間" /><input id="timetable-length" @bind="Length" /></label>}
-  <button id="timetable-apply" @onclick="Apply">下書きに反映</button><button id="timetable-close" @onclick="()=>Modal=false">キャンセル</button>
-  @if(Selected?.Kind=="Transition"){<button id="timetable-delete" @onclick="Delete">下書きから削除</button>}
- </section>}
+ @if(Editing){@if(preview?.OverrunSeconds>0){<label><input id="timetable-ack" disabled="@(Busy||Modal)" type="checkbox" @bind="Acknowledge" />表示された超過を確認し、このまま保存する</label>}<button id="timetable-save" disabled="@(Busy||Modal)" @onclick="Save">保存</button><button id="timetable-cancel" disabled="@(Busy||Modal)" @onclick="Cancel">取消</button>}
+ @if(Modal){<DraftEditDialog @ref="EditDialog" Label="タイムパート編集" Dirty="ModalDirty" OnCancel="CancelModal" ReturnFocusSelector="@(Selected is null ? NewKind=="Song"?"#timetable-add-song":"#timetable-add" : $"[data-timetable-title='{Selected.Id}']")"><h2>@(IsSong ? "曲パートの編集" : "進行パートの編集")</h2>
+  @if(IsSong){
+   <label>曲名<FieldHelp HelpKey="song.title" Label="曲名" /><input id="timetable-song-title" @bind="Name" @bind:event="oninput" maxlength="200" /></label>
+   <label>アーティスト<FieldHelp HelpKey="song.artist" Label="アーティスト" /><input id="timetable-song-artist" @bind="Artist" @bind:event="oninput" maxlength="200" /></label>
+   <label>演奏時間（m:ss / h:mm:ss）<FieldHelp HelpKey="song.duration" Label="演奏時間" /><input id="timetable-song-length" @bind="Length" @bind:event="oninput" /></label>
+   <label>準備時間（空欄はイベント既定を継承、0:00は準備なし）<FieldHelp HelpKey="song.prep" Label="曲別準備時間" /><input id="timetable-song-prep" @bind="Prep" @bind:event="oninput" /></label>
+   <fieldset><legend>演奏パート枠（各定義1枠）</legend>@foreach(var d in Plan.SongEditor!.Definitions){<label><input data-timetable-definition="@d.Id" type="checkbox" checked="@Chosen.Contains(d.Id)" disabled="@(SelectedSong?.Parts.Any(p=>p.DefinitionId==d.Id&&p.Assigned)==true)" @onchange="a=>ToggleDefinition(d.Id,a.Value is true)" />@d.Name（@(d.Category=="Sing"?"声":"楽器")）</label>}</fieldset>
+   <label>曲別アイコン<select id="timetable-row-icon" @bind="RowIcon"><option value="">イベント既定を継承</option>@foreach(var icon in TimetableCalculator.Icons){<option value="@icon">@icon</option>}</select></label>
+   <p>担当者のいる曲・枠は削除できません。担当者の割当や解除は変更しません。</p>
+  }
+  else{<label>進行名<FieldHelp HelpKey="transition.title" Label="進行名" /><input id="timetable-name" @bind="Name" @bind:event="oninput" maxlength="200" /></label><label>所要時間（0秒以上・m:ss / h:mm:ss）<FieldHelp HelpKey="transition.duration" Label="進行の所要時間" /><input id="timetable-length" @bind="Length" @bind:event="oninput" /></label>}
+  <button id="timetable-apply" disabled="@Busy" @onclick="Apply">下書きに反映</button><button id="timetable-close" disabled="@Busy" @onclick="RequestModalCancel">この編集を取消</button>
+  @if(Selected is not null){<button id="timetable-delete" disabled="@(Busy||SelectedSong?.Parts.Any(p=>p.Assigned)==true)" @onclick="Delete">下書きから削除</button>}
+  <p role="alert">@Error</p>
+ </DraftEditDialog>}
+
 }
 </div>
 @code{
@@ -90,29 +103,66 @@ else if (!Embedded)
  [Parameter]public EventCallback<(string EventId,long ContextGeneration,string ContextIdentityKey,IReadOnlyList<TimedPart>? Rows,string ClockFormat,string DurationFormat)> RowsUpdated{get;set;}
  sealed record IdentityBinding(string ActorId,string SecurityStampHash,string SessionHash);
  IdentityBinding?BoundIdentity;string?BoundEventId;bool HasBoundContext;long LoadGeneration;
+ DraftEditDialog? EditDialog;List<SongView>SongRows=[];SongView?SelectedSong;HashSet<string>Chosen=[];
+ string DefaultPrep="10:00",Artist="",Prep="",NewKind="Transition",ModalBaseline="";bool Disposed;
+ bool IsSong=>(Selected?.Kind??NewKind)=="Song";
+ string ModalSnapshot()=>System.Text.Json.JsonSerializer.Serialize(new {Name,Artist,Length,Prep,RowIcon,Chosen=Chosen.OrderBy(x=>x).ToArray()});
+ bool ModalDirty=>Modal&&ModalSnapshot()!=ModalBaseline;
+ Task RequestModalCancel()=>EditDialog?.RequestCancel()??Task.CompletedTask;
+ void CancelModal(){if(Busy)return;Modal=false;Error="";}
+ void ToggleDefinition(string id,bool value){if(value)Chosen.Add(id);else Chosen.Remove(id);}
+ void BeginEdit(){if(Busy||Plan?.CanManage!=true)return;Editing=true;Message="";FeedbackUnknown=false;}
+ public void Dispose(){Disposed=true;LoadGeneration++;}
  TimetablePlan? Plan;List<TimePartEdit>Parts=[];TimePartEdit?Selected;bool Editing,Busy,Modal,Round=true,Acknowledge;string ClockFormat="seconds",DurationFormat="units",Icon="🎵",RowIcon="",PlannedEnd="",Name="",Length="10:00",Drag="",Error="",Message="";
  protected override async Task OnParametersSetAsync(){var principal=(await Authentication.GetAuthenticationStateAsync()).User;if(BindContext(principal))await Load(principal,++LoadGeneration,ContextGeneration,ExpectedIdentityKey(principal));}
  IdentityBinding? BindingFor(System.Security.Claims.ClaimsPrincipal principal){var claims=IdentityOptions.Value.ClaimsIdentity;var actor=principal.FindFirst(claims.UserIdClaimType)?.Value;var stamp=principal.FindFirst(claims.SecurityStampClaimType)?.Value;var session=principal.FindFirst(PasskeyAdditionService.SessionClaim)?.Value;if(principal.Identity?.IsAuthenticated!=true||string.IsNullOrWhiteSpace(actor)||string.IsNullOrWhiteSpace(stamp)||string.IsNullOrWhiteSpace(session))return null;return new(actor,SemEndpoints.Hash(stamp),SemEndpoints.Hash(session));}
  bool BindContext(System.Security.Claims.ClaimsPrincipal principal){var identity=BindingFor(principal);if(HasBoundContext&&BoundEventId==EventId&&BoundIdentity==identity)return false;HasBoundContext=true;BoundEventId=EventId;BoundIdentity=identity;LoadGeneration++;ClearContext();return true;}
- void ClearContext(){Plan=null;Parts=[];Selected=null;Editing=Busy=Modal=false;Round=true;Acknowledge=false;ClockFormat="seconds";DurationFormat="units";Icon="🎵";RowIcon="";PlannedEnd="";Name="";Length="10:00";Drag="";Error=Message="";}
+ void ClearContext(){Plan=null;Parts=[];SongRows=[];SelectedSong=null;Chosen=[];Selected=null;Editing=Busy=Modal=false;Round=true;Acknowledge=false;ClockFormat="seconds";DurationFormat="units";Icon="🎵";RowIcon="";PlannedEnd="";Name="";Length="10:00";Drag="";Error=Message="";}
  void PreventUnsaved(Microsoft.AspNetCore.Components.Routing.LocationChangingContext context){if(Editing){context.PreventNavigation();Error="未保存の下書きがあります。保存または取消してから移動してください。";}}
  async Task Load(){var principal=(await Authentication.GetAuthenticationStateAsync()).User;BindContext(principal);await Load(principal,++LoadGeneration,ContextGeneration,ExpectedIdentityKey(principal));}
  string ExpectedIdentityKey(System.Security.Claims.ClaimsPrincipal principal)=>Embedded?ContextIdentityKey:BindingKey(BindingFor(principal));
- bool IsCurrentLoad(System.Security.Claims.ClaimsPrincipal principal,long generation,long contextGeneration,string contextIdentityKey)=>generation==LoadGeneration&&contextGeneration==ContextGeneration&&BoundEventId==EventId&&BindingFor(principal)==BoundIdentity&&BindingKey(BoundIdentity)==contextIdentityKey&&(!Embedded||ContextIdentityKey==contextIdentityKey);
+ bool IsCurrentLoad(System.Security.Claims.ClaimsPrincipal principal,long generation,long contextGeneration,string contextIdentityKey)=>!Disposed&&generation==LoadGeneration&&contextGeneration==ContextGeneration&&BoundEventId==EventId&&BindingFor(principal)==BoundIdentity&&BindingKey(BoundIdentity)==contextIdentityKey&&(!Embedded||ContextIdentityKey==contextIdentityKey);
  async Task Load(System.Security.Claims.ClaimsPrincipal principal,long generation,long contextGeneration,string contextIdentityKey){try{var plan=await Core.ReadTimetableAsync(principal,EventId);if(!IsCurrentLoad(principal,generation,contextGeneration,contextIdentityKey))return;Plan=plan;Reset();Error="";await PublishRows(contextGeneration,contextIdentityKey,plan);}catch{if(!IsCurrentLoad(principal,generation,contextGeneration,contextIdentityKey))return;Plan=null;Parts=[];Editing=Modal=false;Error="ログイン状態とイベント閲覧権限を確認してください。";await PublishRows(contextGeneration,contextIdentityKey,null);}}
  string BindingKey(IdentityBinding? identity)=>identity is null?"":SemEndpoints.Hash($"{identity.ActorId}\u001f{identity.SecurityStampHash}\u001f{identity.SessionHash}");
  Task PublishRows(long contextGeneration,string contextIdentityKey,TimetablePlan? plan){if(!Embedded||!RowsUpdated.HasDelegate)return Task.CompletedTask;IReadOnlyList<TimedPart>? rows=plan is null?null:Array.AsReadOnly(plan.Calculation.Rows.ToArray());return RowsUpdated.InvokeAsync((EventId,contextGeneration,contextIdentityKey,rows,plan?.ClockFormat??"seconds",plan?.DurationFormat??"units"));}
- void Reset(){Parts=Plan!.Parts.ToList();Round=Plan.RoundStarts;ClockFormat=Plan.ClockFormat;DurationFormat=Plan.DurationFormat;Icon=Plan.SongIcon;PlannedEnd=Plan.PlannedEndAt is null?"":TimetableCalculator.Clock(TimetableCalculator.Instant(Plan.PlannedEndAt),"minutes");Acknowledge=false;}
- void Cancel(){Reset();Editing=Modal=false;Error="";Message="下書きを取り消しました。";}
+ void Reset(){Parts=Plan!.Parts.ToList();SongRows=Plan.SongEditor?.Songs.ToList()??[];DefaultPrep=SongDuration.Format(Plan.DefaultPrepSeconds);Round=Plan.RoundStarts;ClockFormat=Plan.ClockFormat;DurationFormat=Plan.DurationFormat;Icon=Plan.SongIcon;PlannedEnd=Plan.PlannedEndAt is null?"":TimetableCalculator.Clock(TimetableCalculator.Instant(Plan.PlannedEndAt),"minutes");Acknowledge=false;}
+ void Cancel(){if(Busy||Modal)return;FeedbackUnknown=false;Reset();Editing=Modal=false;Error="";Message="下書きを取り消しました。";}
  DateTimeOffset? End(){if(string.IsNullOrWhiteSpace(PlannedEnd))return null;if(Plan?.PlannedEndAt is string prior&&PlannedEnd==TimetableCalculator.Clock(TimetableCalculator.Instant(prior),"minutes"))return TimetableCalculator.Instant(prior);if(!DateTime.TryParseExact(PlannedEnd,"yyyy/MM/dd HH:mm",CultureInfo.InvariantCulture,DateTimeStyles.None,out var dt))throw new System.ComponentModel.DataAnnotations.ValidationException("終了予定は日本時間 yyyy/MM/dd HH:mm で入力してください。");return new DateTimeOffset(dt,TimeSpan.FromHours(9));}
- CalculatedTimetable? Preview(){try{var e=new SessionEvent{ScheduledDate=Plan!.ScheduledDate,OpensAt=Plan.OpensAt,DefaultPrepSeconds=Plan.DefaultPrepSeconds,RoundStarts=Round,SongIcon=Icon,PlannedEndAt=End()?.ToUniversalTime().ToString("O")};return TimetableCalculator.Calculate(e,Parts.Select((p,i)=>new TimePart{Id=p.Id,Kind=p.Kind,SongId=p.SongId,Name=p.Name,DurationSeconds=p.DurationSeconds,Icon=p.Icon,SortOrder=i}),Plan.Songs);}catch{return null;}}
+ CalculatedTimetable? Preview(){try{var e=new SessionEvent{ScheduledDate=Plan!.ScheduledDate,OpensAt=Plan.OpensAt,DefaultPrepSeconds=DraftPrep(),RoundStarts=Round,SongIcon=Icon,PlannedEndAt=End()?.ToUniversalTime().ToString("O")};return TimetableCalculator.Calculate(e,Parts.Select((p,i)=>new TimePart{Id=p.Id,Kind=p.Kind,SongId=p.SongId,Name=p.Name,DurationSeconds=p.DurationSeconds,Icon=p.Icon,SortOrder=i}),DraftSongs());}catch{return null;}}
  string DisplayClock(DateTimeOffset value)=>Sem.Web.Components.Shared.TimetableDisplay.Clock(value,ClockFormat,TimetableCalculator.Instant(Plan!.ScheduledDate));
  void Invalidate(){Acknowledge=false;}
- void New(){if(Busy||Modal||!Editing)return;Selected=null;Name="";Length="10:00";Modal=true;}
- void Open(TimePartEdit p){if(Busy||Modal||!Editing)return;Selected=p;Name=p.Name;Length=SongDuration.Format(p.DurationSeconds);RowIcon=p.Icon??"";Modal=true;}
+ int DraftPrep(){if(!SongDuration.TryParse(DefaultPrep,out var seconds))throw new System.ComponentModel.DataAnnotations.ValidationException("既定準備時間をm:ss / h:mm:ssで入力してください。");return seconds;}
+ Song[] DraftSongs()=>Plan!.CanManage?SongRows.Select(x=>new Song{Id=x.Id,Title=x.Title,Artist=x.Artist,PerformanceSeconds=x.PerformanceSeconds,PrepSeconds=x.PrepSeconds}).ToArray():Plan.Songs;
+ void New(){if(Busy||Modal||!Editing)return;Selected=null;SelectedSong=null;NewKind="Transition";Name=Artist=Prep=RowIcon="";Chosen=[];Length="10:00";Modal=true;ModalBaseline=ModalSnapshot();}
+ void NewSong(){if(Busy||Modal||!Editing||Plan?.SongEditor is null||Plan.SongEditor.Definitions.Length==0)return;Selected=null;SelectedSong=null;NewKind="Song";Name=Artist=Prep=RowIcon="";Length="4:30";Chosen=Plan.SongEditor.Definitions.Select(x=>x.Id).ToHashSet();Modal=true;ModalBaseline=ModalSnapshot();}
+ void Open(TimePartEdit p){if(Busy||Modal||!Editing)return;Selected=p;NewKind=p.Kind;SelectedSong=p.Kind=="Song"?SongRows.Single(x=>x.Id==p.SongId):null;Name=SelectedSong?.Title??p.Name;Artist=SelectedSong?.Artist??"";Length=SongDuration.Format(SelectedSong?.PerformanceSeconds??p.DurationSeconds);Prep=SelectedSong?.PrepSeconds is int prep?SongDuration.Format(prep):"";Chosen=SelectedSong?.Parts.Select(x=>x.DefinitionId).ToHashSet()??[];RowIcon=p.Icon??"";Modal=true;ModalBaseline=ModalSnapshot();}
  void Move(TimePartEdit p,int delta){if(Busy||Modal||!Editing)return;var i=Parts.IndexOf(p);var n=i+delta;if(i>=0&&n>=0&&n<Parts.Count){(Parts[i],Parts[n])=(Parts[n],Parts[i]);Acknowledge=false;}}
  void Drop(string id){if(Busy||Modal||!Editing||id=="opening")return;var from=Parts.FindIndex(x=>x.Id==Drag);var to=Parts.FindIndex(x=>x.Id==id);if(from>=0&&to>=0&&from!=to){var p=Parts[from];Parts.RemoveAt(from);Parts.Insert(to,p);Acknowledge=false;}Drag="";}
- void Apply(){TimePartEdit row;if(Selected?.Kind=="Song")row=Selected with{Icon=RowIcon.Length==0?null:RowIcon};else{if(Name.Trim().Length is <1 or >200||!SongDuration.TryParse(Length,out var seconds)){Error="進行名と0秒以上の所要時間を確認してください。";return;}row=new(Selected?.Id??Guid.NewGuid().ToString(),"Transition",null,Name.Trim(),seconds);}if(Selected is null)Parts.Add(row);else Parts[Parts.FindIndex(x=>x.Id==Selected.Id)]=row;Modal=false;Acknowledge=false;Error="";}
- void Delete(){if(Selected?.Kind=="Transition"){Parts.Remove(Selected);Modal=false;Acknowledge=false;}}
- async Task Save(){if(Busy||Modal||!Editing)return;FeedbackRevision++;FeedbackUnknown=false;Busy=true;Error="";try{var edit=new TimetableEdit(Plan!.RowVersion,Round,ClockFormat,DurationFormat,Icon,End(),Parts.ToArray(),Acknowledge);await Core.SaveTimetableAsync((await Authentication.GetAuthenticationStateAsync()).User,EventId,edit);Editing=Modal=false;await Load();Message="保存しました。";}catch(UnauthorizedAccessException){Plan=null;Parts=[];Editing=Modal=false;Error="再ログインと管理権限を確認してください。";await PublishRows(ContextGeneration,ContextIdentityKey,null);}catch(Exception e)when(e is CoreConflictException or System.ComponentModel.DataAnnotations.ValidationException){Error=e.Message;}catch{FeedbackUnknown=true;Error="保存結果を確認できませんでした。再読込して結果を確認してください。";}finally{Busy=false;}}
+ void Apply(){if(Busy||!Editing||!Modal)return;TimePartEdit row;
+  if(IsSong){var prep=0;if(Name.Trim().Length is <1 or >200||Artist.Length>200||!SongDuration.TryParse(Length,out var seconds)||seconds<1||!string.IsNullOrWhiteSpace(Prep)&&!SongDuration.TryParse(Prep,out prep)||Chosen.Count==0){Error="曲名・アーティスト・時間と1つ以上の枠を確認してください。";return;}
+   if(SelectedSong?.Parts.Where(p=>p.Assigned).GroupBy(p=>p.DefinitionId).Any(g=>g.Count()>1)==true){Error="登録済み同種複数枠は、重複枠解除後に編集してください。";return;}
+   var slots=Plan!.SongEditor!.Definitions.Where(d=>Chosen.Contains(d.Id)).Select(d=>SelectedSong?.Parts.FirstOrDefault(p=>p.DefinitionId==d.Id&&p.Assigned)??SelectedSong?.Parts.FirstOrDefault(p=>p.DefinitionId==d.Id)??new SongPartView("",d.Id,d.Name,d.Category,false)).ToArray();
+   var song=new SongView(SelectedSong?.Id??Guid.NewGuid().ToString(),Name.Trim(),Artist.Trim(),seconds,string.IsNullOrWhiteSpace(Prep)?null:prep,slots);
+   if(SelectedSong is null)SongRows.Add(song);else SongRows[SongRows.FindIndex(x=>x.Id==SelectedSong.Id)]=song;
+   row=new(Selected?.Id??song.Id,"Song",song.Id,"",0,RowIcon.Length==0?null:RowIcon);
+  }else{if(Name.Trim().Length is <1 or >200||!SongDuration.TryParse(Length,out var seconds)){Error="進行名と0秒以上の所要時間を確認してください。";return;}row=new(Selected?.Id??Guid.NewGuid().ToString(),"Transition",null,Name.Trim(),seconds);}
+  if(Selected is null)Parts.Add(row);else Parts[Parts.FindIndex(x=>x.Id==Selected.Id)]=row;Modal=false;Acknowledge=false;Error="";
+ }
+ void Delete(){if(Busy||!Editing||!Modal||Selected is null||SelectedSong?.Parts.Any(p=>p.Assigned)==true)return;if(SelectedSong is not null)SongRows.Remove(SelectedSong);Parts.Remove(Selected);Modal=false;Acknowledge=false;}
+ async Task Save(){
+  if(Busy||Modal||!Editing||Plan is null)return;
+  var eventId=EventId;var generation=LoadGeneration;var contextGeneration=ContextGeneration;var contextIdentityKey=ContextIdentityKey;
+  FeedbackRevision++;FeedbackUnknown=false;Busy=true;Error="";
+  bool Current()=>!Disposed&&generation==LoadGeneration&&eventId==EventId&&contextGeneration==ContextGeneration&&contextIdentityKey==ContextIdentityKey;
+  try{
+   var edit=new TimetableEdit(Plan.RowVersion,Round,ClockFormat,DurationFormat,Icon,End(),Parts.ToArray(),Acknowledge,new SongPlanEdit(Plan.RowVersion,DraftPrep(),Parts.Where(x=>x.Kind=="Song").Select(p=>SongRows.Single(s=>s.Id==p.SongId)).Select(x=>new SongEdit(x.Id,x.Title,x.Artist,x.PerformanceSeconds,x.PrepSeconds,x.Parts.Select(p=>p.DefinitionId).Distinct().ToArray())).ToArray()));
+   var principal=(await Authentication.GetAuthenticationStateAsync()).User;if(!Current())return;
+   if(BindingFor(principal)!=BoundIdentity)throw new UnauthorizedAccessException();
+   await Core.SaveTimetableAsync(principal,eventId,edit);if(!Current())return;
+   Editing=Modal=false;await Load();if(!Disposed&&eventId==EventId&&contextGeneration==ContextGeneration&&contextIdentityKey==ContextIdentityKey)Message="保存しました。";
+  }catch(UnauthorizedAccessException){if(!Current())return;Plan=null;Parts=[];SongRows=[];Editing=Modal=false;Error="再ログインと管理権限を確認してください。";await PublishRows(ContextGeneration,ContextIdentityKey,null);}
+  catch(Exception e)when(e is CoreConflictException or System.ComponentModel.DataAnnotations.ValidationException){if(Current())Error=e.Message;}
+  catch{if(Current()){FeedbackUnknown=true;Error="保存結果を確認できませんでした。下書きを保持しています。再送前に最新状態を確認してください。";}}
+  finally{if(!Disposed&&eventId==EventId&&contextGeneration==ContextGeneration&&contextIdentityKey==ContextIdentityKey)Busy=false;}
+ }
 }

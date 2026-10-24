@@ -11,3 +11,5 @@
 .timetable-calculation-details>summary{min-height:40px;display:flex;align-items:center;cursor:pointer;font-weight:650;color:var(--appearance-accent,#1e6557)}
 .timetable-calculation-details[open]>summary{margin-bottom:8px}
 .timetable-view-embedded .timetable-calculation-details:not([open]){padding:0}
+.timetable-view ::deep .draft-edit-dialog{box-sizing:border-box;max-width:min(720px,calc(100vw - 24px))}
+.timetable-view ::deep .draft-edit-dialog input,.timetable-view ::deep .draft-edit-dialog select{box-sizing:border-box;max-width:100%}
