@@ -9,6 +9,14 @@ module.exports=async({p,ok})=>{
  const created=await api('event',{title:'Isolated edit guard event',description:'',location:'',scheduledDate:new Date(Date.now()+86400000).toISOString(),opensAt:null,announcementMessage:'',phaseKind:'Hidden',managerIds:[],rowVersion:0});
  assert.equal(created.status,200);const id=created.body.id,query='?id='+id;
  const w=await p.context().newPage();const errors=[];w.on('pageerror',e=>errors.push(e.message));
+ const centered=async label=>{
+  const geometry=await w.locator('[data-draft-dialog]').evaluate(e=>{
+   const r=e.getBoundingClientRect();return{x:r.x,y:r.y,width:r.width,height:r.height,vw:innerWidth,vh:innerHeight,scroll:e.scrollHeight,client:e.clientHeight};
+  });
+  assert(Math.abs(geometry.x+geometry.width/2-geometry.vw/2)<=2&&Math.abs(geometry.y+geometry.height/2-geometry.vh/2)<=2,label+': viewport center '+JSON.stringify(geometry));
+  assert(geometry.x>=8&&geometry.y>=8&&geometry.x+geometry.width<=geometry.vw-8&&geometry.y+geometry.height<=geometry.vh-8,label+': viewport bounds '+JSON.stringify(geometry));
+  ok(true,label+': centered and within viewport');
+ };
  const resultClose=async()=>{await w.getByRole('button',{name:'結果を確認して閉じる',exact:true}).click();};
  try {
   for(const [route,prefix,input,apply,key]of [
@@ -29,10 +37,23 @@ module.exports=async({p,ok})=>{
    await w.goto(url);await w.waitForSelector('#'+prefix+'-edit');await w.waitForSelector('[data-draft-interactive=true]',{state:'attached'});
    await w.locator('#'+prefix+'-edit').click();await w.locator('#'+prefix+'-add').click();
    await w.waitForFunction(()=>document.querySelector('[data-draft-dialog]')?.open);
+   await centered(prefix+' edit');
    await w.keyboard.press('Tab');
    assert(await w.evaluate(()=>document.querySelector('[data-draft-dialog]').contains(document.activeElement)));
    const local='Local '+prefix+' draft';await w.locator('#'+input).fill(local);
    await w.keyboard.press('Escape');await w.waitForSelector('[data-draft-keep]');
+   await centered(prefix+' confirmation');
+   if(route==='questions'){
+    for(const mode of ['light','dark'])for(const [width,height]of [[320,568],[390,844],[768,1024],[1440,900],[844,390]]){
+     await w.setViewportSize({width,height});await w.evaluate(mode=>document.documentElement.dataset.appearanceMode=mode,mode);
+     await centered('questions '+mode+' '+width+'x'+height+' confirmation');
+     await w.locator('[data-draft-keep]').click();assert.equal(await w.locator('#'+input).inputValue(),local);
+     await centered('questions '+mode+' '+width+'x'+height+' edit');
+     const close=w.locator('#'+prefix+'-close');await close.scrollIntoViewIfNeeded();await close.click();await w.waitForSelector('[data-draft-keep]');
+     await centered('questions '+mode+' '+width+'x'+height+' reopened confirmation');
+    }
+    await w.setViewportSize({width:1280,height:720});await w.evaluate(()=>document.documentElement.removeAttribute('data-appearance-mode'));
+   }
    ok(await w.locator('[data-draft-dialog]').evaluate(e=>e.open),prefix+': Escape keeps native dialog open for discard confirmation');
    await w.locator('[data-draft-keep]').click();assert.equal(await w.locator('#'+input).inputValue(),local);
    await w.mouse.click(1,1);await w.waitForSelector('[data-draft-keep]');
