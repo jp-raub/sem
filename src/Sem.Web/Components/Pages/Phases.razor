@@ -9,6 +9,7 @@
 <p><a href="/workspace">業務基盤へ戻る</a></p>
 <p>登録曲数上限と受付期間を設定します。参加登録はイベント画面から行い、この画面の保存では登録は発生しません。</p>
 
+<DraftNavigationGuard Protected="@(Editing && (Busy || FeedbackUnknown || PageDirty || ModalDirty))" />
 <OperationFeedback Revision="FeedbackRevision" Busy="Busy" Success="@Message" Error="@Error" Unknown="FeedbackUnknown" />
 <p id="phase-error" role="alert">@Error</p><p id="phase-message" role="status">@Message</p>
 @if(Plan is not null)
@@ -16,34 +17,43 @@
  <p id="phase-mode">@(Plan.ManualOverride ? "手動優先（自動切替停止中）" : "自動（実際のサーバー時刻で評価）")</p>
  @if(!Editing) { <button id="phase-edit" @onclick="Edit">編集</button> <button id="phase-refresh" @onclick="Load">最新状態を取得</button> }
  else { <p>変更は下書きです。最後の保存まで共有されません。</p>
-  <label><input id="phase-manual" type="checkbox" @bind="Manual" />手動優先<FieldHelp HelpKey="phase.manual" Label="手動優先" /></label>
-  <button type="button" id="phase-add" @onclick="New">カスタムフェーズを追加</button>
+  <label><input id="phase-manual" type="checkbox" @bind="Manual" disabled="@(Busy||Modal)" />手動優先<FieldHelp HelpKey="phase.manual" Label="手動優先" /></label>
+  <button type="button" id="phase-add" disabled="@(Busy||Modal)" @onclick="New">カスタムフェーズを追加</button>
  }
  <p class="manual-order-note">並び順：手動。列見出しでは変更しません。編集時の順序操作で保存順を変更します。</p>
  <table><thead><tr><th>有効</th><th>フェーズ</th><th>登録曲数上限</th><th>自動有効期間（日本時間）</th></tr></thead><tbody>
  @foreach(var p in Rows)
  {
-  <tr data-phase="@p.Id"><td><input type="radio" name="active-phase" value="@p.Id" checked="@(Active==p.Id)" disabled="@(!Editing || Busy)" @onchange="()=>{Active=p.Id;Manual=true;}" /></td>
-  <td>@if(Editing && p.Kind=="Custom"){<button type="button" data-phase-name="@p.Id" @onclick="()=>Open(p)">@p.Name</button>}else{@p.Name}</td>
+  <tr data-phase="@p.Id"><td><input type="radio" name="active-phase" value="@p.Id" checked="@(Active==p.Id)" disabled="@(!Editing || Busy || Modal)" @onchange="()=>{Active=p.Id;Manual=true;}" /></td>
+  <td>@if(Editing && p.Kind=="Custom"){<button type="button" data-phase-name="@p.Id" disabled="@(Busy||Modal)" @onclick="()=>Open(p)">@p.Name</button>}else{@p.Name}</td>
   <td>@(p.MaxPicks==-1?"無制限":p.MaxPicks.ToString())</td><td>@(p.ActivateAt is null?"指定なし":Japan(p.ActivateAt)) → @(p.DeactivateAt is null?"指定なし":Japan(p.DeactivateAt))</td></tr>
  }
  </tbody></table>
- @if(Editing){<button id="phase-save" disabled="@(Busy || Modal)" @onclick="Save">保存</button><button id="phase-cancel" disabled="@Busy" @onclick="Cancel">取消</button>}
+ @if(Editing){<button id="phase-save" disabled="@(Busy || Modal)" @onclick="Save">保存</button><button id="phase-cancel" disabled="@(Busy||Modal)" @onclick="Cancel">取消</button>}
  @if(Modal)
  {
-  <section role="dialog" aria-modal="true" aria-label="カスタムフェーズ編集" class="panel">
+  <DraftEditDialog @ref="EditDialog" Label="カスタムフェーズ編集" Dirty="ModalDirty" OnCancel="CancelModal" ReturnFocusSelector="@(Selected is null ? "#phase-add" : $"[data-phase-name='{Selected.Id}']")">
    <h2>カスタムフェーズ編集</h2>
-   <label>名前<FieldHelp HelpKey="phase.name" Label="フェーズ名" /><input id="phase-name" @bind="Name" maxlength="100" /></label>
+   <label>名前<FieldHelp HelpKey="phase.name" Label="フェーズ名" /><input id="phase-name" @bind="Name" @bind:event="oninput" maxlength="100" /></label>
    <label>最大登録曲数（-1=無制限）<FieldHelp HelpKey="phase.maxPicks" Label="最大登録曲数" /><input id="phase-max" type="number" @bind="Maximum" min="-1" /></label>
    <label>有効化（日本時間・任意）<FieldHelp HelpKey="phase.activate" Label="有効化日時" /><input id="phase-start" type="datetime-local" step="1" value="@Starts" @onchange="e=>Starts=e.Value?.ToString()??string.Empty" /></label>
    <label>無効化（日本時間・任意）<FieldHelp HelpKey="phase.deactivate" Label="無効化日時" /><input id="phase-end" type="datetime-local" step="1" value="@Ends" @onchange="e=>Ends=e.Value?.ToString()??string.Empty" /></label>
-   <button id="phase-draft-apply" @onclick="Apply">下書きに反映</button><button type="button" @onclick="()=>Modal=false">閉じる</button>
+   <button id="phase-draft-apply" @onclick="Apply">下書きに反映</button><button id="phase-close" type="button" @onclick="RequestModalCancel">この編集を取消</button>
    @if(Selected is not null){<button id="phase-delete" disabled="@(Selected.Id==Active)" @onclick="Delete">下書きから削除</button>}
    <p>有効なフェーズは削除できません。既定フェーズは編集／削除できません。</p>
-  </section>
+  <p role="alert">@Error</p></DraftEditDialog>
  }
 }
 @code {
+ DraftEditDialog? EditDialog;
+ string PageBaseline="", ModalBaseline="";
+ string PageSnapshot()=>System.Text.Json.JsonSerializer.Serialize(new { Rows, Active, Manual });
+ string ModalSnapshot()=>System.Text.Json.JsonSerializer.Serialize(new { Name, Maximum, Starts, Ends });
+ bool PageDirty=>Editing && PageSnapshot()!=PageBaseline;
+ bool ModalDirty=>Modal && ModalSnapshot()!=ModalBaseline;
+ Task RequestModalCancel()=>EditDialog?.RequestCancel()??Task.CompletedTask;
+ void CancelModal(){if(Busy)return;Modal=false;Error="";}
+
  long FeedbackRevision; bool FeedbackUnknown;
 
  [Parameter] public string EventId {get;set;}="";
@@ -53,13 +63,13 @@
  static string Japan(string value)=>TimeZoneInfo.ConvertTime(DateTimeOffset.Parse(value,CultureInfo.InvariantCulture),Zone).ToString("yyyy/MM/dd HH:mm:ss");
  static string Local(string? value)=>value is null?"":TimeZoneInfo.ConvertTime(DateTimeOffset.Parse(value,CultureInfo.InvariantCulture),Zone).ToString("yyyy-MM-ddTHH:mm:ss");
  static DateTimeOffset? Parse(string value){if(string.IsNullOrWhiteSpace(value))return null;if(!DateTime.TryParseExact(value,["yyyy-MM-ddTHH:mm","yyyy-MM-ddTHH:mm:ss"],CultureInfo.InvariantCulture,DateTimeStyles.None,out var time))throw new System.ComponentModel.DataAnnotations.ValidationException("日時を確認してください。");return new DateTimeOffset(time,Zone.GetUtcOffset(time));}
- protected override async Task OnParametersSetAsync()=>await Load();
+ protected override async Task OnParametersSetAsync(){Editing=Modal=false;await Load();}
  async Task Load(){try{Plan=await Core.ReadPhasePlanAsync((await Authentication.GetAuthenticationStateAsync()).User,EventId);Rows=Plan.Phases.ToList();Active=Rows.Single(p=>p.IsActive).Id;Manual=Plan.ManualOverride;Error="";}catch{Plan=null;Rows=[];Error="ログイン状態とイベント管理権限を確認してください。";}}
- void Edit(){Editing=true;Message="";}
- void Cancel(){Editing=Modal=false;Rows=Plan!.Phases.ToList();Active=Rows.Single(p=>p.IsActive).Id;Manual=Plan.ManualOverride;Error="";Message="下書きを取り消しました。";}
- void New(){Selected=null;Name=Starts=Ends="";Maximum=2;Modal=true;}
- void Open(PhaseView p){Selected=p;Name=p.Name;Maximum=p.MaxPicks;Starts=Local(p.ActivateAt);Ends=Local(p.DeactivateAt);Modal=true;}
- void Apply(){try{var start=Parse(Starts);var end=Parse(Ends);if(string.IsNullOrWhiteSpace(Name)||Name.Length>100||Maximum< -1||start is not null&&end is not null&&end<=start)throw new System.ComponentModel.DataAnnotations.ValidationException("名前／曲数／有効期間を確認してください。");var p=new PhaseView(Selected?.Id??Guid.NewGuid().ToString(),"Custom",Name.Trim(),Maximum,start?.ToUniversalTime().ToString("O"),end?.ToUniversalTime().ToString("O"),false);if(Selected is not null)Rows[Rows.IndexOf(Selected)]=p;else Rows.Add(p);Modal=false;Error="";}catch(Exception e){Error=e.Message;}}
- void Delete(){if(Selected is not null&&Selected.Id!=Active){Rows.Remove(Selected);Modal=false;}}
- async Task Save(){FeedbackRevision++;FeedbackUnknown=false;Busy=true;Error="";try{var edit=new PhasePlanEdit(Plan!.RowVersion,Manual,Active,Rows.Where(p=>p.Kind=="Custom").Select(p=>new CustomPhaseEdit(p.Id,p.Name,p.MaxPicks,p.ActivateAt is null?null:DateTimeOffset.Parse(p.ActivateAt),p.DeactivateAt is null?null:DateTimeOffset.Parse(p.DeactivateAt))).ToArray());await Core.SavePhasePlanAsync((await Authentication.GetAuthenticationStateAsync()).User,EventId,edit);Editing=Modal=false;Message="保存しました。";await Load();}catch(UnauthorizedAccessException){Plan=null;Rows=[];Editing=Modal=false;Error="再ログインと管理権限を確認してください。";}catch(Exception e)when(e is CoreConflictException or System.ComponentModel.DataAnnotations.ValidationException){Error=e.Message;}catch{FeedbackUnknown=true;Error="保存結果を確認できませんでした。再送前に最新状態を確認してください。";}finally{Busy=false;}}
+ void Edit(){Editing=true;Message="";PageBaseline=PageSnapshot();}
+ void Cancel(){if(Busy||Modal||Plan is null)return;FeedbackUnknown=false;Editing=Modal=false;Rows=Plan!.Phases.ToList();Active=Rows.Single(p=>p.IsActive).Id;Manual=Plan.ManualOverride;Error="";Message="下書きを取り消しました。";}
+ void New(){if(Busy||Modal||!Editing)return;Selected=null;Name=Starts=Ends="";Maximum=2;Modal=true;ModalBaseline=ModalSnapshot();}
+ void Open(PhaseView p){if(Busy||Modal||!Editing)return;Selected=p;Name=p.Name;Maximum=p.MaxPicks;Starts=Local(p.ActivateAt);Ends=Local(p.DeactivateAt);Modal=true;ModalBaseline=ModalSnapshot();}
+ void Apply(){if(Busy||!Editing||!Modal)return;try{var start=Parse(Starts);var end=Parse(Ends);if(string.IsNullOrWhiteSpace(Name)||Name.Length>100||Maximum< -1||start is not null&&end is not null&&end<=start)throw new System.ComponentModel.DataAnnotations.ValidationException("名前／曲数／有効期間を確認してください。");var p=new PhaseView(Selected?.Id??Guid.NewGuid().ToString(),"Custom",Name.Trim(),Maximum,start?.ToUniversalTime().ToString("O"),end?.ToUniversalTime().ToString("O"),false);if(Selected is not null)Rows[Rows.IndexOf(Selected)]=p;else Rows.Add(p);Modal=false;Error="";}catch(Exception e){Error=e.Message;}}
+ void Delete(){if(Busy||!Editing||!Modal)return;if(Selected is not null&&Selected.Id!=Active){Rows.Remove(Selected);Modal=false;}}
+ async Task Save(){if(Busy||Modal||!Editing||Plan is null)return;FeedbackRevision++;FeedbackUnknown=false;Busy=true;Error="";try{var edit=new PhasePlanEdit(Plan!.RowVersion,Manual,Active,Rows.Where(p=>p.Kind=="Custom").Select(p=>new CustomPhaseEdit(p.Id,p.Name,p.MaxPicks,p.ActivateAt is null?null:DateTimeOffset.Parse(p.ActivateAt),p.DeactivateAt is null?null:DateTimeOffset.Parse(p.DeactivateAt))).ToArray());await Core.SavePhasePlanAsync((await Authentication.GetAuthenticationStateAsync()).User,EventId,edit);Editing=Modal=false;Message="保存しました。";await Load();}catch(UnauthorizedAccessException){Plan=null;Rows=[];Editing=Modal=false;Error="再ログインと管理権限を確認してください。";}catch(Exception e)when(e is CoreConflictException or System.ComponentModel.DataAnnotations.ValidationException){Error=e.Message;}catch{FeedbackUnknown=true;Error="保存結果を確認できませんでした。再送前に最新状態を確認してください。";}finally{Busy=false;}}
 }

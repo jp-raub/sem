@@ -42,6 +42,9 @@ node scripts/e2e-request-pacing-checks.cjs 2>&1 | tee verification/e2e-request-p
 node --check scripts/settings-pages-checks.cjs
 node --check scripts/runtime-version-checks.cjs
 node scripts/legacy-passkey-url-checks.mjs 2>&1 | tee verification/legacy-passkey-url.log
+node scripts/draft-navigation-guard-checks.mjs
+node scripts/draft-edit-dialog-checks.mjs
+node --check scripts/edit-guard-checks.cjs
 node scripts/dialog-lifecycle-checks.mjs 2>&1 | tee verification/dialog-lifecycle-ui.log
 node --check src/Sem.Web/wwwroot/operation-feedback.js
 node --check src/Sem.Web/wwwroot/operation-result-presenter.js

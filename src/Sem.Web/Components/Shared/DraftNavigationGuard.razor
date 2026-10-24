@@ -1,0 +1,40 @@
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+<NavigationLock ConfirmExternalNavigation="@Protected" OnBeforeInternalNavigation="BeforeNavigation" />
+<span hidden data-draft-interactive="@(Interactive ? "true" : "false")"></span>
+@if (Blocked && Protected)
+{
+    <p class="draft-navigation-warning" role="alert">未保存の下書き、または処理中・結果未確認の保存があります。入力を保持しました。保存結果を確認し、保存または画面全体の取消をしてから移動してください。</p>
+}
+@code {
+    [Parameter] public bool Protected { get; set; }
+    readonly string Key = Guid.NewGuid().ToString("N");
+    IJSObjectReference? Module;
+    DotNetObjectReference<DraftNavigationGuard>? Reference;
+    bool Blocked, Interactive, Disposed;
+    protected override void OnParametersSet() { if (!Protected) Blocked = false; }
+    void BeforeNavigation(LocationChangingContext context)
+    {
+        if (!Protected) return;
+        context.PreventNavigation();
+        Blocked = true;
+        StateHasChanged();
+    }
+    [JSInvokable] public Task BlockNavigation() => InvokeAsync(() => { if (!Disposed && Protected) { Blocked = true; StateHasChanged(); } });
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (Disposed) return;
+        Module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./" + Assets["draft-navigation-guard.js"]);
+        if (Disposed) return;
+        Reference ??= DotNetObjectReference.Create(this);
+        await Module.InvokeVoidAsync("sync", Key, Protected, Reference);
+        if (!Interactive) { Interactive = true; StateHasChanged(); }
+    }
+    public async ValueTask DisposeAsync()
+    {
+        Disposed = true;
+        try { if (Module is not null) { await Module.InvokeVoidAsync("release", Key); await Module.DisposeAsync(); } }
+        catch (Exception e) when (e is JSDisconnectedException or JSException or TaskCanceledException) { }
+        finally { Reference?.Dispose(); }
+    }
+}
