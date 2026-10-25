@@ -183,3 +183,23 @@
         min-width: 780px;
     }
 }
+
+/* OSの配色ではなく、アプリで選ばれたテーマを管理画面にも使う。 */
+.admin-account-editor, .admin-account-table-wrap, .admin-account-table th,
+.admin-account-table td, .admin-account-dialog, .admin-account-dialog-header {
+    border-color: var(--appearance-line, #cbd8ce);
+}
+.admin-account-table, .admin-account-dialog {
+    background: var(--appearance-surface, #fffefa);
+    color: var(--appearance-text, #18312e);
+}
+.admin-account-table th { background: var(--appearance-background, #f5f7f3); }
+.account-name-button { color: var(--appearance-accent, #1e6557); overflow-wrap: anywhere; }
+.admin-account-backdrop { box-sizing: border-box; padding: 16px; }
+.admin-account-dialog { max-height: calc(100dvh - 32px); overflow-wrap: anywhere; }
+.admin-account-dialog fieldset { min-width: 0; border: 1px solid var(--appearance-line, #cbd8ce); margin: 1rem 0; }
+.admin-account-dialog ::deep a { overflow-wrap: anywhere; }
+.admin-account-dialog ::deep img { max-width: 100%; }
+.admin-account-dialog :focus-visible, .account-name-button:focus-visible {
+    outline-color: var(--appearance-accent, #1e6557);
+}
