@@ -672,6 +672,9 @@ export async function init(root) {
         const parsed = parseContext(value, null);
         actorId = parsed.actorId;
         ready = true;
+        // 明示的に選ばれた対象は入力候補だけにする。照会・再認証・復旧は自動実行しない。
+        const selectedTarget = root.getAttribute('data-selected-target');
+        if (validTargetId(selectedTarget)) root.querySelector(`#${ids.targetId}`).value = selectedTarget;
         setText('status', '管理者セッションを確認しました。対象ユーザーIDを入力して確認してください。');
         setText('error', '');
     } catch (error) {

@@ -5,7 +5,7 @@
 @inject IJSRuntime JS
 
 <PageTitle>パスキー認証の復旧 — 管理</PageTitle>
-<main @ref="_root" id="recovery-admin-root" class="panel" style="max-width:800px;margin:24px auto;">
+<main @ref="_root" id="recovery-admin-root" data-selected-target="@Target" class="panel" style="max-width:800px;margin:24px auto;">
     <h1 id="recovery-admin-title">パスキー認証の復旧</h1>
     <p>管理者が対象ユーザーの本人確認とパスキー復旧を開始します。復旧の確定時に、対象アカウントの既存パスキーと全セッションが無効になります。</p>
     <p>復旧案内は保存済みメールアドレスだけに送られます。新しいパスキーの登録が終わってもログイン状態は発行されず、本人が通常のログイン画面からログインし直します。</p>
@@ -47,6 +47,7 @@
 </main>
 
 @code {
+    [SupplyParameterFromQuery(Name = "target")] public string? Target { get; set; }
     private IJSObjectReference? _module;
     private ElementReference _root;
     private bool _disposed;

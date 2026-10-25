@@ -7,30 +7,38 @@
 @inject CoreFoundationService Core
 @inject IJSRuntime JS
 @implements IAsyncDisposable
-<PageTitle>@Title — 業務基盤</PageTitle>
-<h1 id="core-title" data-workspace-interactive="@InteractiveReady.ToString().ToLowerInvariant()">@Title</h1>
+<PageTitle>@(ServiceOnly ? "サービス管理" : Title) — 業務基盤</PageTitle>
+<h1 id="core-title" data-workspace-interactive="@InteractiveReady.ToString().ToLowerInvariant()">@(ServiceOnly ? "サービス管理" : Title)</h1>
 @if (View is not null) { <p>@(Editing == "service" ? ServiceDescription : View.Service.Description)</p> }
+@if (!ServiceOnly)
+{
 <p class="workspace-lead">開催予定・現在のフェーズ・お知らせを確認し、各イベントの参加・運営画面へ移動できます。</p>
 <p class="workspace-login-link"><a id="workspace-auth-link" data-enhance-nav="false" href="/auth?returnUrl=%2Fworkspace">ログイン画面へ</a></p>
 
+}
+@if (ServiceOnly) { <p>サービス設定・ユーザーアカウントを管理します。認証復旧と招待操作は独立した手順で行います。</p> }
 <OperationFeedback Revision="FeedbackRevision" Busy="Busy" Success="@Message" Error="@Error" Unknown="FeedbackUnknown" />
 <p id="core-error" role="alert">@Error</p><p id="core-message" role="status">@Message</p>
 @if (View is null)
 {
     <p>通常のパスキー認証が必要です。上のリンクからログインしてください。</p>
     <p class="workspace-secondary-link"><a href="/">外部テスト画面（補助）</a></p>
+    }
+    @if (ServiceOnly) { <p><a href="/workspace">イベント一覧へ戻る</a></p> }
 }
 else
 {
     <DevelopmentNotice />
     <button id="core-refresh" disabled="@(Busy || Editing is not null)" @onclick="Load">最新状態を取得</button>
+    @if (!ServiceOnly)
+    {
     <section class="panel workspace-event-panel" id="core-events" aria-labelledby="core-events-heading">
         <div class="workspace-events-heading">
             <div>
                 <h2 id="core-events-heading">イベント一覧</h2>
                 <p id="event-sort-status">並び順：@(EventSortByName ? "イベント名" : "開催日時") ／ @(EventSortDescending ? "降順 ▼" : "昇順 ▲")。列見出しで変更できます。行の「関連画面」から参加・運営機能を開けます。</p>
             </div>
-            @if (View.IsAdmin) { <button id="event-new" disabled="@(Busy || Editing is not null)" @onclick="NewEvent">イベントを新規作成</button> }
+            @if (View!.IsAdmin) { <button id="event-new" disabled="@(Busy || Editing is not null)" @onclick="NewEvent">イベントを新規作成</button> }
         </div>
         @if (View.Events.Length == 0)
         {
@@ -137,9 +145,10 @@ else
         <button id="profile-edit" disabled="@(Busy || Editing is not null)" @onclick="EditProfile">編集</button>
     }
     <p>基本プロフィールはログイン済みメンバーに公開されます。<a href="/profile/settings">プロフィール全項目・メール変更・パスキーの管理</a>。メール・登録履歴はプロフィールQRに含まれません。</p></section>
-    @if (View.IsAdmin)
+    }
+    @if (View!.IsAdmin)
     {
-        <section class="panel" id="core-service"><h2>サービス管理</h2><p><a id="admin-audit-link" href="/service/audit">監査ログ</a> ／ <a href="/service/part-presets">新規イベント用パートプリセット</a> ／ <a id="digest-preview-link" href="/service/digest-preview">日次ダイジェスト文面プレビュー</a> ／ <a id="manual-push-control-link" href="/service/manual-push">手動Pushの運用制御</a> ／ <a id="recovery-admin-link" href="/service/passkey-recovery">パスキー認証の復旧</a></p>
+        <section class="panel" id="core-service"><h2>サービス設定</h2><p><a id="admin-audit-link" href="/service/audit">監査ログ</a> ／ <a href="/service/part-presets">新規イベント用パートプリセット</a> ／ <a id="digest-preview-link" href="/service/digest-preview">日次ダイジェスト文面プレビュー</a> ／ <a id="manual-push-control-link" href="/service/manual-push">手動Pushの運用制御</a> ／ <a id="recovery-admin-link" href="/service/passkey-recovery">パスキー認証の復旧</a></p>
         @if (Editing == "service")
         {
             <form @onsubmit="SaveService" @onsubmit:preventDefault>
@@ -149,9 +158,13 @@ else
                 <button id="service-save" disabled="@(Busy || AdminRolesDirty)">サービス設定を保存</button>
                 <button type="button" disabled="@(Busy || AdminAccountsLoading)" @onclick="Cancel">サービス編集を取消</button>
             </form>
+        }
+        else { <button id="service-edit" disabled="@(Busy || Editing is not null)" @onclick="EditService">編集</button> }
+        @if (ServiceOnly || Editing == "service")
+        {
             <section class="admin-account-editor" id="global-admin-accounts">
                 <h3>アカウント一覧・全体管理者権限</h3>
-                <p>権限だけを変更します。イベント限定管理者は各イベントで管理します。認証状態、最終ログイン、復旧操作はこの画面から変更しません。</p>
+                <p>表示名から閲覧専用プロフィール・権限・認証復旧への入口を確認できます。権限の変更はサービス設定の編集モードで行います。イベント限定管理者は各イベントで管理します。</p>
                 @if (AdminAccountsLoading)
                 {
                     <p role="status">アカウント一覧を確認しています…</p>
@@ -209,6 +222,10 @@ else
                                     @if (selected.IsRecovering) { <dt>復旧状態</dt><dd>復旧中のため新しい全体管理者権限を付与できません。</dd> }
                                     @if (selected.Bootstrap && selected.IsAdmin) { <dt>保護</dt><dd>Bootstrap管理者の全体管理者権限は解除できません。</dd> }
                                 </dl>
+                                <fieldset class="admin-profile-readonly"><legend>プロフィール（閲覧専用）</legend>
+                                    <MemberProfile @key="selected.UserId" UserId="@selected.UserId" Compact="true" />
+                                    <a id="admin-profile-page" href="@($"/profiles/{Uri.EscapeDataString(selected.UserId)}")">プロフィールページを開く</a>
+                                </fieldset>
                                 <h5>権限</h5>
                                 <div class="account-role-tags">
                                     @if (selectedDraftIsAdmin) { <span class="account-role-tag">全体管理者</span> }
@@ -217,28 +234,40 @@ else
                                 </div>
                                 <label class="account-admin-toggle">
                                     <input type="checkbox" checked="@selectedDraftIsAdmin"
-                                        disabled="@(Busy || (!selected.IsAdmin && !selectedCanReceiveAdmin) || (selected.Bootstrap && selected.IsAdmin))"
+                                        disabled="@(Editing != "service" || Busy || (!selected.IsAdmin && !selectedCanReceiveAdmin) || (selected.Bootstrap && selected.IsAdmin))"
                                         aria-label="全体管理者権限: @selected.DisplayName"
                                         @onchange="e => SetAdminRoleDraft(selected.UserId, e.Value is true)" />
                                     全体管理者にする（下書き）
                                 </label>
-                                <p>表示名・プロフィールの編集、アカウント停止・削除、認証リセットはここでは行いません。</p>
+                                <p>@(Editing == "service" ? "権限変更は下書きです。権限変更の保存で確定します。" : "権限変更はサービス設定の編集モードで行います。")</p>
+                                <fieldset><legend>認証の復旧</legend>
+                                    @if (selected.Bootstrap) { <p>Bootstrap管理者の緊急復旧は運用者限定の手順です。</p> }
+                                    else { <a id="admin-account-recovery" data-enhance-nav="false" href="@($"/service/passkey-recovery?target={Uri.EscapeDataString(selected.UserId)}")">このアカウントの認証復旧を確認</a> }
+                                    <p>移動だけでは復旧・メール送信・再認証を開始しません。復旧は理由と管理者本人の再認証を伴う独立した即時操作です。未保存の権限・サービス設定は保存されません。</p>
+                                </fieldset>
+                                <p>表示名・プロフィールの編集、アカウント停止・削除はここでは行いません。</p>
                             </section>
                         </div>
                     }
+                    @if (Editing == "service")
+                    {
                     <p>権限変更は下書きです。未有効・メール未確認・復旧中のアカウントには新しい権限を付与できません。Bootstrap管理者と最後の有効な全体管理者は解除できません。</p>
                     <p>保存時に最新の権限と更新版を確認します。競合時は下書き全体を保存せず、最新一覧を取得してください。権限変更だけではSecurityStampや既存セッションを失効させず、各サーバー操作でDB権限を再確認します。</p>
                     <button id="admin-roles-save" type="button" disabled="@(Busy || !AdminRolesDirty)" @onclick="SaveAdminRoles">権限変更を保存</button>
                     <button id="admin-roles-cancel" type="button" disabled="@(Busy || !AdminRolesDirty)" @onclick="CancelAdminRoleDraft">権限の下書きを取消</button>
                     <button id="admin-roles-reconcile" type="button" disabled="@(Busy || AdminAccountsLoading)" @onclick="ReconcileAdminRoles">下書きを破棄して保存結果を再確認</button>
                     <p>通信に失敗した場合も保存済みの可能性があります。再保存せず「保存結果を再確認」で一覧を取得してください。この操作は権限を書き込みません。</p>
+                    }
                     <button id="admin-roles-refresh" type="button" disabled="@(Busy || AdminRolesDirty)" @onclick="LoadAdminAccounts">最新一覧を取得</button>
                 }
             </section>
         }
-        else { <button id="service-edit" disabled="@(Busy || Editing is not null)" @onclick="EditService">編集</button> }
+        @if (ServiceOnly) { <p><a id="service-invitations-link" href="/invitations">招待の依頼・発行・台帳を開く</a></p> }
         </section>
     }
+    @if (ServiceOnly && !View.IsAdmin) { <p id="service-access-denied" role="alert">サービス管理は全体管理者だけが利用できます。</p> }
+    @if (!ServiceOnly)
+    {
     <section class="panel"><h2>メンバープロフィールの閲覧</h2>
         @foreach (var member in View.Members) { <button disabled="@Busy" @onclick="() => PreviewProfile(member.UserId)">@member.DisplayName</button> }
         @if (Preview is not null)
@@ -250,8 +279,12 @@ else
         }
     </section>
     <p class="workspace-secondary-link"><a href="/">外部テスト画面（補助）</a></p>
+    }
+    @if (ServiceOnly) { <p><a href="/workspace">イベント一覧へ戻る</a></p> }
 }
 @code {
+ [Parameter] public bool ServiceOnly { get; set; }
+ bool AdminInitialLoadStarted, Disposed, AdminDialogFocusPending;
  long FeedbackRevision; bool FeedbackUnknown;
 
     bool EventSortByName, EventSortDescending = true;
@@ -279,20 +312,36 @@ else
     static TimeZoneInfo JapanZone => TimeZoneInfo.FindSystemTimeZoneById("Asia/Tokyo");
     static string Japan(string value) => TimeZoneInfo.ConvertTime(DateTimeOffset.Parse(value, CultureInfo.InvariantCulture), JapanZone).ToString("yyyy/MM/dd HH:mm:ss");
     bool InteractiveReady;
-    protected override Task OnAfterRenderAsync(bool firstRender) { if (firstRender) { InteractiveReady = true; StateHasChanged(); } return Task.CompletedTask; }
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (Disposed) return;
+        if (firstRender) { InteractiveReady = true; StateHasChanged(); }
+        if (ServiceOnly && View?.IsAdmin == true && !AdminInitialLoadStarted)
+        {
+            AdminInitialLoadStarted = true;
+            await LoadAdminAccounts();
+            if (!Disposed) StateHasChanged();
+        }
+        // DOMの反映を待ってからフォーカスを移す。イベント内の描画要求だけでは早すぎる。
+        if (!Disposed && AdminDialogFocusPending && SelectedAdminAccount is not null && AdminAccountsModule is not null)
+        {
+            AdminDialogFocusPending = false;
+            await AdminAccountsModule.InvokeVoidAsync("focusDialog");
+        }
+    }
     protected override Task OnInitializedAsync() => Load();
     async Task Load()
     {
         Busy = true; Error = "";
-        try { View = await Core.ReadAsync((await Authentication.GetAuthenticationStateAsync()).User); }
-        catch (UnauthorizedAccessException) { View = null; Preview = null; Editing = null; Error = "再ログインしてください。"; }
+        try { View = await Core.ReadAsync((await Authentication.GetAuthenticationStateAsync()).User); if (!View.IsAdmin) ClearAdminAccountDraft(); else if (ServiceOnly && Editing is null) { ClearAdminAccountDraft(); AdminInitialLoadStarted = false; } }
+        catch (UnauthorizedAccessException) { View = null; Preview = null; Editing = null; ClearAdminAccountDraft(); Error = "再ログインしてください。"; }
         catch { Error = "状態を取得できませんでした。保存せず再読み込みしてください。"; }
         finally { Busy = false; }
     }
     void Cancel()
     {
         Editing = null; Error = ""; Message = "下書きを取り消しました。";
-        ClearAdminAccountDraft();
+        ClearAdminAccountDraft(); AdminInitialLoadStarted = false;
     }
     async Task EditService()
     {
@@ -307,7 +356,7 @@ else
         {
             AdminAccountsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "/admin-accounts.js");
             var result = await AdminAccountsModule.InvokeAsync<GlobalAdminAccountsView>("load");
-            if (generation != AdminLoadGeneration || Editing != "service") return;
+            if (Disposed || generation != AdminLoadGeneration || (!ServiceOnly && Editing != "service")) return;
             var actorId = (await Authentication.GetAuthenticationStateAsync()).User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (View?.IsAdmin != true || string.IsNullOrEmpty(actorId) || result.ActorId != actorId)
                 throw new InvalidOperationException("操作者が一致しません。");
@@ -326,18 +375,18 @@ else
     }
     void SetAdminRoleDraft(string userId, bool isAdmin)
     {
-        if (AdminAccounts is null) return;
+        if (Editing != "service" || Busy || AdminAccounts is null) return;
         AdminRoleDraft[userId] = isAdmin;
     }
     async Task OpenAdminAccount(string userId)
     {
-        SelectedAdminAccountId = userId;
+        if (Busy || AdminAccountsLoading || View?.IsAdmin != true) return;
+        SelectedAdminAccountId = userId; AdminDialogFocusPending = true;
         await InvokeAsync(StateHasChanged);
-        if (AdminAccountsModule is not null) await AdminAccountsModule.InvokeVoidAsync("focusDialog");
     }
     async Task CloseAdminAccount()
     {
-        SelectedAdminAccountId = null;
+        SelectedAdminAccountId = null; AdminDialogFocusPending = false;
         await InvokeAsync(StateHasChanged);
         if (AdminAccountsModule is not null) await AdminAccountsModule.InvokeVoidAsync("restoreDialogFocus");
     }
@@ -361,7 +410,7 @@ else
     }
     async Task SaveAdminRoles()
     {
-        if (AdminAccounts is null || AdminAccountsModule is null) return;
+        if (Editing != "service" || Busy || AdminAccounts is null || AdminAccountsModule is null) return;
         var changes = AdminAccounts.Accounts
             .Where(account => AdminRoleDraft.TryGetValue(account.UserId, out var draft) && draft != account.IsAdmin)
             .Select(account => new { userId = account.UserId, expectedConcurrencyStamp = account.ConcurrencyStamp, isAdmin = AdminRoleDraft[account.UserId] })
@@ -386,7 +435,7 @@ else
     }
     void ClearAdminAccountDraft()
     {
-        AdminLoadGeneration++;
+        AdminLoadGeneration++; AdminDialogFocusPending = false;
         AdminAccounts = null; AdminRoleDraft.Clear(); AdminAccountsError = ""; AdminAccountsLoading = false; SelectedAdminAccountId = null;
     }
     void EditProfile()
@@ -402,7 +451,7 @@ else
     {
         FeedbackRevision++; FeedbackUnknown=false; Busy = true; Error = ""; Message = "";
         try { await action((await Authentication.GetAuthenticationStateAsync()).User); Editing = null; ClearAdminAccountDraft(); Message = "保存しました。"; await Load(); }
-        catch (UnauthorizedAccessException) { View = null; Preview = null; Editing = null; Error = "ログイン状態と権限を確認し、再ログインしてください。"; }
+        catch (UnauthorizedAccessException) { View = null; Preview = null; Editing = null; ClearAdminAccountDraft(); Error = "ログイン状態と権限を確認し、再ログインしてください。"; }
         catch (Exception e) when (e is System.ComponentModel.DataAnnotations.ValidationException or CoreConflictException) { Error = e.Message; }
         catch { FeedbackUnknown=true; Error = "保存結果を確認できませんでした。下書きを確認し、再送前に最新状態を取得してください。"; }
         finally { Busy = false; }
@@ -415,6 +464,7 @@ else
     sealed class SocialDraft { public string Service { get; set; } = "その他"; public string Url { get; set; } = ""; }
     public async ValueTask DisposeAsync()
     {
+        Disposed = true; ClearAdminAccountDraft();
         if (AdminAccountsModule is null) return;
         try { await AdminAccountsModule.InvokeVoidAsync("releaseDialog"); await AdminAccountsModule.DisposeAsync(); }
         catch (JSDisconnectedException) { }

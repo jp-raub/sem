@@ -26,7 +26,7 @@ class Element {
 }
 function makeRoot(id, names) {
     const elements = new Map(names.map(name => [name, new Element(name)]));
-    return { id, isConnected: true, elements, querySelector(selector) { return elements.get(selector.replace(/^#/, '')) ?? null; } };
+    return { id, isConnected: true, elements, getAttribute() { return null; }, querySelector(selector) { return elements.get(selector.replace(/^#/, '')) ?? null; } };
 }
 function putGlobal(name, value) { Object.defineProperty(globalThis, name, { configurable: true, writable: true, value }); }
 let currentUrl = new URL('https://sem.test/');
@@ -140,7 +140,12 @@ installFetch(call => {
     assert.fail(`Unexpected admin request: ${method} ${url}`);
 });
 const admin = await moduleFor(adminSource, 'admin');
+activeRoot.getAttribute = name => name === 'data-selected-target' ? 'target-user' : null;
 await admin.init(activeRoot);
+assert.equal(activeRoot.elements.get('recovery-admin-target-id').value, 'target-user', '選択対象は入力候補へ引き継ぐ');
+assert.equal(calls.length, 1, '入口表示では管理者文脈の読取だけを実行する');
+assert.equal(chronology.length, 0, '入口表示で本人認証・復旧を開始しない');
+assert.equal(activeRoot.elements.get('recovery-admin-target-summary').hidden, true, '対象は明示照会するまで未確認');
 assert.match(activeRoot.elements.get('recovery-admin-status').textContent, /対象ユーザーID/);
 const targetId = activeRoot.elements.get('recovery-admin-target-id');
 targetId.value = 'target-user'; targetId.emit('input');
