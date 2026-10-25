@@ -21,10 +21,9 @@
 <p id="core-error" role="alert">@Error</p><p id="core-message" role="status">@Message</p>
 @if (View is null)
 {
-    <p>通常のパスキー認証が必要です。上のリンクからログインしてください。</p>
+    <p>通常のパスキー認証が必要です。ログインしてから利用してください。</p>
+    @if (ServiceOnly) { <p><a id="service-auth-link" data-enhance-nav="false" href="/auth?returnUrl=%2Fservice">ログイン画面へ</a> ／ <a href="/workspace">イベント一覧へ戻る</a></p> }
     <p class="workspace-secondary-link"><a href="/">外部テスト画面（補助）</a></p>
-    }
-    @if (ServiceOnly) { <p><a href="/workspace">イベント一覧へ戻る</a></p> }
 }
 else
 {
@@ -38,7 +37,7 @@ else
                 <h2 id="core-events-heading">イベント一覧</h2>
                 <p id="event-sort-status">並び順：@(EventSortByName ? "イベント名" : "開催日時") ／ @(EventSortDescending ? "降順 ▼" : "昇順 ▲")。列見出しで変更できます。行の「関連画面」から参加・運営機能を開けます。</p>
             </div>
-            @if (View!.IsAdmin) { <button id="event-new" disabled="@(Busy || Editing is not null)" @onclick="NewEvent">イベントを新規作成</button> }
+            @if (View.IsAdmin) { <button id="event-new" disabled="@(Busy || Editing is not null)" @onclick="NewEvent">イベントを新規作成</button> }
         </div>
         @if (View.Events.Length == 0)
         {
@@ -146,7 +145,7 @@ else
     }
     <p>基本プロフィールはログイン済みメンバーに公開されます。<a href="/profile/settings">プロフィール全項目・メール変更・パスキーの管理</a>。メール・登録履歴はプロフィールQRに含まれません。</p></section>
     }
-    @if (View!.IsAdmin)
+    @if (View.IsAdmin)
     {
         <section class="panel" id="core-service"><h2>サービス設定</h2><p><a id="admin-audit-link" href="/service/audit">監査ログ</a> ／ <a href="/service/part-presets">新規イベント用パートプリセット</a> ／ <a id="digest-preview-link" href="/service/digest-preview">日次ダイジェスト文面プレビュー</a> ／ <a id="manual-push-control-link" href="/service/manual-push">手動Pushの運用制御</a> ／ <a id="recovery-admin-link" href="/service/passkey-recovery">パスキー認証の復旧</a></p>
         @if (Editing == "service")
