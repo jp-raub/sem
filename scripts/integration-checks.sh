@@ -53,6 +53,7 @@ node --check scripts/notification-ui-checks.cjs
 node --check scripts/theme-navigation-checks.cjs
 node --check scripts/theme-lifecycle-browser-checks.cjs
 node scripts/theme-appearance-checks.mjs
+node scripts/browser-runtime-probe-checks.cjs
 node scripts/dialog-lifecycle-checks.mjs 2>&1 | tee verification/dialog-lifecycle-ui.log
 node --check src/Sem.Web/wwwroot/operation-feedback.js
 node --check src/Sem.Web/wwwroot/operation-result-presenter.js

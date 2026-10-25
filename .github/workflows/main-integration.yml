@@ -53,7 +53,16 @@ jobs:
       - name: Install isolated browser dependencies
         run: |
           npm install --prefix "$RUNNER_TEMP/sem-browser" --no-save playwright@1.56.1
-          "$RUNNER_TEMP/sem-browser/node_modules/.bin/playwright" install --with-deps chromium --only-shell
+          "$RUNNER_TEMP/sem-browser/node_modules/.bin/playwright" install chromium --only-shell
+          # OS依存の導入は、同じ固定ブラウザーで共有ライブラリ不足を実測した場合だけ。
+          if NODE_PATH="$RUNNER_TEMP/sem-browser/node_modules" node scripts/browser-runtime-probe.cjs; then
+            :
+          else
+            status=$?
+            if [[ "$status" != 78 ]]; then exit "$status"; fi
+            "$RUNNER_TEMP/sem-browser/node_modules/.bin/playwright" install-deps chromium
+            NODE_PATH="$RUNNER_TEMP/sem-browser/node_modules" node scripts/browser-runtime-probe.cjs
+          fi
       - name: Verify keyboard and touch field help above dialogs
         env:
           NODE_PATH: ${{ runner.temp }}/sem-browser/node_modules
@@ -117,7 +126,16 @@ jobs:
       - name: Install isolated browser dependencies
         run: |
           npm install --prefix "$RUNNER_TEMP/sem-browser" --no-save playwright@1.56.1
-          "$RUNNER_TEMP/sem-browser/node_modules/.bin/playwright" install --with-deps chromium --only-shell
+          "$RUNNER_TEMP/sem-browser/node_modules/.bin/playwright" install chromium --only-shell
+          # OS依存の導入は、同じ固定ブラウザーで共有ライブラリ不足を実測した場合だけ。
+          if NODE_PATH="$RUNNER_TEMP/sem-browser/node_modules" node scripts/browser-runtime-probe.cjs; then
+            :
+          else
+            status=$?
+            if [[ "$status" != 78 ]]; then exit "$status"; fi
+            "$RUNNER_TEMP/sem-browser/node_modules/.bin/playwright" install-deps chromium
+            NODE_PATH="$RUNNER_TEMP/sem-browser/node_modules" node scripts/browser-runtime-probe.cjs
+          fi
       - name: Verify populated local acceptance and whole-directory restore
         env:
           NODE_PATH: ${{ runner.temp }}/sem-browser/node_modules
