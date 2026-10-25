@@ -8,6 +8,9 @@ module.exports=async({p,g,ok})=>{
  const close=async()=>{await a.locator('.admin-account-dialog').getByRole('button',{name:'閉じる',exact:true}).click();await a.locator('.admin-account-dialog').waitFor({state:'hidden'});};
  const ready=async()=>{await a.goto(origin+'/service');await a.locator('#admin-roles-refresh:enabled').waitFor();};
  try{
+  // 単独fixtureでもイベント限定管理者の長いタグを必ず描画する。
+  const setup=await p.evaluate(async userId=>{const{token}=await(await fetch('/api/csrf')).json();const r=await fetch('/api/core/event',{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-TOKEN':token},body:JSON.stringify({title:'サービス管理UIの権限タグ',description:'',location:'',scheduledDate:'2099-03-01T03:00:00Z',opensAt:null,announcementMessage:'',phaseKind:'Hidden',managerIds:[userId],rowVersion:0})});return r.status;},member.userId);
+  ok(setup===200,'単独fixtureにイベント限定管理者の表示条件を作る');
   await ready();
   ok(await a.locator('#core-title').innerText()==='サービス管理','サービス管理は専用見出しで表示される');
   ok(await a.locator('#core-events,#core-account,#core-profile').count()===0,'専用画面にはイベント一覧と本人編集が混在しない');
@@ -17,6 +20,7 @@ module.exports=async({p,g,ok})=>{
   let writes=0,challenges=0,targetReads=0;
   const observer=req=>{if(req.method()==='POST'&&new URL(req.url()).pathname.startsWith('/api/'))writes++;if(/passkey-recovery-.*options/.test(req.url()))challenges++;if(req.url().includes('passkey-recovery-admin-context?'))targetReads++;};a.on('request',observer);
   await open();await a.locator('#member-profile[data-user="'+member.userId+'"]').waitFor();
+  ok((await a.locator('.admin-account-dialog .account-role-tags').innerText()).includes('イベント側で管理'),'アカウント表示はイベント限定管理者の補足を含む');
   ok(await a.locator('.admin-account-dialog input[type=checkbox]').isDisabled(),'閲覧時の権限は読取専用');
   ok(await a.locator('.admin-profile-readonly input,.admin-profile-readonly textarea').count()===0,'管理者から他人のプロフィールを編集できない');
   ok(await a.locator('#admin-profile-page').getAttribute('href')==='/profiles/'+encodeURIComponent(member.userId),'プロフィールは選択した本人の既存ページへ進む');
@@ -27,7 +31,7 @@ module.exports=async({p,g,ok})=>{
   for(const[width,height]of[[320,568],[390,844],[768,1024],[1440,900],[844,390]])for(const mode of['light','dark']){
    await a.setViewportSize({width,height});await a.emulateMedia({colorScheme:mode});await open();
    const b=await a.locator('.admin-account-dialog').evaluate(e=>{const r=e.getBoundingClientRect();return{x:r.x,y:r.y,right:r.right,bottom:r.bottom,cx:r.x+r.width/2,cy:r.y+r.height/2,w:innerWidth,h:innerHeight,sw:e.scrollWidth,cw:e.clientWidth};});
-   ok(b.x>=0&&b.y>=0&&b.right<=width+1&&b.bottom<=height+1&&b.sw<=b.cw+1,'アカウント表示が画面内に収まる '+width+'x'+height+' '+mode);
+   ok(b.x>=0&&b.y>=0&&b.right<=width+1&&b.bottom<=height+1&&b.sw<=b.cw+1,'アカウント表示が画面内に収まる '+width+'x'+height+' '+mode+' '+JSON.stringify(b));
    ok(Math.abs(b.cx-width/2)<2&&Math.abs(b.cy-height/2)<2,'アカウント表示が中央にある '+width+'x'+height+' '+mode);
    await a.locator('.admin-account-dialog').focus();for(let i=0;i<12;i++)await a.keyboard.press('Tab');
    ok(await a.locator('.admin-account-dialog').evaluate(e=>e.contains(document.activeElement)),'キーボードのフォーカスを表示内に保つ '+width+' '+mode);

@@ -203,3 +203,10 @@
 .admin-account-dialog :focus-visible, .account-name-button:focus-visible {
     outline-color: var(--appearance-accent, #1e6557);
 }
+/* イベント管理者タグは補足を含むため、狭いアカウント表示では折り返す。 */
+.admin-account-dialog .account-role-tag {
+    box-sizing: border-box;
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
