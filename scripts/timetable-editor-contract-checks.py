@@ -41,6 +41,7 @@ def verify(w,f,d):
  assert "if(process.env.SEM_PROGRESS_UI_CHECKS){await phase('progress-ui-checks',()=>require('./progress-checks.cjs')({p,g,ok}));await phase('progress-emphasis-checks',()=>require('./progress-emphasis-checks.cjs')({p,g,ok}));}" in d
  assert "if(process.env.SEM_SERVICE_MANAGEMENT_UI_CHECKS){await phase('service-management-ui-checks',()=>require('./service-management-ui-checks.cjs')({p,g,ok}));await phase('admin-accounts-checks',()=>require('./admin-accounts-checks.cjs')({p,g,ok}));}" in d
  assert "if(process.env.SEM_INVITATION_UI_CHECKS)await phase('invitation-ui-checks',()=>require('./invitation-layout-checks.cjs')({p,g,ok}));" in d
+ assert "if(process.env.SEM_COMMENT_CHECKS)await phase('comment-checks',()=>require('./comment-checks.cjs')({p,g,ok}));" in d
  assert 'exit "$status"' in f
  assert '!verification/acceptance-native/**' in integration
  for private in ['e2e-error.txt','host.log','data.db','key.pem']:
@@ -73,4 +74,7 @@ else:raise AssertionError('サービス管理UIの必須検証が削除された
 try:verify(workflow,fixture,driver.replace("if(process.env.SEM_SERVICE_MANAGEMENT_UI_CHECKS){await phase('service-management-ui-checks'","if(false){await phase('service-management-ui-checks'"))
 except AssertionError:pass
 else:raise AssertionError('サービス管理UIドライバーの無効化が受理された')
-print('Unified timetable coverage contract passed: actual workflow + 14 unsafe mutations rejected')
+try:verify(workflow,fixture,driver.replace("if(process.env.SEM_COMMENT_CHECKS)await phase('comment-checks'","if(false)await phase('comment-checks'"))
+except AssertionError:pass
+else:raise AssertionError('コメントUIのfull回帰ドライバーの無効化が受理された')
+print('Unified timetable coverage contract passed: actual workflow + 15 unsafe mutations rejected')

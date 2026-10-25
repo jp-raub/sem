@@ -13,6 +13,32 @@ using Sem.Web.Runtime;
 var root=Path.Combine(Path.GetTempPath(),"sem-comments-"+Guid.NewGuid());Directory.CreateDirectory(root);
 var services=new ServiceCollection();services.AddLogging();services.AddDbContextFactory<ApplicationDbContext>(o=>o.UseSqlite("Data Source="+Path.Combine(root,"data.db")),ServiceLifetime.Scoped);services.AddIdentityCore<ApplicationUser>(o=>o.Stores.SchemaVersion=IdentitySchemaVersions.Version3).AddEntityFrameworkStores<ApplicationDbContext>();var clock=new TestClock{Now=DateTimeOffset.Parse("2026-11-01T12:00:00Z")};services.AddSingleton<TimeProvider>(clock);Microsoft.Extensions.DependencyInjection.DataProtectionServiceCollectionExtensions.AddDataProtection(services);services.AddSingleton<BusinessNotificationStore>();services.AddScoped<CoreFoundationService>();using var provider=services.BuildServiceProvider();using var scope=provider.CreateScope();var factory=scope.ServiceProvider.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();var core=scope.ServiceProvider.GetRequiredService<CoreFoundationService>();int passed=0;
 void Check(bool v,string label){if(!v)throw new Exception(label);passed++;Console.WriteLine("PASS "+label);}
+// 実コンポーネントの取消ハンドラーを隔離して検証し、未知結果の操作IDを守る。
+{
+ var component=new Sem.Web.Components.Pages.Comments();
+ const System.Reflection.BindingFlags flags=System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic;
+ var type=component.GetType();
+ void Put(string name,object? value)=>type.GetField(name,flags)!.SetValue(component,value);
+ object? Get(string name)=>type.GetField(name,flags)!.GetValue(component);
+ void Act(string name)=>type.GetMethod(name,flags)!.Invoke(component,null);
+ Put("ComposerOpen",true);Put("Body","未送信コメント");Put("Error","以前の入力エラー");Act("CancelComposer");
+ Check((string?)Get("Body")==""&&!(bool)Get("ComposerOpen")!&&(string?)Get("Error")=="","明示キャンセルは未送信本文と入力エラーだけを破棄して閉じる");
+ Put("ComposerOpen",true);Put("Body","入力を保持");Act("CloseComposer");
+ Check((string?)Get("Body")=="入力を保持"&&!(bool)Get("ComposerOpen")!,"保持付き閉じるは本文を破棄しない");
+ foreach(var handler in new[]{"CancelComposer","CloseComposer"})
+ {
+  foreach(var state in new[]{"Busy","Pending","PendingDelete"})
+  {
+   Put("Busy",false);Put("Pending",null);Put("PendingDelete",null);Put("ComposerOpen",true);Put("Body","結果不明の本文");Put("Error","結果未確認");
+   object protectedValue=state=="Busy"?true:state=="Pending"?new CommentEdit("same-post-id",7,"結果不明の本文"):new CommentDeleteEdit("same-delete-id","comment-id");
+   Put(state,protectedValue);Act(handler);
+   Check((bool)Get("ComposerOpen")!&&(string?)Get("Body")=="結果不明の本文"&&(string?)Get("Error")=="結果未確認"&&Equals(Get(state),protectedValue),handler+" は "+state+" の本文・操作ID・表示を保持する");
+   Check(!(bool)type.GetProperty("CanCloseComposer",flags)!.GetValue(component)!,state+" は保持閉じると破棄を無効にする");
+  }
+ }
+ Put("Busy",false);Put("Pending",null);Put("PendingDelete",null);Act("CancelComposer");
+ Check((string?)Get("Body")==""&&!(bool)Get("ComposerOpen")!,"結果確認後は通常の未送信キャンセルへ戻れる");
+}
 async Task Deny<T>(Func<Task> f,string label)where T:Exception{bool denied=false;try{await f();}catch(T){denied=true;}Check(denied,label);}
 ClaimsPrincipal Who(string id)=>new(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier,id),new Claim("AspNet.Identity.SecurityStamp",id+"-stamp"),new Claim(PasskeyAdditionService.SessionClaim,id+"-session")],"Identity.Application"));
 var admin=Who("admin");var manager=Who("manager");var one=Who("one");var two=Who("two");

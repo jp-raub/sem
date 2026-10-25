@@ -31,7 +31,27 @@ module.exports=async({p,g,ok})=>{
   await w.keyboard.press('Escape');
   await w.waitForFunction(()=>!document.querySelector('.comment-composer')?.open&&document.activeElement===document.getElementById('comment-compose-open'));
   ok(await w.locator('#comment-body').inputValue()==='Embedded standalone text <img src=x>'&&await w.locator('[data-event-matrix-slot="'+selectedSlot+'"]').getAttribute('aria-pressed')==='true','Native Escape closes comment composer, restores focus and preserves both drafts');
+  const beforeCancel=(await api(g,'comments',undefined,q)).body.comments.length;
+  for(const[width,height]of[[320,568],[390,844],[768,1024],[1440,900],[844,390]])for(const mode of['light','dark']){
+   await w.setViewportSize({width,height});await w.emulateMedia({colorScheme:mode});
+   await w.locator('#comment-compose-open').click();await w.locator('.comment-composer[open]').waitFor();
+   await w.locator('#comment-body').fill('破棄する未送信コメント '+width+' '+mode);
+   const box=await w.locator('.comment-composer').evaluate(e=>{const r=e.getBoundingClientRect();return{x:r.x,y:r.y,right:r.right,bottom:r.bottom,cx:r.x+r.width/2,cy:r.y+r.height/2,sw:e.scrollWidth,cw:e.clientWidth};});
+   ok(box.x>=0&&box.y>=0&&box.right<=width+1&&box.bottom<=height+1&&box.sw<=box.cw+1,'コメント入力と取消が画面内に収まる '+width+'x'+height+' '+mode+' '+JSON.stringify(box));
+   ok(Math.abs(box.cx-width/2)<2&&Math.abs(box.cy-height/2)<2,'コメント入力が画面中央にある '+width+'x'+height+' '+mode);
+   await w.mouse.click(2,2);
+   ok(await w.locator('.comment-composer').evaluate(e=>e.open)&&await w.locator('#comment-body').inputValue()===('破棄する未送信コメント '+width+' '+mode),'背景操作は未送信本文を暗黙に破棄しない '+width+' '+mode);
+   await w.locator('#comment-body').focus();for(let n=0;n<8;n++)await w.keyboard.press('Tab');
+   ok(await w.locator('.comment-composer').evaluate(e=>e.contains(document.activeElement)),'コメント入力のフォーカスをモーダル内に保つ '+width+' '+mode);
+   await w.locator('#comment-compose-cancel').click();
+   await w.waitForFunction(()=>!document.querySelector('.comment-composer')?.open&&document.activeElement===document.getElementById('comment-compose-open'));
+   ok(await w.locator('#comment-body').inputValue()===''&&await w.locator('[data-event-matrix-slot="'+selectedSlot+'"]').getAttribute('aria-pressed')==='true'&&await w.locator('[data-participation-answer="'+question+'"]').inputValue()==='YES','明示キャンセルはコメントだけを破棄し参加枠・設問回答とフォーカスを保持する '+width+' '+mode);
+  }
+  ok((await api(g,'comments',undefined,q)).body.comments.length===beforeCancel,'キャンセル・背景・保持閉じるはコメントを投稿しない');
+  await w.setViewportSize({width:390,height:844});await w.emulateMedia({colorScheme:'light'});
   await w.locator('#comment-compose-open').click();await w.locator('.comment-composer[open]').waitFor();
+  ok(await w.locator('#comment-body').inputValue()===''&&await w.locator('#comment-post').isDisabled(),'取消後の再表示は空欄で3文字未満を送信できない');
+  await w.locator('#comment-body').fill('Embedded standalone text <img src=x>');
   await w.locator('#comment-post').click();
   await w.waitForFunction(()=>document.getElementById('comments-message').textContent.includes('投稿しました'));
   await w.waitForFunction(()=>!document.querySelector('.comment-composer')?.open);
