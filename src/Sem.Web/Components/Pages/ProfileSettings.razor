@@ -13,8 +13,23 @@
 <button type="button" id="profile-image-refresh" hidden>プロフィールを再取得</button>
 <div id="profile-settings" hidden>
     <nav data-enhance-nav="false" class="profile-settings-sections" aria-label="プロフィールの設定"><a href="/profile/settings#profile-edit-heading">プロフィール</a><a href="/profile/settings#profile-qr-heading">プロフィールQR</a></nav>
-    <section class="panel" aria-labelledby="profile-edit-heading">
+    <div class="profile-layout">
+    <div class="profile-primary">
+    <section class="panel profile-card" aria-labelledby="profile-edit-heading">
         <h2 id="profile-edit-heading">本人のプロフィール</h2>
+        <p class="eyebrow">PLAYER PROFILE</p>
+        <div id="profile-card-avatar" class="profile-avatar" aria-hidden="true"></div>
+        <p id="profile-card-reading"></p>
+        <h3 id="profile-card-name"></h3>
+        <p>対面では <strong id="profile-card-call"></strong> と呼んでください</p>
+        <button type="button" id="profile-edit-open">プロフィールを編集</button>
+        <h3>SNSアカウント</h3><div id="profile-card-social" class="profile-socials"></div>
+        <h3>自己紹介</h3><div id="profile-card-answers"></div>
+        <p>プロフィールは従来の閲覧権限で表示されます。メール・認証情報は表示しません。</p>
+        <dialog id="profile-edit-dialog" aria-labelledby="profile-edit-dialog-heading" aria-describedby="profile-edit-dialog-help">
+        <h2 id="profile-edit-dialog-heading">自分のプロフィールを編集</h2>
+        <p id="profile-edit-dialog-help">名前・SNS・設問回答は保存で反映され、取消では未保存入力を破棄します。画像のアップロード／削除は独立した即時保存です。取消でも確定済みの画像操作は戻りません。</p>
+        <button type="button" id="profile-dialog-refresh" hidden>プロフィールを再取得（未保存入力は置換）</button>
         <form id="profile-editor-form">
             <label>表示名<FieldHelp HelpKey="profile.display" Label="表示名" /><input id="profile-display-name" maxlength="60" required /></label>
             <label>読み（カタカナは保存時にひらがなへ）<FieldHelp HelpKey="profile.reading" Label="読み" /><input id="profile-reading" maxlength="80" /></label>
@@ -38,16 +53,29 @@
             <h3>プロフィール設問</h3>
             <p>設問は任意です。回答は他のメンバーに自動公開されます。</p>
             <div id="profile-answer-fields"></div>
-            <button id="profile-save">保存</button>
+            <div class="profile-editor-actions"><button id="profile-save">プロフィールを保存</button>
+            <button type="button" id="profile-edit-cancel">取消（未保存入力を破棄）</button></div>
         </form>
+        </dialog>
     </section>
-    <section class="panel" aria-labelledby="profile-qr-heading">
+    <section class="panel" aria-labelledby="profile-history-heading">
+        <h2 id="profile-history-heading">参加登録したイベント・曲・パート</h2>
+        <p>現在の申込み情報であり、実際の出席・演奏の証明ではありません。新しい登録候補から最大100件を選び、その後で閲覧権限を確認します。全履歴ではなく、非表示の候補や100件より古いイベントは表示されない場合があります。</p>
+        <button type="button" id="profile-history-refresh">登録履歴を再取得</button>
+        <p id="profile-history-status" role="status" aria-live="polite"></p>
+        <div id="profile-history"></div>
+    </section>
+    </div>
+    <aside class="panel profile-qr" aria-labelledby="profile-qr-heading">
         <h2 id="profile-qr-heading">プロフィールQR（24時間）</h2>
         <p id="profile-qr-status"></p>
         <button type="button" id="profile-qr-issue">QRを発行</button>
         <div id="profile-qr-image"></div>
+        <button type="button" id="profile-qr-enlarge" hidden>QRを拡大する</button>
+        <dialog id="profile-qr-dialog" aria-labelledby="profile-qr-dialog-heading"><h2 id="profile-qr-dialog-heading">プロフィールQR（24時間）</h2><div id="profile-qr-large-image"></div><p>発行済みの同じQRです。拡大で再発行や期限延長はしません。</p><button type="button" id="profile-qr-close">閉じる</button></dialog>
         <p>リンクを知っている人は、表示名・プロフィール設問の回答・SNSリンクを閲覧できます。メール、登録履歴、招待、認証情報は含まれません。</p>
-    </section>
+    </aside>
+    </div>
     <section class="panel" id="profile-question-admin" aria-labelledby="profile-question-admin-heading" hidden>
         <h2 id="profile-question-admin-heading">プロフィール設問の管理</h2>
         <form id="profile-question-add">

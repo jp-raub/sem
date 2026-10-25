@@ -10,11 +10,13 @@ let resultPresenter;
 let state = null;
 let busy = false;
 let qrObjectUrl = null;
+let shownQrVersion=null;
 let imageWriteNeedsRefresh = false;
+let profileWriteNeedsRefresh=false, historyBusy=false;
 let ownerGeneration=0, ownerRoot=null;
 const activeRequests=new Set();
 const currentOwner=mine=>mine===ownerGeneration && ownerRoot?.isConnected && ownerRoot===document.getElementById('profile-settings');
-export function cleanup(){ resultPresenter?.clear();resultPresenter=null; ownerGeneration++;for(const c of activeRequests)c.abort();activeRequests.clear();state=null;busy=false;imageWriteNeedsRefresh=false;if(qrObjectUrl){URL.revokeObjectURL(qrObjectUrl);qrObjectUrl=null;}ownerRoot=null; }
+export function cleanup(){ resultPresenter?.clear();resultPresenter=null; ownerGeneration++;for(const c of activeRequests)c.abort();activeRequests.clear();state=null;busy=false;imageWriteNeedsRefresh=false;profileWriteNeedsRefresh=false;historyBusy=false;const dialog=ownerRoot?.querySelector?.('#profile-edit-dialog');if(dialog?.open)dialog.close();const qrDialog=ownerRoot?.querySelector?.('#profile-qr-dialog');if(qrDialog?.open)qrDialog.close();if(qrObjectUrl){URL.revokeObjectURL(qrObjectUrl);qrObjectUrl=null;}ownerRoot=null; }
 
 const $ = id => document.getElementById(id);
 const elem = (tag, text = null) => {
@@ -57,9 +59,11 @@ function renderSavedImage() {
     if (dataUrl) image.src = dataUrl;
 }
 function setImageControls() {
-    const disabled = !state || busy || imageWriteNeedsRefresh;
+    const disabled = !state || busy || imageWriteNeedsRefresh || profileWriteNeedsRefresh;
     for (const id of ['profile-image-file', 'profile-image-upload', 'profile-image-delete'])
         if ($(id)) $(id).disabled = disabled;
+    for(const id of ['profile-edit-open','profile-edit-cancel'])if($(id))$(id).disabled=disabled;
+    const dialogRefresh=$('profile-dialog-refresh');if(dialogRefresh){dialogRefresh.hidden=!imageWriteNeedsRefresh&&!profileWriteNeedsRefresh;dialogRefresh.disabled=busy;}
     const hasSavedImage = Boolean(state?.profile?.imageDataUrl);
     if ($('profile-image-delete')) $('profile-image-delete').disabled = disabled || !hasSavedImage;
     if ($('profile-save')) $('profile-save').disabled = disabled;
@@ -72,7 +76,7 @@ function setImageControls() {
     }
     const refresh = $('profile-image-refresh');
     if (refresh) {
-        refresh.hidden = !imageWriteNeedsRefresh && Boolean(state);
+        refresh.hidden = !imageWriteNeedsRefresh && !profileWriteNeedsRefresh && Boolean(state);
         refresh.disabled = busy;
     }
 }
@@ -100,6 +104,9 @@ async function boundedJson(response, limit) {
 }
 function clearIdentity() {
     state=null;
+    const dialog=$('profile-edit-dialog');if(dialog?.open)dialog.close();
+    for(const id of ['profile-card-name','profile-card-reading','profile-card-call','profile-card-social','profile-card-answers','profile-card-avatar','profile-history'])$(id)?.replaceChildren();
+    const qrDialog=$('profile-qr-dialog');if(qrDialog?.open)qrDialog.close();$('profile-qr-large-image')?.replaceChildren();if($('profile-qr-enlarge'))$('profile-qr-enlarge').hidden=true;
     const root=$('profile-settings');if(root)root.hidden=true;
     const image=$('profile-qr-image');if(image)image.replaceChildren();
     const preview=$('profile-image-preview');if(preview){preview.removeAttribute('src');preview.hidden=true;}
@@ -141,10 +148,10 @@ function input(labelText, value, maxLength, type = 'text') {
     label.append(control);
     return { label, control };
 }
-function renderSocial() {
+function renderSocial(socials=state.profile.social || []) {
     const root = $('profile-social-links');
     root.replaceChildren();
-    for (const social of state.profile.social || []) {
+    for (const social of socials) {
         const row = elem('div');
         const service = input('サービス名', social.service, 60);
         const url = input('URL', social.url, 500, 'url');
@@ -243,7 +250,7 @@ function collectProfile() {
     };
 }
 async function loadQrStatus(mine=ownerGeneration) {
-    const qr=await readJson(endpoint('profile-qr'));if(!currentOwner(mine)||!state)return;state.qr=qr;
+    const qr=await readJson(endpoint('profile-qr'));if(!currentOwner(mine)||!state)return;if(qrObjectUrl&&(!qr.active||shownQrVersion!==qr.rowVersion))clearQrView();state.qr=qr;
     const text = state.qr.active
         ? `発行済み・有効期限 ${state.qr.expiresAt}。再発行すると以前のQRは直ちに無効になります。`
         : state.qr.exists
@@ -252,15 +259,18 @@ async function loadQrStatus(mine=ownerGeneration) {
     $('profile-qr-status').textContent = text;
     $('profile-qr-issue').textContent = state.qr.exists ? 'QRを再発行' : 'QRを発行';
 }
-async function load(mine=ownerGeneration) {
-    setError('');
-    const loaded=await readJson(endpoint('profile-editor'));if(!currentOwner(mine))return;state=loaded;
+function populateEditor(){
     $('profile-display-name').value = state.profile.displayName;
     $('profile-reading').value = state.profile.reading;
     $('profile-call-name').value = state.profile.callName;
     $('profile-icon').value = state.profile.icon || '';
     renderSavedImage();
     renderSocial(); renderAnswers(); renderQuestionAdmin();
+}
+async function load(mine=ownerGeneration) {
+    setError('');
+    const loaded=await readJson(endpoint('profile-editor'));if(!currentOwner(mine))return;state=loaded;
+    populateEditor(); renderProfileCard();
     $('profile-settings').hidden = false;
     const sectionId = new Map([
         ['#profile-edit-heading', 'profile-edit-heading'],
@@ -270,29 +280,30 @@ async function load(mine=ownerGeneration) {
     ]).get(globalThis.location?.hash);
     if (sectionId) requestAnimationFrame(() => document.getElementById(sectionId)?.scrollIntoView({block:'start'}));
 
-    imageWriteNeedsRefresh = false;
+    imageWriteNeedsRefresh = false;profileWriteNeedsRefresh=false;
     clearSelectedImage();
     setImageControls();
     const refresh = $('profile-image-refresh'); if (refresh) refresh.hidden = true;
     await loadQrStatus(mine);if(!currentOwner(mine))return;
     setStatus('現在のプロフィールを読み込みました。');
+    await loadHistory(mine);
 }
-async function mutate(action) {
-    if (busy || imageWriteNeedsRefresh) return;
+async function mutate(action, profileWrite=false) {
+    if (busy || imageWriteNeedsRefresh || profileWriteNeedsRefresh) return;
     const mine=ownerGeneration;busy = true; setImageControls();setError(''); setStatus('保存しています…');
     let saved=false;
-    try { await action();saved=true;if(!currentOwner(mine))return;await load(mine);if(currentOwner(mine)){setStatus('保存しました。');resultPresenter?.show('success','プロフィール設定を保存しました。');} }
-    catch (error) { if(currentOwner(mine)){setError(error.message || '保存できませんでした。再読込して状態を確認してください。');setStatus('');resultPresenter?.show(saved?'partial':error.resultKind||'error',saved?'保存処理は完了しましたが、最新表示を取得できませんでした。再保存せずプロフィールを再取得してください。':error.message||'処理を開始できませんでした。');} }
+    try { await action();saved=true;if(!currentOwner(mine))return;await load(mine);if(currentOwner(mine)){setStatus('保存しました。');if(!profileWrite)resultPresenter?.show('success','プロフィール設定を保存しました。');return true;} }
+    catch (error) { if(currentOwner(mine)){if(profileWrite&&(saved||error.resultKind==='unknown'))profileWriteNeedsRefresh=true;setError(error.message || '保存できませんでした。再読込して状態を確認してください。');setStatus('');resultPresenter?.show(saved?'partial':error.resultKind||'error',saved?'保存処理は完了しましたが、最新表示を取得できませんでした。再保存せずプロフィールを再取得してください。':error.message||'処理を開始できませんでした。');} }
     finally { if(currentOwner(mine)){busy = false;setImageControls();} }
 }
 async function saveProfile(event) {
     event.preventDefault();
-    if (!state || busy || imageWriteNeedsRefresh) return;
-    await mutate(() => post(endpoint('profile-editor', { expectedActor: state.actorId }), collectProfile()));
+    if (!state || busy || imageWriteNeedsRefresh || profileWriteNeedsRefresh) return;
+    if(await mutate(() => post(endpoint('profile-editor', { expectedActor: state.actorId }), collectProfile()),true)){closeEditor(false);resultPresenter?.show('success','プロフィール設定を保存しました。');}
 }
 async function addQuestion(event) {
     event.preventDefault();
-    if (!state || busy || imageWriteNeedsRefresh) return;
+    if (!state || busy || imageWriteNeedsRefresh || profileWriteNeedsRefresh) return;
     const text = $('profile-question-new-text').value;
     const type = $('profile-question-new-type').value;
     await mutate(async () => {
@@ -310,7 +321,7 @@ async function boundedSvg(response) {
     return new Blob(chunks,{type:'image/svg+xml'});
 }
 async function issueQr() {
-    if (!state || busy || imageWriteNeedsRefresh) return;
+    if (!state || busy || imageWriteNeedsRefresh || profileWriteNeedsRefresh) return;
     const reissue = state.qr.exists;
     if (reissue && !confirm('以前のQRを無効にして、新しい24時間QRを発行しますか？')) return;
     const mine=ownerGeneration;let svgController=null,svgTimer=null;busy = true;setImageControls(); setError(''); setStatus('QRを発行しています…');
@@ -333,9 +344,9 @@ async function issueQr() {
             throw new Error('QR画像を取得できません。発行状態を再読込してください。');
         const svg = await boundedSvg(svgResponse);if(!currentOwner(mine))return;
         if (qrObjectUrl) URL.revokeObjectURL(qrObjectUrl);
-        qrObjectUrl = URL.createObjectURL(svg);
+        qrObjectUrl = URL.createObjectURL(svg);shownQrVersion=issued.rowVersion;
         const img = elem('img'); img.src = qrObjectUrl; img.alt = 'プロフィールの24時間QRコード';
-        const root = $('profile-qr-image'); root.replaceChildren(img);
+        const root = $('profile-qr-image'); root.replaceChildren(img);if($('profile-qr-enlarge'))$('profile-qr-enlarge').hidden=false;
         state.qr = { exists: true, active: true, expiresAt: issued.expiresAt, rowVersion: issued.rowVersion };
         $('profile-qr-status').textContent = `発行済み・有効期限 ${issued.expiresAt}。再発行すると以前のQRは直ちに無効になります。`;
         $('profile-qr-issue').textContent = 'QRを再発行';
@@ -365,7 +376,7 @@ function selectedImage() {
     return file;
 }
 async function changeImage(operation) {
-    if (!state || busy || imageWriteNeedsRefresh) return;
+    if (!state || busy || imageWriteNeedsRefresh || profileWriteNeedsRefresh) return;
     let file = null;
     if (operation === 'upload') {
         file = selectedImage();
@@ -378,6 +389,7 @@ async function changeImage(operation) {
     try { rowVersion = imageRowVersion(); }
     catch (error) { setError(error.message); return; }
     const mine=ownerGeneration, actor=state.actorId;
+    const draft=$('profile-edit-dialog')?.open?collectProfile():null;
     const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),25000);
     activeRequests.add(controller);
     busy=true;setImageControls();setError('');setStatus(operation==='upload'?'画像をアップロードしています…':'画像を削除しています…');
@@ -416,6 +428,7 @@ async function changeImage(operation) {
             ? `画像を保存しました（正規化後 ${result.width} × ${result.height}px）。プロフィールを再読み込みしています。`
             : '画像を削除しました。プロフィールを再読み込みしています。');
         await load(mine);
+        if(currentOwner(mine)&&draft)restoreDraft(draft);
         if (currentOwner(mine)) setStatus(operation==='upload'
             ? `画像を保存しました（正規化後 ${result.width} × ${result.height}px）。`
             : '画像を削除しました。');
@@ -447,8 +460,10 @@ async function manualRefresh() {
 function bind() {
     $('profile-editor-form').addEventListener('submit', saveProfile);
     $('profile-social-add').addEventListener('click', () => {
-        state.profile.social.push({ service: '', url: '' }); renderSocial();
+        if(!state||busy||imageWriteNeedsRefresh||profileWriteNeedsRefresh)return;
+        renderSocial([...collectProfile().social,{service:'',url:''}]);
     });
+    bindProfileUi();
     $('profile-qr-issue').addEventListener('click', issueQr);
     $('profile-question-add').addEventListener('submit', addQuestion);
     $('profile-image-file').addEventListener('change', () => {
@@ -458,6 +473,59 @@ function bind() {
     $('profile-image-delete').addEventListener('click', () => changeImage('delete'));
     $('profile-image-refresh').addEventListener('click', () => manualRefresh());
 }
+
+function clearQrView(){const dialog=$('profile-qr-dialog');if(dialog?.open)dialog.close();$('profile-qr-large-image')?.replaceChildren();$('profile-qr-image')?.replaceChildren();if($('profile-qr-enlarge'))$('profile-qr-enlarge').hidden=true;if(qrObjectUrl)URL.revokeObjectURL(qrObjectUrl);qrObjectUrl=null;shownQrVersion=null;}
+function safeLink(value){try{const url=new URL(value);return ['http:','https:'].includes(url.protocol)&&!url.username&&!url.password?url.href:null;}catch{return null;}}
+function renderProfileCard(){
+    const name=$('profile-card-name');if(!name||!state)return;
+    name.textContent=state.profile.displayName;
+    $('profile-card-reading').textContent=state.profile.reading||'読み方未設定';
+    $('profile-card-call').textContent=state.profile.callName||state.profile.displayName;
+    const avatar=$('profile-card-avatar'),data=savedPngDataUrl(state.profile.imageDataUrl);avatar.replaceChildren();
+    if(data){const img=elem('img');img.src=data;img.alt='';avatar.append(img);}else avatar.textContent=state.profile.icon||'🙂';
+    const social=$('profile-card-social');social.replaceChildren();
+    for(const item of state.profile.social||[]){const href=safeLink(item.url);if(!href)continue;const a=elem('a',item.service||'SNS');a.href=href;a.target='_blank';a.rel='noopener noreferrer';social.append(a);}
+    if(!social.childNodes.length)social.append(elem('p','SNSは未登録です。編集から追加できます。'));
+    const answers=$('profile-card-answers');answers.replaceChildren();
+    for(const answer of state.profile.answers||[]){if(!answer.enabled)continue;const row=elem('section');row.className='profile-answer';const value=answer.value?answer.type==='YesNo'?(answer.value==='YES'?'はい':'いいえ'):answer.value:'未回答';const text=elem('p',value);text.style.whiteSpace='pre-wrap';row.append(elem('h4',answer.text),text);answers.append(row);}
+    if(!answers.childNodes.length)answers.append(elem('p','表示できる設問はありません。'));
+}
+function restoreDraft(draft){
+    for(const[key,id]of[['displayName','profile-display-name'],['reading','profile-reading'],['callName','profile-call-name'],['icon','profile-icon']])$(id).value=draft[key]||'';
+    renderSocial(draft.social);
+    for(const field of $('profile-answer-fields').querySelectorAll('[data-question-id]'))field.value=draft.answers.find(a=>a.questionId===field.dataset.questionId)?.value||'';
+}
+function closeEditor(discard=true){
+    if(busy||imageWriteNeedsRefresh||profileWriteNeedsRefresh)return;
+    const dialog=$('profile-edit-dialog');if(!dialog?.open)return;
+    if(discard){populateEditor();clearSelectedImage();setError('');}
+    dialog.close();$('profile-edit-open')?.focus();
+}
+function bindProfileUi(){
+    const dialog=$('profile-edit-dialog');if(!dialog)return;
+    $('profile-edit-open').addEventListener('click',()=>{if(!state||busy||imageWriteNeedsRefresh||profileWriteNeedsRefresh||dialog.open)return;dialog.showModal();$('profile-display-name').focus();});
+    $('profile-edit-cancel').addEventListener('click',()=>closeEditor());
+    $('profile-dialog-refresh').addEventListener('click',()=>manualRefresh());
+    dialog.addEventListener('cancel',e=>{e.preventDefault();closeEditor();});
+    dialog.addEventListener('keydown',e=>{if(e.key!=='Tab'||!dialog.open)return;const fields=[...dialog.querySelectorAll('button,input,textarea,select,a[href],[tabindex]')].filter(x=>x.tabIndex>=0&&!x.matches(':disabled,[hidden],[inert]')&&x.getClientRects().length&&getComputedStyle(x).visibility!=='hidden');const first=fields[0],last=fields.at(-1),active=document.activeElement;if(!first){e.preventDefault();dialog.focus();}else if(e.shiftKey&&(active===first||!fields.includes(active))){e.preventDefault();last.focus();}else if(!e.shiftKey&&(active===last||!fields.includes(active))){e.preventDefault();first.focus();}});
+    $('profile-history-refresh')?.addEventListener('click',()=>loadHistory());
+    const qrDialog=$('profile-qr-dialog'),enlarge=$('profile-qr-enlarge'),qrClose=$('profile-qr-close');
+    const closeQr=()=>{if(qrDialog?.open)qrDialog.close();$('profile-qr-large-image')?.replaceChildren();enlarge?.focus();};
+    enlarge?.addEventListener('click',()=>{if(!qrObjectUrl||!state||qrDialog.open)return;if(!state.qr?.active||!Number.isFinite(Date.parse(state.qr.expiresAt))||Date.parse(state.qr.expiresAt)<=Date.now()){clearQrView();setError('QRの期限が切れています。必要な場合だけ再発行してください。');return;}const img=elem('img');img.src=qrObjectUrl;img.alt='発行済みのプロフィールQRコード';$('profile-qr-large-image').replaceChildren(img);qrDialog.showModal();qrClose.focus();});
+    qrClose?.addEventListener('click',closeQr);qrDialog?.addEventListener('cancel',e=>{e.preventDefault();closeQr();});
+    qrDialog?.addEventListener('keydown',e=>{if(e.key==='Tab'){e.preventDefault();qrClose.focus();}});
+}
+async function loadHistory(mine=ownerGeneration){
+    const root=$('profile-history'),status=$('profile-history-status');if(!root||!state||historyBusy)return;
+    const actor=state.actorId;historyBusy=true;root.replaceChildren();status.textContent='登録履歴を読み込んでいます。';$('profile-history-refresh').disabled=true;
+    try{const value=await readJson(endpoint('profile-registration-history',{id:actor}));if(!currentOwner(mine)||!state||state.actorId!==actor)return;
+        if(value.userId!==actor||!Array.isArray(value.events)||value.events.length>100)throw Error('登録履歴を確認できません。');
+        for(const item of value.events){const article=elem('article');article.className='profile-event';const heading=elem('h3'),link=elem('a',item.title);link.href='/events/'+encodeURIComponent(item.eventId);heading.append(link);article.append(heading,elem('p',item.scheduledDate));if(item.spectator)article.append(elem('p','観覧のみ'));for(const part of item.parts||[]){const row=elem('div');row.className='profile-song';row.append(elem('strong',part.songTitle),elem('span',part.partName+' ('+part.category+')'));article.append(row);}root.append(article);}
+        if(!value.events.length)root.append(elem('p','表示できる参加登録履歴はありません。'));status.textContent='現在の登録情報を読み込みました。';
+    }catch(error){if(currentOwner(mine)){root.replaceChildren();status.textContent='登録履歴を取得できませんでした。再取得できます。';}}
+    finally{if(currentOwner(mine)){historyBusy=false;$('profile-history-refresh').disabled=false;}}
+}
+
 export async function init() {
     cleanup();ownerRoot=$('profile-settings');const mine=ownerGeneration;if(!ownerRoot)return;resultPresenter=createResultPresenter(ownerRoot,()=>currentOwner(mine));
     bind();

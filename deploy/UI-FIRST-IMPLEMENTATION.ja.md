@@ -20,7 +20,7 @@
 |パート定義|Definitions|今回: ドラッグハンドルと上下操作で同じ下書きを並べ替える。保存・取消・競合・プリセット非遡及を維持。[契約](DEFINITION-ORDER-UI.ja.md)。公開の成否は対象PRの固定版記録で判定する。|
 |フェーズ・設問|Phases / Questions|編集欄だけの取消と離脱保護・中央確認は既存受入済み。詳細への配置、ラジオ／カスタム編集の最終見た目、既定・稼働中の削除不可を後続で照合。既存受入を繰り返し人に依頼しない。|
 |当日進行|Progress / ShorteningPanel|今回: 曲／進行ごとのrowgroupと記録点比較、準備→演奏、状態／見積の横並び、72px基本行高、現在強調、1分／5分境界の遅延表示を採用v24〜25へ合わせる。計算・記録・短縮の既存保護は維持。[契約](PROGRESS-COMPARISON-UI.ja.md)。公開の成否は対象PRの固定版記録で判定し、全UI完成へ拡張しない。|
-|プロフィール・アカウント|ProfileSettings / AccountSettings / MemberProfile / ProfileQrShare|画面分離・旧リンクは受入済み。画像・SNS・設問・QR、パスキー／メール変更の空・失敗・狭幅等は最終UI照合を残す。メール入力なしログインは後続の追加要件で、現時点の認証を省略しない。|
+|プロフィール・アカウント|ProfileSettings / AccountSettings / MemberProfile / ProfileQrShare|画面分離・旧リンクは受入済み。今回、本人の閲覧カード・登録履歴と明示編集モーダル、QRの読み取り専用拡大を接続する。即時画像操作とプロフィールの保存取消・結果不明保護を区別する。[契約](PROFILE-CARD-UI.ja.md)。他者プロフィール・アカウント等の全UI完成とは扱わず、メール入力なしログインも後続とする。|
 |招待・登録・復旧|InvitationManagement / Join / Auth / PasskeyRecovery / PasskeyRecoveryAdmin|招待管理は今回、依頼／本人招待のカードと申請・直接発行・判断・失効の中央モーダルへ合わせる。[契約](INVITATION-MODAL-UI.ja.md)。サービス管理への台帳配置、登録ステップ、管理者本人再認証と復旧画面の照合は別途残す。デモ用の認証迂回は移植しない。|
 |サービス管理・ユーザー|Workspace / Definitions / passkey-recovery-admin・admin-accounts|設定・ユーザー表・プロフィール参照とロール／リセット、最終ログイン、定義編集のUIを照合。管理者が他人のプロフィールを編集する機能は追加しない。|
 |テーマ・ヘルプ|Appearance / theme-appearance / FieldHelp|個人→イベント→サイト優先、取消プレビュー、初回遷移の修正は保護。全モーダル・ヘルプの見た目一致を未検証のまま完了にしない。|
