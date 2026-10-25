@@ -6,6 +6,7 @@ if(process.env.SEM_TIMETABLE_EDITOR_UI_CHECKS)await phase('timetable-editor-ui-c
 if(process.env.SEM_PROGRESS_UI_CHECKS){await phase('progress-ui-checks',()=>require('./progress-checks.cjs')({p,g,ok}));await phase('progress-emphasis-checks',()=>require('./progress-emphasis-checks.cjs')({p,g,ok}));}
 if(process.env.SEM_DEFINITION_ORDER_UI_CHECKS)await phase('definition-order-ui-checks',()=>require('./definition-order-ui-checks.cjs')({p,g,ok}));
 if(process.env.SEM_EVENT_MANAGEMENT_UI_CHECKS)await phase('event-management-ui-checks',()=>require('./event-management-ui-checks.cjs')({p,g,ok}));
+if(process.env.SEM_INVITATION_UI_CHECKS)await phase('invitation-ui-checks',()=>require('./invitation-layout-checks.cjs')({p,g,ok}));
 if(process.env.SEM_NOTIFICATION_UI_CHECKS)await phase('notification-ui-checks',()=>require('./notification-ui-checks.cjs')({p,g,ok}));
 if(process.env.SEM_THEME_NAVIGATION_CHECKS)await phase('theme-navigation-checks',()=>require('./theme-navigation-checks.cjs')({p,ok}));
 if(process.env.SEM_EDIT_GUARD_CHECKS)await phase('edit-guard-checks',()=>require('./edit-guard-checks.cjs')({p,g,ok}));

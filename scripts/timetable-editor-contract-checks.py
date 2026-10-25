@@ -27,7 +27,7 @@ def verify(w,f,d):
  assert 'run: bash scripts/integration-checks.sh' in integration
  assert 'run: bash scripts/acceptance-browser-fixture.sh' in browser
  assert 'SEM_ACCEPTANCE_FOCUS:' not in browser
- assert 'timetable-editor-ui) export SEM_TIMETABLE_EDITOR_UI_CHECKS=1 SEM_EDIT_GUARD_CHECKS=1 SEM_EVENT_MANAGEMENT_UI_CHECKS=1 SEM_DEFINITION_ORDER_UI_CHECKS=1 SEM_PROGRESS_UI_CHECKS=1 ;;' in f
+ assert 'timetable-editor-ui) export SEM_TIMETABLE_EDITOR_UI_CHECKS=1 SEM_EDIT_GUARD_CHECKS=1 SEM_EVENT_MANAGEMENT_UI_CHECKS=1 SEM_DEFINITION_ORDER_UI_CHECKS=1 SEM_PROGRESS_UI_CHECKS=1 SEM_INVITATION_UI_CHECKS=1 ;;' in f
  full=re.search(r'(?m)^ full\)(.*);;',f).group(1)
  for flag in ['NOTIFICATION_UI','THEME_NAVIGATION','PUBLIC_ANSWER','EVENT_HEADER','EVENT_DESCRIPTION','EVENT_LOCATION','EVENT_MATRIX','COMMENT','ACCEPTANCE_WORKFLOW']:
   assert 'SEM_'+flag+'_CHECKS=1' in full
@@ -39,6 +39,7 @@ def verify(w,f,d):
  assert "if(process.env.SEM_EVENT_MANAGEMENT_UI_CHECKS)await phase('event-management-ui-checks',()=>require('./event-management-ui-checks.cjs')({p,g,ok}));" in d
  assert "if(process.env.SEM_DEFINITION_ORDER_UI_CHECKS)await phase('definition-order-ui-checks',()=>require('./definition-order-ui-checks.cjs')({p,g,ok}));" in d
  assert "if(process.env.SEM_PROGRESS_UI_CHECKS){await phase('progress-ui-checks',()=>require('./progress-checks.cjs')({p,g,ok}));await phase('progress-emphasis-checks',()=>require('./progress-emphasis-checks.cjs')({p,g,ok}));}" in d
+ assert "if(process.env.SEM_INVITATION_UI_CHECKS)await phase('invitation-ui-checks',()=>require('./invitation-layout-checks.cjs')({p,g,ok}));" in d
  assert 'exit "$status"' in f
  assert '!verification/acceptance-native/**' in integration
  for private in ['e2e-error.txt','host.log','data.db','key.pem']:
@@ -62,4 +63,7 @@ else:raise AssertionError('Dropped definition reorder coverage accepted')
 try:verify(workflow,fixture.replace(' SEM_PROGRESS_UI_CHECKS=1',''),driver)
 except AssertionError:pass
 else:raise AssertionError('Dropped progress UI coverage accepted')
-print('Unified timetable coverage contract passed: actual workflow + 11 unsafe mutations rejected')
+try:verify(workflow,fixture.replace(' SEM_INVITATION_UI_CHECKS=1',''),driver)
+except AssertionError:pass
+else:raise AssertionError('Dropped invitation UI coverage accepted')
+print('Unified timetable coverage contract passed: actual workflow + 12 unsafe mutations rejected')

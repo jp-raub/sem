@@ -26,6 +26,8 @@ node scripts/device-notification-ui-checks.mjs 2>&1 | tee verification/device-no
 node --check src/Sem.Web/wwwroot/invitation-management.js
 node --check scripts/invitation-management-ui-checks.mjs
 node scripts/invitation-management-ui-checks.mjs 2>&1 | tee verification/invitation-management-ui.log
+node scripts/invitation-dialogs-checks.mjs 2>&1 | tee verification/invitation-dialogs.log
+node --check scripts/invitation-layout-checks.cjs
 node --check src/Sem.Web/wwwroot/admin-accounts.js
 node --check scripts/admin-accounts-checks.cjs
 node scripts/admin-accounts-ui-checks.mjs 2>&1 | tee verification/admin-accounts-ui.log

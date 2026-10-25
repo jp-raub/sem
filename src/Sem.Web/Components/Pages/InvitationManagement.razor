@@ -5,8 +5,8 @@
 @inject IJSRuntime JS
 
 <PageTitle>招待管理</PageTitle>
-<main id="invitation-management-root" @ref="Root" aria-labelledby="invitation-management-title" class="panel" style="max-width:1200px;margin:24px auto;">
-    <h1 id="invitation-management-title">招待・依頼の管理</h1>
+<main id="invitation-management-root" @ref="Root" aria-labelledby="invitation-management-title" class="invitation-workspace">
+    <h1 id="invitation-management-title">招待管理</h1>
     <p>招待依頼の作成と本人リンクの確認、全体管理者による依頼判断・直接発行・既存招待の失効を行います。招待リンクは一覧に含めず、本人または発行者の一時欄にだけ表示します。</p>
     <p id="invitation-management-scope" role="status" aria-live="polite">一覧を準備しています。</p>
     <p id="invitation-management-status" role="status" aria-live="polite">読み込み中です。</p>
@@ -14,8 +14,12 @@
     <p id="invitation-management-module-error" role="alert" hidden="@(!ModuleUnavailable)">招待管理画面を読み込めませんでした。操作は有効になっていません。ページを再読み込みしてください。</p>
     <button id="invitation-management-refresh" type="button" disabled>現在のページを再読込</button>
 
-    <section id="invitation-issue" aria-labelledby="invitation-issue-heading" hidden>
-        <h2 id="invitation-issue-heading">招待を直接発行（管理者のみ）</h2>
+    <section id="invitation-issue" class="panel" aria-labelledby="invitation-issue-heading" hidden>
+        <h2 id="invitation-issue-heading">全体管理者による直接発行</h2>
+        <p>リクエスト不要で人数・期限付きリンクを発行できます。</p>
+        <button id="invitation-issue-open" type="button" class="primary" disabled>招待リンクを直接発行</button>
+        <dialog id="invitation-issue-dialog" class="invitation-dialog" aria-labelledby="invitation-issue-dialog-title">
+        <h2 id="invitation-issue-dialog-title">招待リンクを直接発行</h2>
         <p>目的は招待一覧に保存されます。上限は1〜5回、期限は1〜7日です。成功後に表示するリンクは一時的な秘密情報です。明示的にコピーまたは手動選択して安全に共有してください。自動配布は行いません。</p>
         <p id="invitation-issue-status" role="status" aria-live="polite"></p>
         <p id="invitation-issue-error" role="alert"></p>
@@ -23,10 +27,16 @@
             <fieldset id="invitation-issue-fields" disabled>
                 <label for="invitation-issue-purpose">目的（前後空白を除き1〜500文字、制御文字不可）</label>
                 <textarea id="invitation-issue-purpose" maxlength="500" rows="3" autocomplete="off" required></textarea>
+                <div class="invitation-pair">
+                    <div>
                 <label for="invitation-issue-count">利用上限（1〜5）</label>
                 <input id="invitation-issue-count" type="number" min="1" max="5" step="1" value="1" inputmode="numeric" />
+                    </div>
+                    <div>
                 <label for="invitation-issue-days">有効日数（1〜7）</label>
                 <input id="invitation-issue-days" type="number" min="1" max="7" step="1" value="1" inputmode="numeric" />
+                    </div>
+                </div>
                 <label for="invitation-issue-confirm">
                     <input id="invitation-issue-confirm" type="checkbox" />
                     表示した目的・利用上限・有効日数で新しい招待を発行することを確認しました。
@@ -42,10 +52,14 @@
             <button id="invitation-issue-copy" type="button" disabled>リンクをコピー</button>
             <p id="invitation-issue-copy-status" role="status" aria-live="polite"></p>
         </section>
+        <button id="invitation-issue-close" type="button">閉じる</button>
+        </dialog>
     </section>
 
     <section id="invitation-management-admin" aria-labelledby="invitation-management-revoke-heading" hidden>
-        <h2 id="invitation-management-revoke-heading">招待の失効（管理者のみ）</h2>
+        <h2 id="invitation-management-revoke-heading">招待の緊急失効（管理者のみ）</h2>
+        <p>招待一覧から対象を選択します。通常編集の保存・取消とは独立して、新規登録を直ちに停止します。登録済みユーザーには影響しません。</p>
+        <dialog id="invitation-revoke-dialog" class="invitation-dialog" aria-labelledby="invitation-management-selected-heading">
         <section id="invitation-management-selected" aria-labelledby="invitation-management-selected-heading" hidden>
             <h3 id="invitation-management-selected-heading">失効対象の確認</h3>
             <p id="invitation-management-selected-summary"></p>
@@ -59,6 +73,8 @@
                 <button id="invitation-management-revoke" type="submit" disabled>この招待を失効</button>
             </form>
         </section>
+        <button id="invitation-revoke-close" type="button">閉じる</button>
+        </dialog>
         <p id="invitation-management-unknown" role="alert" hidden></p>
     </section>
 
@@ -73,7 +89,10 @@
     </section>
 
     <section id="invitation-request-create" class="panel" aria-labelledby="invitation-request-create-heading" hidden>
-        <h2 id="invitation-request-create-heading">招待リンク発行を依頼</h2>
+        <h2 id="invitation-request-create-heading">管理者への招待リンク発行リクエスト</h2>
+        <button id="invitation-request-open" type="button" class="primary" disabled>発行をリクエスト</button>
+        <dialog id="invitation-request-dialog" class="invitation-dialog" aria-labelledby="invitation-request-dialog-title">
+        <h2 id="invitation-request-dialog-title">招待リンク発行リクエスト</h2>
         <p>理由を記入し、希望人数（1〜5名）と有効期間（1〜7日）を指定してください。期限は管理者が許可して発行した時点から計算します。</p>
         <p id="invitation-request-create-status" role="status" aria-live="polite"></p>
         <p id="invitation-request-create-error" role="alert"></p>
@@ -81,15 +100,24 @@
             <fieldset id="invitation-request-create-fields" disabled>
                 <label for="invitation-request-create-reason">依頼理由（前後空白を除き1〜500文字、制御文字不可）</label>
                 <textarea id="invitation-request-create-reason" maxlength="500" rows="3" autocomplete="off" required></textarea>
+                <div class="invitation-pair">
+                    <div>
                 <label for="invitation-request-create-count">希望人数（1〜5）</label>
                 <input id="invitation-request-create-count" type="number" min="1" max="5" step="1" value="1" inputmode="numeric" />
+                    </div>
+                    <div>
                 <label for="invitation-request-create-days">希望有効期間（日、1〜7）</label>
                 <input id="invitation-request-create-days" type="number" min="1" max="7" step="1" value="1" inputmode="numeric" />
+                    </div>
+                </div>
                 <button id="invitation-request-create-submit" type="submit" disabled>発行をリクエスト</button>
             </fieldset>
         </form>
+        <button id="invitation-request-close" type="button">閉じる</button>
+        </dialog>
     </section>
 
+    <dialog id="invitation-review-dialog" class="invitation-dialog" aria-labelledby="invitation-request-review-heading">
     <section id="invitation-request-review" class="panel" aria-labelledby="invitation-request-review-heading" hidden>
         <h2 id="invitation-request-review-heading">依頼の確認・許可／拒否（全体管理者のみ）</h2>
         <p id="invitation-request-review-summary"></p>
@@ -112,24 +140,26 @@
         </form>
     </section>
 
-    <section aria-labelledby="invitation-management-invitations-heading">
-        <h2 id="invitation-management-invitations-heading">招待一覧</h2>
-        <p>表示対象はログインユーザーに許可された範囲です。1ページ最大50件で、表示中のページだけでは全件取得済みとは限りません。</p>
-        <div style="overflow-x:auto">
-            <table id="invitation-management-invitations" aria-describedby="invitation-management-invitations-heading">
-                <thead id="invitation-management-invitations-head"></thead>
-                <tbody id="invitation-management-invitations-body"></tbody>
+    </dialog>
+
+    <section class="panel" aria-labelledby="invitation-management-requests-heading">
+        <h2 id="invitation-management-requests-heading">依頼一覧</h2>
+        <p>全体管理者には全依頼、その他のユーザーには本人の依頼だけを表示します。承認済みのリンクは依頼者本人だけが取得できます。</p>
+        <div class="invitation-list-wrap" tabindex="0" role="region" aria-label="依頼一覧">
+            <table role="table" id="invitation-management-requests" aria-describedby="invitation-management-requests-heading">
+                <thead id="invitation-management-requests-head"></thead>
+                <tbody id="invitation-management-requests-body"></tbody>
             </table>
         </div>
     </section>
 
-    <section aria-labelledby="invitation-management-requests-heading">
-        <h2 id="invitation-management-requests-heading">依頼一覧</h2>
-        <p>全体管理者には全依頼、その他のユーザーには本人の依頼だけを表示します。承認済みのリンクは依頼者本人だけが取得できます。</p>
-        <div style="overflow-x:auto">
-            <table id="invitation-management-requests" aria-describedby="invitation-management-requests-heading">
-                <thead id="invitation-management-requests-head"></thead>
-                <tbody id="invitation-management-requests-body"></tbody>
+    <section class="panel" aria-labelledby="invitation-management-invitations-heading">
+        <h2 id="invitation-management-invitations-heading">招待一覧</h2>
+        <p>表示対象はログインユーザーに許可された範囲です。1ページ最大50件で、表示中のページだけでは全件取得済みとは限りません。</p>
+        <div class="invitation-list-wrap" tabindex="0" role="region" aria-label="招待一覧">
+            <table role="table" id="invitation-management-invitations" aria-describedby="invitation-management-invitations-heading">
+                <thead id="invitation-management-invitations-head"></thead>
+                <tbody id="invitation-management-invitations-body"></tbody>
             </table>
         </div>
     </section>
