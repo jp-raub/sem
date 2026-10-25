@@ -19,7 +19,7 @@
 |曲・タイムテーブル編集|Songs / Timetable / DraftEditDialog|PR116／117、main145d614aで曲／進行の共通下書きと一括保存を公開済み。旧曲API・競合・占有削除保護・秒精度を保持。[契約](TIMETABLE-EDITOR.ja.md)。今回の管理区画統合でも保護する。|
 |パート定義|Definitions|今回: ドラッグハンドルと上下操作で同じ下書きを並べ替える。保存・取消・競合・プリセット非遡及を維持。[契約](DEFINITION-ORDER-UI.ja.md)。公開の成否は対象PRの固定版記録で判定する。|
 |フェーズ・設問|Phases / Questions|編集欄だけの取消と離脱保護・中央確認は既存受入済み。詳細への配置、ラジオ／カスタム編集の最終見た目、既定・稼働中の削除不可を後続で照合。既存受入を繰り返し人に依頼しない。|
-|当日進行|Progress / ShorteningPanel|元／最新／実績のグループ、開始・終了状態の一体表示、遅延段階と現在の遅れの表示差分が残る。定数短縮の既存保護を維持。静的棚卸しで見つかった文字化け説明も同じ対応へ。|
+|当日進行|Progress / ShorteningPanel|今回: 曲／進行ごとのrowgroupと記録点比較、準備→演奏、状態／見積の横並び、72px基本行高、現在強調、1分／5分境界の遅延表示を採用v24〜25へ合わせる。計算・記録・短縮の既存保護は維持。[契約](PROGRESS-COMPARISON-UI.ja.md)。公開の成否は対象PRの固定版記録で判定し、全UI完成へ拡張しない。|
 |プロフィール・アカウント|ProfileSettings / AccountSettings / MemberProfile / ProfileQrShare|画面分離・旧リンクは受入済み。画像・SNS・設問・QR、パスキー／メール変更の空・失敗・狭幅等は最終UI照合を残す。メール入力なしログインは後続の追加要件で、現時点の認証を省略しない。|
 |招待・登録・復旧|InvitationManagement / Join / Auth / PasskeyRecovery / PasskeyRecoveryAdmin|実機能あり。v33の申請・発行・判断・理由・件数／期限、即時無効化の独立操作、登録ステップ、管理者の本人再認証のUI状態を個別照合する。デモ用の認証迂回は移植しない。|
 |サービス管理・ユーザー|Workspace / Definitions / passkey-recovery-admin・admin-accounts|設定・ユーザー表・プロフィール参照とロール／リセット、最終ログイン、定義編集のUIを照合。管理者が他人のプロフィールを編集する機能は追加しない。|

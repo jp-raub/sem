@@ -15,7 +15,7 @@
  @if(Plan.CanManage){<button id="progress-manager-view" @onclick="()=>ManagerView=true">管理者表示</button><button id="progress-participant-view" disabled="@(Editing||ShorteningActive)" @onclick="()=>ManagerView=false">参加者表示</button>}
  <p id="progress-day">@(Plan.EventDay?"イベント当日（日本時間）":"計画プレビュー：運営の書込みはイベント当日だけ可能です。")</p>
  <section class="panel">
-  <p id="progress-health" role="status">@Health</p>
+  <p id="progress-health" role="status" data-delay-level="@ProgressPresentation.Severity(HealthDelta)">@Health</p>
   <h2 id="progress-current">@(Plan.Summary.CurrentTitle??(Plan.Summary.State=="終了"?"イベントが終了しました":"パート未設定"))</h2><strong id="progress-state">@Plan.Summary.State</strong>
   @if(Plan.Summary.Target is DateTimeOffset target){<p>次の切替予定：@TimetableCalculator.Clock(target,"seconds")</p><p id="progress-countdown" role="timer" aria-live="off">@ProgressCalculator.Remaining(target,DisplayNow)</p>}
   <p>予定時刻だけでは状態を切り替えません。管理者の実績記録で変わります。</p>
@@ -25,11 +25,35 @@
  @if(Plan.CanManage&&ManagerView){
   <section class="panel"><p id="progress-next-action">次の記録：@(Plan.NextAction?.Label??"全パートの終了を記録済み")</p><button id="progress-record" data-progress-version="@Plan.ProgressVersion" style="min-height:56px;font-size:1.2rem" disabled="@(Busy||Editing||ShorteningActive||!Plan.CanRecord)" @onclick="Record">時刻を記録</button><p>実績はサーバー時刻で保存します。開始した当初計画を保護し、終了と次開始を同じ時刻で一括保存します。</p></section>
   <ShorteningPanel EventId="@EventId" EventVersion="Plan.RowVersion" ProgressVersion="Plan.ProgressVersion" ExternalBusy="Busy" ExternalEditing="Editing" ActiveChanged="active=>ShorteningActive=active" Saved="Load" />
-  <button id="progress-show-plan" @onclick="()=>ShowPlan=!ShowPlan">予実・時間管理を表示</button>
-  <section class="@(ShowPlan?"progress-comparison show-plan":"progress-comparison")">
-   <table id="progress-comparison"><thead><tr><th>曲・進行</th><th>記録点</th><th>当初計画</th><th>最新見積</th><th>実績</th><th>見積</th></tr></thead><tbody>
-   @foreach(var row in Plan.ManagerRows){@foreach(var point in row.Points){<tr data-progress-point="@(row.Original.Id+":"+point.Point)" class="@(Plan.NextAction?.PartId==row.Original.Id?"current-timepart":"")"><td>@row.Original.Icon @row.Original.Title<br />@row.State</td><td>@PointLabel(point.Point)</td><td>@TimetableCalculator.Clock(point.Original,"seconds")</td><td style="@(point.Latest!=point.Original?"font-weight:bold":"")">@TimetableCalculator.Clock(point.Latest,"seconds")</td><td>@(point.Actual is DateTimeOffset actual?TimetableCalculator.Clock(actual,"seconds"):"未記録")</td><td>@if(point.Point=="End"&&row.Original.Kind!="Opening"&&row.State!="完了"){<button data-progress-estimate="@row.Original.Id" disabled="@(Busy||Editing||ShorteningActive||!Plan.EventDay||row.Original.Kind=="Song"&&row.Points.Any(p=>p.Point=="Start"&&p.Actual is not null))" @onclick="()=>Open(row)">当日見積</button>}</td></tr>}}
-   </tbody></table>
+  <button id="progress-show-plan" aria-expanded="@ShowPlan.ToString().ToLowerInvariant()" aria-controls="progress-comparison-region" @onclick="()=>ShowPlan=!ShowPlan">予実・時間管理を@(ShowPlan?"閉じる":"表示")</button>
+  <section id="progress-comparison-region" class="@(ShowPlan?"progress-comparison show-plan":"progress-comparison")" tabindex="0" aria-label="予実・時間管理（表内を左右にスクロールできます）">
+   @if(CurrentDelay>0){<p id="progress-current-alert" class="current-part-alert" role="status">⚠ 現在のパートに遅延があります（@ProgressPresentation.DelayText(CurrentDelay)）。将来の回復見込とは別に、現在の記録点を確認してください。</p>}
+   <table id="progress-comparison">
+    <caption>記録点ごとに計画と実績を比較します。最新計画は実績と当日見積を反映します。時刻は日本時間です。</caption>
+    <thead><tr><th scope="col">タイムパート</th><th scope="col">記録点</th><th scope="col">当初計画</th><th scope="col">最新計画</th><th scope="col">実績</th></tr></thead>
+    @foreach(var row in Plan.ManagerRows){
+     <tbody @key="row.Original.Id" data-comparison-part="@row.Original.Id" class="@(Plan.NextAction?.PartId==row.Original.Id?"current-timepart":row.State=="完了"?"completed-part":"")">
+     @for(var index=0;index<row.Points.Length;index++){
+      var point=row.Points[index];var delay=ProgressPresentation.Delay(row,point,Plan.NextAction,DisplayNow);
+      <tr data-progress-point="@(row.Original.Id+":"+point.Point)" data-delay-level="@ProgressPresentation.Severity(delay)">
+       @if(index==0){<th scope="rowgroup" rowspan="@row.Points.Length" class="comparison-part"><strong title="@row.Original.Title">@row.Original.Icon @row.Original.Title</strong>
+        @if(row.Original.Kind=="Song"){<small title="@row.Original.Artist">@row.Original.Artist</small>}
+        <small class="progress-duration">@ProgressPresentation.Duration(row)</small>
+        <div class="comparison-controls"><span class="progress-state-tag">@row.State</span>
+        @if(row.Original.Kind!="Opening"&&row.State!="完了"){<button data-progress-estimate="@row.Original.Id" aria-label="@($"{row.Original.Title}の当日見積")" disabled="@(Busy||Editing||ShorteningActive||!Plan.EventDay||row.Original.Kind=="Song"&&row.Points.Any(p=>p.Point=="Start"&&p.Actual is not null))" @onclick="()=>Open(row)">当日見積</button>}
+        </div></th>}
+       <th scope="row">@ProgressPresentation.PointLabel(row.Original.Kind,point.Point)</th>
+       <td class="initial-plan">@TimetableCalculator.Clock(point.Original,"seconds")</td>
+       <td class="@(point.Latest!=point.Original?"latest-plan revised-plan":"latest-plan")">@TimetableCalculator.Clock(point.Latest,"seconds")
+        @if(point.Latest!=point.Original){<span class="visually-hidden">（当初計画から変更）</span>}
+        @if(delay>0){<small class="record-delay">@ProgressPresentation.DelayText(delay)</small>}
+       </td>
+       <td class="actual-time">@(point.Actual is DateTimeOffset actual?TimetableCalculator.Clock(actual,"seconds"):"未記録")</td>
+      </tr>
+     }
+     </tbody>
+    }
+   </table>
   </section>
  }
  @if(Editing&&Selected is not null){<section role="dialog" aria-modal="true" aria-label="当日見積" class="panel"><h2>当日見積：@Selected.Original.Title</h2>
@@ -38,17 +62,15 @@
   <p>元の計画と実績は変更しません。短縮提案は管理者の明示承認だけで当日見積へ反映します。</p><button id="progress-estimate-save" disabled="@Busy" @onclick="SaveEstimate">当日見積を保存</button><button id="progress-estimate-cancel" disabled="@Busy" @onclick="Cancel">取消</button>
  </section>}
 }
-<style>
- .progress-comparison{display:none;overflow-x:auto}.progress-comparison.show-plan{display:block} .current-timepart{background:var(--soft,#eef4f2)}
- @@media(min-width:900px){.progress-comparison{display:block;margin-top:1rem}}
-</style>
+
 </section>
 @code{
  [Parameter]public string EventId{get;set;}="";
  ProgressPlan? Plan;ProgressRow?Selected;bool Busy,Editing,ShowPlan,ShorteningActive,InteractiveReady,ManagerView=true;string Error="",Message="",Prep="",Length="";DateTimeOffset LoadedAt;int Ticks;readonly CancellationTokenSource Stop=new();Task?TimerTask;
  DateTimeOffset DisplayNow=>Plan!.Summary.Now+(DateTimeOffset.UtcNow-LoadedAt);
- string Health{get{var d=Plan!.Summary.DeltaMilliseconds;return d>0?$"ビハインド（{(d<60000?"1分未満":Math.Ceiling(d/60000d)+"分")}遅れ）":d<=-60000?$"オンスケ（{Math.Floor(-d/60000d)}分先行）":"オンスケ";}}
- static string PointLabel(string p)=>p=="PrepStart"?"準備開始":p=="Start"?"開始":"終了";
+ long HealthDelta=>Plan!.CanManage?ProgressCalculator.Summary(Plan.ManagerRows,DisplayNow).DeltaMilliseconds:Plan.Summary.DeltaMilliseconds;
+ long CurrentDelay{get{var row=Plan!.ManagerRows.FirstOrDefault(r=>r.Original.Id==Plan.NextAction?.PartId);var point=row?.Points.FirstOrDefault(p=>p.Point==Plan.NextAction?.Point);return row is not null&&point is not null?ProgressPresentation.Delay(row,point,Plan.NextAction,DisplayNow):0;}}
+ string Health{get{var d=HealthDelta;return d>0?$"ビハインド（{(d<60000?"1分未満":Math.Ceiling(d/60000d)+"分")}遅れ）":d<=-60000?$"オンスケ（{Math.Floor(-d/60000d)}分先行）":"オンスケ";}}
  protected override void OnAfterRender(bool firstRender){if(firstRender){InteractiveReady=true;StateHasChanged();}}
  protected override async Task OnParametersSetAsync(){Editing=false;await Load();}
  protected override Task OnAfterRenderAsync(bool first){if(first)TimerTask=Tick();return Task.CompletedTask;}
