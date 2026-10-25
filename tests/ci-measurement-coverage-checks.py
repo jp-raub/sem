@@ -33,7 +33,12 @@ class Checks(unittest.TestCase):
         self.assertIn('path: ${{ runner.temp }}/sem-browser-cache',s)
         self.assertIn('playwright-1.56.1-headless-v1',s)
         self.assertIn('playwright@1.56.1',s)
-        self.assertIn('install --with-deps chromium --only-shell',s)
+        self.assertIn('install chromium --only-shell',s)
+        self.assertIn('if NODE_PATH="$RUNNER_TEMP/sem-browser/node_modules" node scripts/browser-runtime-probe.cjs; then',s)
+        self.assertIn('if [[ "$status" != 78 ]]; then exit "$status"; fi',s)
+        self.assertIn('install-deps chromium',s)
+        self.assertEqual(s.count('node scripts/browser-runtime-probe.cjs'),2)
+        self.assertNotIn('node scripts/browser-runtime-probe.cjs || true',s)
         self.assertNotIn('cache-hit',s) # Dependency hits cannot skip install or verification.
         self.assertIn('if: ${{ failure() || cancelled() }}',s)
     def test_both_browser_actors_have_bounded_selector_and_function_waits(self):
