@@ -41,8 +41,12 @@ module.exports=async({p,g,ok})=>{
    ok(Math.abs(box.cx-width/2)<2&&Math.abs(box.cy-height/2)<2,'コメント入力が画面中央にある '+width+'x'+height+' '+mode);
    await w.mouse.click(2,2);
    ok(await w.locator('.comment-composer').evaluate(e=>e.open)&&await w.locator('#comment-body').inputValue()===('破棄する未送信コメント '+width+' '+mode),'背景操作は未送信本文を暗黙に破棄しない '+width+' '+mode);
-   await w.locator('#comment-body').focus();for(let n=0;n<8;n++)await w.keyboard.press('Tab');
-   ok(await w.locator('.comment-composer').evaluate(e=>e.contains(document.activeElement)),'コメント入力のフォーカスをモーダル内に保つ '+width+' '+mode);
+   await w.locator('#comment-body').focus();
+   for(const key of['Tab','Shift+Tab'])for(let n=0;n<24;n++){
+    await w.keyboard.press(key);
+    const focus=await w.locator('.comment-composer').evaluate(e=>({inside:e.contains(document.activeElement),tag:document.activeElement?.tagName,open:e.open}));
+    ok(focus.inside&&focus.open,'コメント入力の各Tab操作でフォーカスをモーダル内に保つ '+width+' '+mode+' '+key+' '+n+' '+JSON.stringify(focus));
+   }
    await w.locator('#comment-compose-cancel').click();
    await w.waitForFunction(()=>!document.querySelector('.comment-composer')?.open&&document.activeElement===document.getElementById('comment-compose-open'));
    ok(await w.locator('#comment-body').inputValue()===''&&await w.locator('[data-event-matrix-slot="'+selectedSlot+'"]').getAttribute('aria-pressed')==='true'&&await w.locator('[data-participation-answer="'+question+'"]').inputValue()==='YES','明示キャンセルはコメントだけを破棄し参加枠・設問回答とフォーカスを保持する '+width+' '+mode);
