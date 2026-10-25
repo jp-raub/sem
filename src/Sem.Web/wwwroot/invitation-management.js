@@ -1,3 +1,4 @@
+import { createInvitationDialogs } from './invitation-dialogs.js';
 import { createResultPresenter } from './operation-result-presenter.js';
 const MAX_JSON_BYTES = 512 * 1024;
 const MAX_CSRF_BYTES = 16 * 1024;
@@ -199,6 +200,7 @@ function personText(name, id) {
 }
 function cell(state, row, text, header = false) {
   const node = create(state, header ? 'th' : 'td', text);
+  node.setAttribute('role', header ? 'columnheader' : 'cell');
   if (header) node.setAttribute('scope', 'col');
   row.append(node);
   return node;
@@ -208,6 +210,11 @@ function emptyRow(state, body, count, message) {
   const col = create(state, 'td', message);
   col.setAttribute('colspan', String(count));
   row.append(col); body.append(row);
+}
+
+function labelCells(row, headers) {
+  row.setAttribute('role', 'row');
+  [...row.children].forEach((cell, index) => cell.setAttribute('data-label', headers[index]));
 }
 
 function renderInvitations(state) {
@@ -259,6 +266,7 @@ function renderInvitations(state) {
     }
     if (!actionCell.childNodes.length) actionCell.textContent = '—';
     row.append(actionCell);
+    labelCells(row, headers);
     body.append(row);
   }
 }
@@ -294,6 +302,7 @@ function renderRequests(state) {
       actionCell.append(button);
     } else actionCell.textContent = '—';
     row.append(actionCell);
+    labelCells(row, headers);
     body.append(row);
   }
 }
@@ -434,6 +443,7 @@ function render(state) {
   renderInvitations(state);
   renderRequests(state);
   updateConfirmation(state);
+  state.dialogs?.sync({ admin: state.isAdmin, actor: !!state.actorId, locked: state.busy || !!state.unknown || state.readErrorLock, busy: state.busy, review: !!state.selectedRequest, revoke: !!state.selectedTarget });
 }
 
 function elements(root) {
@@ -474,6 +484,7 @@ function elements(root) {
 function selectTarget(state, invitation) {
   if (!isCurrent(state) || !state.isAdmin || state.busy || state.unknown || state.readErrorLock || invitation.disabled) return;
   state.operationGeneration++;
+  state.dialogs?.capture();
   state.selectedTarget = Object.freeze({ ...invitation });
   element(state, 'reason').value = '';
   element(state, 'confirm').checked = false;
@@ -485,6 +496,7 @@ function selectTarget(state, invitation) {
 function selectRequest(state, request) {
   if (!isCurrent(state) || !state.isAdmin || state.busy || state.unknown || state.readErrorLock || request.status !== 'Pending') return;
   state.operationGeneration++;
+  state.dialogs?.capture();
   state.selectedRequest = Object.freeze({ ...request });
   element(state, 'reviewChoice').value = 'approve';
   element(state, 'reviewComment').value = '';
@@ -849,6 +861,7 @@ async function createInvitationRequest(state, event) {
     state.operationGeneration++;
     state.requestStatusMessage = `依頼 ${value.id} を受け付けました。管理者の判断は依頼一覧で確認できます。`;
     state.requestErrorMessage = '';
+    state.dialogs?.completed('request');
     render(state);
     state.resultPresenter.show('success', state.requestStatusMessage);
     void loadPage(state, 1);
@@ -1012,6 +1025,7 @@ function abortRequests(state) {
 }
 
 function onPageHide(state) {
+  state.dialogs?.closeAll();
   state.resultPresenter?.clear();
   if (liveState !== state || state.disposed || state.pageHidden || state.generation !== nextGeneration) return;
   state.operationGeneration++;
@@ -1071,6 +1085,7 @@ function onPageShow(state) {
 }
 
 function clearActorState(state) {
+  state.dialogs?.closeAll();
   state.resultPresenter?.clear();
   state.operationGeneration++;
   state.actorId = null;
@@ -1095,6 +1110,7 @@ function clearActorState(state) {
 }
 
 function disposeState(state) {
+  state.dialogs?.dispose();
   state.resultPresenter?.clear();
   if (!state || state.disposed) return;
   state.disposed = true;
@@ -1143,6 +1159,27 @@ export async function init(root, owner) {
   if (Object.values(state.elements).some(node => !node)) throw new TypeError('invitation UI elements missing');
   liveState = state;
   state.resultPresenter = createResultPresenter(root, () => isCurrent(state) && !!state.actorId);
+  state.dialogs = createInvitationDialogs(root, kind => {
+    if (!isCurrent(state) || state.busy) return false;
+    if (kind === 'review') {
+      state.selectedRequest = null;
+      element(state, 'reviewComment').value = '';
+      element(state, 'reviewConfirm').checked = false;
+      state.reviewErrorMessage = '';
+    } else if (kind === 'revoke') clearConfirmation(state);
+    else if (kind === 'issue') {
+      resetIssueConfirmation(state, true);
+      element(state, 'issuePurpose').value = '';
+      element(state, 'issueCount').value = '1';
+      element(state, 'issueDays').value = '1';
+    } else if (kind === 'request') {
+      element(state, 'requestReason').value = '';
+      element(state, 'requestCount').value = '1';
+      element(state, 'requestDays').value = '1';
+    }
+    render(state);
+    return true;
+  });
   state.listeners = {
     click: event => {
       const target = event.target;
