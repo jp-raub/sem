@@ -27,11 +27,15 @@
  @if(Plan.ClosesAt is not null){<p id="comment-cutoff">一般ユーザーの締切：@JapaneseTime(Plan.ClosesAt) より前</p>}
  @if(Embedded){
   <button id="comment-compose-open" disabled="@(Busy||PendingDelete is not null||!Plan.CanPost)" @onclick="()=>ComposerOpen=true">コメントのみ投稿</button>
-  <dialog @ref="ComposerDialog" class="comment-composer" aria-labelledby="comment-compose-heading">
+  <dialog @ref="ComposerDialog" class="comment-composer" aria-labelledby="comment-compose-heading" aria-describedby="comment-compose-help">
    <h3 id="comment-compose-heading">コメントのみ投稿</h3>
    <p>参加枠の選択・設問回答は送信しません。</p>
    @CommentForm
-   <button id="comment-compose-close" type="button" data-dialog-close disabled="@(Busy||Pending is not null)" @onclick="CloseComposer">閉じる（入力は保持）</button>
+   <p id="comment-compose-help">キャンセルは、このコメントの未送信入力だけを破棄します。参加枠・設問回答はそのままです。入力を残す場合は「入力を保持して閉じる」またはEscapeを使ってください。</p>
+   <div class="comment-compose-actions">
+    <button id="comment-compose-cancel" type="button" disabled="@(!CanCloseComposer)" @onclick="CancelComposer">キャンセル（入力を破棄）</button>
+    <button id="comment-compose-close" type="button" data-dialog-close disabled="@(!CanCloseComposer)" @onclick="CloseComposer">入力を保持して閉じる</button>
+   </div>
   </dialog>
  }else{@CommentForm}
  @if(Pending is not null||PendingDelete is not null){<p>結果が未確認です。入力は変更せず、同じ操作IDで再試行してください。新しいIDで送信すると別の投稿として扱われます。</p>}
@@ -54,7 +58,10 @@
   <button id="comment-post" disabled="@(Busy||PendingDelete is not null||Pending is null&&(Plan?.CanPost!=true||Body.Trim().EnumerateRunes().Count()<3))" @onclick="Post">@(Pending is null?"コメントのみ投稿":"同じ操作IDで結果を確認／再試行")</button>
   @if(Embedded){<p role="alert">@Error</p>}
  </div>;
- void CloseComposer(){if(!Busy&&Pending is null)ComposerOpen=false;}
+ bool CanCloseComposer => !Busy && Pending is null && PendingDelete is null;
+ void CloseComposer(){if(CanCloseComposer)ComposerOpen=false;}
+ // 未送信入力だけが対象。通信中・結果不明の操作は取消で隠したり作り直したりしない。
+ void CancelComposer(){if(!CanCloseComposer)return;Body="";Error="";ComposerOpen=false;}
  void PreventPendingNavigation(Microsoft.AspNetCore.Components.Routing.LocationChangingContext context){if(Pending is not null||PendingDelete is not null||ComposerOpen&&Body.Length>0){context.PreventNavigation();Error="コメントの入力中、または結果が未確認です。投稿結果を確認するか、入力を保持して閉じてから移動してください。";}}
  protected override void OnInitialized(){Authentication.AuthenticationStateChanged+=AuthenticationChanged;}
  void AuthenticationChanged(Task<AuthenticationState> state){_ = InvokeAsync(async()=>{if(Disposed)return;BindContext((await state).User);StateHasChanged();});}

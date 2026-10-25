@@ -51,20 +51,22 @@ const refreshTarget = {...target}, phaseTarget = {...target};
 globalThis.document = {body,activeElement:target};
 class NativeDialog extends EventTarget {
     open=false; isConnected=true; opens=0; closes=0; adds=0; removes=0;
+    addedNames=[];removedNames=[];
     button={isConnected:true,matches:()=>false,focus:()=>{document.activeElement=this.button;},click:()=>notice.sync(this,false)};
     showModal(){this.open=true;this.opens++;}
     close(){this.open=false;this.closes++;}
     querySelector(selector){return selector==='[data-dialog-close]'?this.button:null;}
     closest(){return {querySelector:selector=>selector==='#participation-refresh'?refreshTarget:phaseTarget};}
     contains(element){return element===this.button;}
-    addEventListener(name,fn){this.adds++;super.addEventListener(name,fn);}
-    removeEventListener(name,fn){this.removes++;super.removeEventListener(name,fn);}
+    addEventListener(name,fn){this.adds++;this.addedNames.push(name);super.addEventListener(name,fn);}
+    removeEventListener(name,fn){this.removes++;this.removedNames.push(name);super.removeEventListener(name,fn);}
 }
 globalThis.HTMLDialogElement=NativeDialog;
 const dialog=new NativeDialog();
 notice.sync(dialog,true);notice.sync(dialog,true);
-check(dialog.open && dialog.opens===1 && dialog.adds===1 && document.activeElement===dialog.button,
+check(dialog.open && dialog.opens===1 && dialog.adds===2 && document.activeElement===dialog.button,
     'Native modal opens once, focuses acknowledgement, and does not duplicate on rerender');
+check(JSON.stringify(dialog.addedNames)===JSON.stringify(['cancel','keydown']), 'Shared modal registers exactly the native cancel and Tab boundary listeners');
 const cancel=new Event('cancel',{cancelable:true});dialog.dispatchEvent(cancel);
 check(cancel.defaultPrevented && !dialog.open && document.activeElement===target,
     'Escape follows the acknowledgement action and restores the connected input');
@@ -74,7 +76,8 @@ target.disabled=false;document.activeElement=target;notice.sync(dialog,true);tar
 check(document.activeElement===phaseTarget, 'Busy refresh control falls back to the participation heading');
 refreshTarget.disabled=false;target.disabled=false;document.activeElement=target;notice.sync(dialog,true);
 notice.release(dialog);
-check(!dialog.open && dialog.removes===1, 'Disposal closes the modal and releases its native Escape listener');
+check(!dialog.open && dialog.removes===2, 'Disposal closes the modal and releases its native Escape and Tab listeners');
+check(JSON.stringify(dialog.removedNames)===JSON.stringify(dialog.addedNames), 'Disposal removes exactly the listeners registered by the shared modal');
 dialog.isConnected=false;const before=dialog.opens;notice.sync(dialog,true);
 check(dialog.opens===before, 'Detached event or authentication context cannot reopen an old modal');
 const markup=fs.readFileSync('src/Sem.Web/Components/Shared/ParticipationSelectionNotice.razor','utf8');
