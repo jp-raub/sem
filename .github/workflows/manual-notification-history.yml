@@ -1,44 +1,13 @@
-name: Own-authored manual notification history
+name: 旧方式・参考 — manual-notification-history
 on:
-  push:
-    branches: [feat/manual-notification-history]
-  pull_request:
-    branches: [feat/manual-history-ui]
-    paths:
-      - src/**
-      - tests/**
-      - .github/workflows/manual-notification-history.yml
   workflow_dispatch:
 permissions:
   contents: read
-concurrency:
-  group: manual-history-${{ github.ref }}
-  cancel-in-progress: true
 jobs:
-  backend-checks:
+  retired:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '10.0.x'
-      - name: Release and all .NET regressions
+      - name: 旧実装用の検査は再開しない
         run: |
-          set -euo pipefail
-          mkdir -p verification
-          dotnet build src/Sem.Web -c Release -warnaserror 2>&1 | tee verification/status-build.log
-          suites=0
-          for project in tests/*/*.csproj; do
-            name=$(basename "$(dirname "$project")")
-            dotnet run --project "$project" -c Release 2>&1 | tee "verification/${name}.log"
-            suites=$((suites+1))
-          done
-          echo "::notice title=.NET regressions::All $suites suites passed."
-          echo '::notice title=Verification boundary::Read-only own-author Core history; no HTTP/UI integration, real external Push or deployment acceptance.'
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: manual-history-backend-verification
-          path: verification/*.log
-          retention-days: 7
+          echo '::error::旧実装用workflowです。mock起点の検証はMain integration verificationを参照してください。'
+          exit 1

@@ -1,38 +1,13 @@
-name: DXP delivery availability
+name: 旧方式・参考 — dxp-delivery-check
 on:
-  push:
-    branches: [test/dxp-external]
-    paths: [.github/workflows/dxp-delivery-check.yml]
   workflow_dispatch:
 permissions:
-  contents: write
-  actions: read
+  contents: read
 jobs:
-  delivery:
+  retired:
     runs-on: ubuntu-latest
-    timeout-minutes: 6
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: test/dxp-external
-      - name: Verify packaged artifact and record URL
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: 旧実装用の検査は再開しない
         run: |
-          set -euo pipefail
-          for n in $(seq 1 30); do
-            gh api repos/jp-raub/sem/actions/runs/38169700995 > /tmp/run.json
-            if [ "$(jq -r .status /tmp/run.json)" = completed ]; then break; fi
-            sleep 5
-          done
-          test "$(jq -r .conclusion /tmp/run.json)" = success
-          gh api repos/jp-raub/sem/actions/runs/38169700995/artifacts > /tmp/artifacts.json
-          ID=$(jq -r '.artifacts[] | select(.name == "sem-dxp-delivery" and .expired == false) | .id' /tmp/artifacts.json)
-          test -n "$ID"
-          mkdir -p verification
-          jq -n --arg url "https://github.com/jp-raub/sem/actions/runs/38169700995/artifacts/$ID" --arg id "$ID" '{status:"available", run:"https://github.com/jp-raub/sem/actions/runs/38169700995", sourceCommit:"78b9a6cb6d25911b5c9c7a030efb71ab785d962d",artifactId:$id,artifactUrl:$url,contents:["sem-dxp-source.zip","sem-dxp-image.tar.gz","README.ja.md","VERSION.txt","SHA256SUMS"]}' > verification/delivery.json
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add verification/delivery.json
-          git commit -m 'ci: record available DXP delivery artifact'
-          git push origin HEAD:test/dxp-external
+          echo '::error::旧実装用workflowです。mock起点の検証はMain integration verificationを参照してください。'
+          exit 1

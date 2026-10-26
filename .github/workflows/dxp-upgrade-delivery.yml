@@ -1,122 +1,13 @@
-name: DXP verified upgrade delivery
+name: 旧方式・参考 — dxp-upgrade-delivery
 on:
-  push:
-    branches: [feat/dxp-upgrade-delivery]
-  pull_request:
-    branches: [feat/passkey-addition-proof]
-    paths:
-      - src/**
-      - tests/**
-      - scripts/**
-      - deploy/**
-      - .github/workflows/dxp-upgrade-delivery.yml
   workflow_dispatch:
 permissions:
   contents: read
-concurrency:
-  group: dxp-upgrade-delivery-${{ github.ref }}
-  cancel-in-progress: true
 jobs:
-  verify:
+  retired:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '10.0.x'
-      - name: Validate update override preserves deployed settings
-        run: python3 scripts/check-upgrade-compose.py
-      - name: Release build and storage safety checks
+      - name: 旧実装用の検査は再開しない
         run: |
-          set -euo pipefail
-          mkdir -p verification
-          dotnet build src/Sem.Web -c Release 2>&1 | tee verification/migration-build.log
-          dotnet run --project tests/Sem.StorageChecks -c Release 2>&1 | tee verification/storage-checks.log
-          dotnet run --project tests/Sem.PasskeyProofChecks -c Release 2>&1 | tee verification/passkey-proof-checks.log
-      - name: Build current and fixed legacy Docker images
-        run: |
-          set -euo pipefail
-          docker build --platform linux/amd64 --label org.opencontainers.image.revision="$GITHUB_SHA" --label org.opencontainers.image.source="https://github.com/$GITHUB_REPOSITORY" -t sem-dxp:migration-ci -f deploy/Dockerfile .
-          git worktree add --detach /tmp/sem-legacy 78b9a6cb6d25911b5c9c7a030efb71ab785d962d
-          docker build --platform linux/amd64 -t sem-dxp:legacy-ci -f /tmp/sem-legacy/deploy/Dockerfile /tmp/sem-legacy
-      - name: Empty database and restart smoke
-        run: |
-          set -euo pipefail
-          docker volume create sem-migration-smoke
-          docker run -d --name sem-migration-smoke \
-            -p 127.0.0.1:18080:8080 -v sem-migration-smoke:/data \
-            --cap-drop ALL --security-opt no-new-privileges:true \
-            sem-dxp:migration-ci
-          trap 'docker logs sem-migration-smoke > verification/migration-smoke.log 2>&1 || true; docker rm -f sem-migration-smoke || true; docker volume rm sem-migration-smoke || true' EXIT
-          ready() {
-            for n in $(seq 1 60); do
-              if curl -fsS http://127.0.0.1:18080/health/ready; then return 0; fi
-              sleep 1
-            done
-            return 1
-          }
-          ready
-          docker restart sem-migration-smoke
-          sleep 2
-          ready
-      - name: Existing passkeys, protection keys, SMTP and scheduled worker across upgrade
-        run: |
-          set -euo pipefail
-          npm install --prefix scripts --no-save playwright@1.56.0
-          scripts/node_modules/.bin/playwright install --with-deps chromium
-          openssl req -x509 -newkey rsa:2048 -nodes -keyout /tmp/sem-key.pem -out /tmp/sem-cert.pem -days 1 -subj '/CN=localhost' >/dev/null 2>&1
-          python3 scripts/smtp-fixture.py > /tmp/sem-smtp.log 2>&1 &
-          SMTP_PID=$!
-          for n in $(seq 1 30); do
-            if curl -fsS http://127.0.0.1:18025/ >/dev/null; then break; fi
-            sleep 1
-          done
-          curl -fsS http://127.0.0.1:18025/ >/dev/null
-          export SEM_E2E_GATEWAY=$(docker network inspect bridge --format '{{(index .IPAM.Config 0).Gateway}}')
-          docker volume create sem-migration-e2e
-          cat > /tmp/sem-test-start.sh <<'SCRIPT'
-          #!/usr/bin/env bash
-          set -euo pipefail
-          image=$1
-          docker run -d --name sem-e2e \
-            --cap-drop ALL --security-opt no-new-privileges:true \
-            --add-host host.docker.internal:host-gateway \
-            -p 127.0.0.1:18080:8080 -v sem-migration-e2e:/data \
-            -e Sem__PublicUrl=https://localhost:18443/ \
-            -e Sem__TrustedProxies__0="$SEM_E2E_GATEWAY" \
-            -e Sem__BootstrapSecret=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA \
-            -e Smtp__Host=host.docker.internal -e Smtp__Port=2525 \
-            -e Smtp__Tls=None -e Smtp__AllowInsecureLocalTest=true "$image"
-          SCRIPT
-          bash /tmp/sem-test-start.sh sem-dxp:legacy-ci
-          trap 'docker logs sem-e2e > verification/migration-integration.log 2>&1 || true; docker rm -f sem-e2e || true; docker volume rm sem-migration-e2e || true; kill "$SMTP_PID" || true' EXIT
-          for n in $(seq 1 60); do
-            if curl -fsS http://127.0.0.1:18080/health/ready; then break; fi
-            sleep 1
-          done
-          curl -fsS http://127.0.0.1:18080/health/ready
-          export SEM_STORAGE_UPGRADE_COMMAND='docker stop sem-e2e && docker rm sem-e2e && bash /tmp/sem-test-start.sh sem-dxp:migration-ci'
-          SEM_PASSKEY_ADDITION_CHECKS=1 node scripts/e2e.cjs
-      - name: Package exact tested source and image; verify export reload
-        run: python3 scripts/package-upgrade.py
-      - uses: actions/upload-artifact@v4
-        with:
-          name: sem-dxp-proof-delivery-${{ github.sha }}
-          path: delivery/
-          if-no-files-found: error
-          compression-level: 0
-          retention-days: 14
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: dxp-upgrade-verification
-          path: |
-            verification/migration-*.log
-            verification/storage-checks.log
-            verification/passkey-proof-checks.log
-            verification/e2e-result.json
-            verification/e2e-error.txt
-          retention-days: 7
+          echo '::error::旧実装用workflowです。mock起点の検証はMain integration verificationを参照してください。'
+          exit 1

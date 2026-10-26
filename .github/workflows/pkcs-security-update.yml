@@ -1,60 +1,13 @@
-name: PKCS security dependency regression
+name: 旧方式・参考 — pkcs-security-update
 on:
-  push:
-    branches: [fix/pkcs-security-update]
-  pull_request:
-    branches: [feat/manual-notification-push-activation]
-    paths:
-      - src/**
-      - tests/**
-      - .github/workflows/pkcs-security-update.yml
   workflow_dispatch:
 permissions:
   contents: read
-concurrency:
-  group: pkcs-security-update-${{ github.ref }}
-  cancel-in-progress: true
 jobs:
-  backend-checks:
+  retired:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '10.0.x'
-      - name: Dependency vulnerability snapshot
-        run: dotnet list src/Sem.Web package --vulnerable --include-transitive
-      - name: Release with warnings as errors
+      - name: 旧実装用の検査は再開しない
         run: |
-          set -euo pipefail
-          mkdir -p verification
-          if dotnet build src/Sem.Web -c Release -warnaserror 2>&1 | tee verification/device-preflight-build.log; then
-            echo "Release build passed with warnings as errors."
-          else
-            python3 - <<'PYERROR'
-          import pathlib
-          lines = pathlib.Path("verification/device-preflight-build.log").read_text(errors="replace").splitlines()
-          errors = [line for line in lines if "error" in line.lower()][-20:]
-          for line in errors:
-              safe = line.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
-              print("::error title=Release build diagnostic::" + safe)
-          PYERROR
-            exit 1
-          fi
-      - name: Patched PKCS and all existing .NET regressions
-        run: |
-          set -euo pipefail
-          suites=0
-          for project in tests/*/*.csproj; do
-            name=$(basename "$(dirname "$project")")
-            dotnet run --project "$project" -c Release 2>&1 | tee "verification/${name}.log"
-            suites=$((suites+1))
-          done
-          echo "::notice title=.NET regressions::All $suites suites completed. No transport, native UI, Docker or DXP claim."
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: pkcs-security-update-backend
-          path: verification/*.log
-          retention-days: 7
+          echo '::error::旧実装用workflowです。mock起点の検証はMain integration verificationを参照してください。'
+          exit 1
