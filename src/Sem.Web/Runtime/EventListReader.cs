@@ -16,7 +16,7 @@ public sealed record EventListItem(string Id, string Title, string Location, str
 public sealed record EventListView(string SiteName, EventListItem[] Events);
 public static class EventListReader
 {
-    static DateTimeOffset? Instant(string? value) => value is not null && Regex.IsMatch(value, @"\A[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(:[0-9]{2}(\.[0-9]{1,7})?)?(Z|[+-][0-9]{2}:[0-9]{2})\z", RegexOptions.CultureInvariant) &&
+    internal static DateTimeOffset? Instant(string? value) => value is not null && Regex.IsMatch(value, @"\A[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(:[0-9]{2}(\.[0-9]{1,7})?)?(Z|[+-][0-9]{2}:[0-9]{2})\z", RegexOptions.CultureInvariant) &&
         DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.None, out var time) ? time : null;
     // cacheのPhaseKindを信頼しない。worker未接続でも読取り時点の有効期間で判定し、DBは変更しない。
     public static EventPhase? Effective(SessionEvent e, DateTimeOffset now)
