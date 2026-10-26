@@ -18,19 +18,27 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+          fetch-depth: 2
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
+      - name: 変更範囲を判定（判定不能は全検査）
+        id: scope
+        run: |
+          python3 scripts/test-scope-checks.py
+          python3 scripts/test-scope.py
       - name: 固定モック・版・保護契約の集中検証
         run: |
           set -euo pipefail
           python3 scripts/mock-checks.py
           python3 scripts/ui-inventory-checks.py
-          python3 scripts/storage-source-checks.py
-          dotnet run --project tests/Sem.Storage.Checks -c Release
+          if [[ "${{ steps.scope.outputs.storage }}" == "true" ]]; then
+            python3 scripts/storage-source-checks.py
+            dotnet run --project tests/Sem.Storage.Checks -c Release
+          fi
           python3 scripts/cd/release_gate_checks.py
           python3 scripts/cd/updater_checks.py
           python3 scripts/cd/observe_checks.py
