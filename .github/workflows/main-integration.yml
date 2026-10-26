@@ -28,6 +28,7 @@ jobs:
       - name: 変更範囲を判定（判定不能は全検査）
         id: scope
         run: |
+          python3 scripts/browser-ci-checks.py
           python3 scripts/test-scope-checks.py
           python3 scripts/test-scope.py
       - name: 固定モック・版・保護契約の集中検証
@@ -47,8 +48,19 @@ jobs:
           for n in $(seq 1 40); do curl -fsS http://127.0.0.1:8765/health/live && break; sleep 1; done
           python3 scripts/runtime-checks.py http://127.0.0.1:8765 "$GITHUB_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"
   acceptance-browser:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 8
+    # ブラウザーとOS依存を事前同梱。実行ごとのapt更新・ミラー待ちをなくす。
+    container:
+      image: mcr.microsoft.com/playwright:v1.56.1-noble@sha256:f1e7e01021efd65dd1a2c56064be399f3e4de00fd021ac561325f2bfbb2b837a
+      options: --ipc=host
+    defaults:
+      run:
+        shell: bash
+    env:
+      NODE_PATH: /tmp/sem-browser/node_modules
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+      PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
     steps:
       - uses: actions/checkout@v4
         with:
@@ -59,14 +71,47 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - name: モックと版表示の実ブラウザー検証
+      - name: Playwrightパッケージを準備（ブラウザー・OS依存はイメージ同梱）
+        timeout-minutes: 2
         run: |
           set -euo pipefail
-          npm install --prefix /tmp/sem-browser playwright@1.56.1
-          export NODE_PATH=/tmp/sem-browser/node_modules
-          /tmp/sem-browser/node_modules/.bin/playwright install --with-deps chromium
-          dotnet publish src/Sem.Web -c Release -o /tmp/sem
-          (cd /tmp/sem; dotnet Sem.Web.dll --urls http://127.0.0.1:8765 > /tmp/sem.log 2>&1) &
-          for n in $(seq 1 40); do curl -fsS http://127.0.0.1:8765/health/live && break; sleep 1; done
-          node scripts/runtime-browser.cjs
-          node scripts/ui-inventory-browser.cjs
+          npm install --prefix /tmp/sem-browser --no-audit --no-fund --fetch-retries=1 --fetch-timeout=30000 playwright@1.56.1
+          node -e 'const fs=require("node:fs"); const {chromium}=require("playwright"); if(!fs.existsSync(chromium.executablePath())) throw Error("同梱Chromiumが見つかりません"); console.log("同梱Chromiumを確認しました");'
+      - name: 検証用アプリをビルド
+        timeout-minutes: 2
+        run: dotnet publish src/Sem.Web -c Release -o /tmp/sem
+      - name: ローカル検証ホストを起動・到達確認
+        timeout-minutes: 1
+        run: |
+          set -euo pipefail
+          cd /tmp/sem
+          nohup dotnet Sem.Web.dll --urls http://127.0.0.1:8765 > /tmp/sem-browser-host.log 2>&1 &
+          echo "$!" > /tmp/sem-browser-host.pid
+          for n in $(seq 1 40); do
+            if curl --connect-timeout 1 --max-time 2 -fsS http://127.0.0.1:8765/health/live; then exit 0; fi
+            kill -0 "$(cat /tmp/sem-browser-host.pid)" || break
+            sleep 1
+          done
+          echo 'ローカル検証ホストの起動に失敗しました' >&2
+          cat /tmp/sem-browser-host.log
+          exit 1
+      - name: 稼働版表示の実ブラウザー検証
+        timeout-minutes: 1
+        run: node scripts/runtime-browser.cjs
+      - name: 固定モックの画面基準を実ブラウザー検証
+        timeout-minutes: 2
+        run: node scripts/ui-inventory-browser.cjs
+      - name: ローカル検証ホストを終了
+        if: always()
+        run: |
+          if [[ -f /tmp/sem-browser-host.pid ]]; then
+            kill "$(cat /tmp/sem-browser-host.pid)" 2>/dev/null || true
+          fi
+      - name: 失敗時の合成ホスト診断を保存
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: acceptance-browser-host-log
+          path: /tmp/sem-browser-host.log
+          if-no-files-found: ignore
+          retention-days: 3
