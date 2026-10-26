@@ -43,7 +43,7 @@
 |---|---|---|
 |共通|メニュー開閉、役割別項目、ヘルプ、必須／任意、狭幅、ライト／ダーク、サイト→イベント→個人テーマ|`site-ui.js`, `management-navigation.js`, `settings-refinement.js`|
 |認証|利用可能／非対応／中断／失敗、招待不正・期限・人数・失効、メール確認待ち・再送・期限切れ、初回登録、復旧限定状態|`account-notifications.js`, `account-management.js`|
-|一覧|募集中／閲覧／非公開、空一覧、検索・ソート、新規作成、プリセット選択|`app.js`, `definitions.js`, `event-opening.js`|
+|一覧|募集中／閲覧／非公開、空一覧、題名／開催日時ソート、新規作成、プリセット選択|`app.js`, `definitions.js`, `event-opening.js`|
 |イベント|タイムテーブル、占有枠の本人表示、空枠選択、兼務、上限、統合申込み、観覧、取消、部分成功・競合|`entry-refinement.js`, `attendance.js`, `event-rules.js`, `event-features.js`|
 |編集|概要、曲／進行、秒単位、準備継承、並べ替え、フェーズ、パート、設問、管理者、下書き反映、欄だけ取消、全体保存／取消、理由必須削除|`event-refinement.js`, `settings-refinement.js`, `phase-refinement.js`, `preset-refinement.js`, `modal-overview.js`|
 |進行|現在・次曲、開始／停止・補正、予実時刻、余裕時間、遅れ、操作取消、一般／管理者の表示差|`progress-refinement.js`, `progress-audience.js`, `time-comparison.js`, `live-buffer-proposal.js`|
@@ -87,3 +87,7 @@ node scripts/ui-inventory-browser.cjs
 ## 認証の製品接続段階
 
 [実認証モードと配置・保全・固定ログインDOM](../auth/PRODUCT-CONNECTION.ja.md)を追加した。既定は引き続きdemoで、明示配置時だけ既存アカウントの標準パスキー認証・最小本人セッション・ログアウトを接続する。最終mockと4幅×明暗の寸法・字体・配色を比較する。新規登録／復旧、保存済みテーマ、イベント以降のDTO・保存はまだ後続であり、デモの模擬成功は混ぜない。実volumeの接続・公開実認証の有効化は別の配置工程である。
+
+## イベント一覧の接続段階
+
+[一覧接続の契約と境界](EVENT-LIST-CONNECTION.ja.md)を追加した。明示実認証モードの一覧だけを保存データへ接続し、公開・担当非公開・現ロール・有効期間を読取り時に再判定する。参照はDBを変更せず、本文や他人の割当等を返さない。採用mockの一覧・3指標・列ソートを実装し、未接続の詳細・作成・保存を成功表示しない。招待／メール／限定権限を安易に単独移植せず、既存認証で安全に参照できるこの範囲を先に接続した。既定公開配置はdemoのままで、全UI完成や実volume有効化ではない。

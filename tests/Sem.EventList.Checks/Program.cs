@@ -1,0 +1,40 @@
+using System.Security.Claims;
+using System.Text.Json;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Sem.Authentication;
+using Sem.Web.Core;
+using Sem.Web.Data;
+using Sem.Web.Runtime;
+int checks=0;void Check(bool value,string label){if(!value)throw new Exception(label);checks++;}
+var now=DateTimeOffset.Parse("2026-10-26T00:00:00Z");
+var e=EventListFixture.Event("phase","2026-10-26T00:00:00Z","Hidden",false);
+var custom=e.Phases.Single(p=>p.Kind=="Custom");custom.ActivateAt=null;
+Check(EventListReader.Effective(e,now)!.Kind=="View","開催時刻ちょうどから閲覧");Check(EventListReader.Effective(e,now.AddTicks(-1))!.Kind=="Hidden","開催直前は非公開");
+custom.ActivateAt=now.ToString("O");custom.DeactivateAt=now.AddHours(1).ToString("O");
+Check(EventListReader.Effective(e,now)==custom,"開始境界を含む");Check(EventListReader.Effective(e,now.AddHours(1))!.Kind=="View","終了境界を含まない");
+var newest=new EventPhase{Id="latest",EventId=e.Id,Kind="Custom",Name="最新",MaxPicks=-1,ActivateAt="2026-10-26T08:30:00+09:00",SortOrder=0};e.Phases.Add(newest);
+Check(EventListReader.Effective(e,now)==custom,"ISO文字列順でなく絶対時刻順");custom.ActivateAt="2026-10-25T22:00:00Z";Check(EventListReader.Effective(e,now)==newest,"重複は最も新しい開始優先");
+var tie=new EventPhase{Id="a",EventId=e.Id,Kind="Custom",MaxPicks=0,ActivateAt=newest.ActivateAt,SortOrder=-1};e.Phases.Add(tie);Check(EventListReader.Effective(e,now)==tie,"同時刻は表示順");tie.SortOrder=0;Check(EventListReader.Effective(e,now)==tie,"同時刻・順序はID安定順");
+e.ManualPhaseOverride=true;Check(EventListReader.Effective(e,now)!.Kind=="Hidden","手動指定を維持し自動切替しない");custom.IsActive=true;Check(EventListReader.Effective(e,now)==null,"多重手動指定は閉じる");custom.IsActive=false;tie.DeletedAt="deleted";tie.IsActive=true;Check(EventListReader.Effective(e,now)==null,"削除フェーズの手動指定を拒否");tie.IsActive=false;
+custom.ActivateAt="invalid";Check(EventListReader.Effective(e,now)==null,"不正時刻を推測しない");custom.ActivateAt=now.ToString("O");custom.DeactivateAt=custom.ActivateAt;Check(EventListReader.Effective(e,now)==null,"無効期間を拒否");custom.DeactivateAt=null;custom.MaxPicks=-2;Check(EventListReader.Effective(e,now)==null,"不正上限拒否");custom.MaxPicks=-1;custom.EventId="other";Check(EventListReader.Effective(e,now)==null,"別イベントのフェーズ拒否");
+custom.EventId=e.Id;custom.ActivateAt=null;e.ManualPhaseOverride=false;e.ScheduledDate="2026-10-26T00:00:00";Check(EventListReader.Effective(e,now)==null,"timezone未指定の開催日時を推測しない");e.ScheduledDate="10/26/2026";Check(EventListReader.Effective(e,now)==null,"文化依存の開催日時を拒否");
+var file=Path.Combine(Path.GetTempPath(),"sem-events-"+Guid.NewGuid().ToString("N")+".db");
+try {
+ var services=new ServiceCollection();services.AddLogging();services.AddDbContext<ApplicationDbContext>(o=>o.UseSqlite("Data Source="+file));services.AddIdentityCore<ApplicationUser>(o=>o.Stores.SchemaVersion=IdentitySchemaVersions.Version3).AddEntityFrameworkStores<ApplicationDbContext>();
+ await using var provider=services.BuildServiceProvider();await using var scope=provider.CreateAsyncScope();var db=scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();await SqliteStorageInitializer.InitializeAsync(db);
+ db.Users.Add(new(){Id="synthetic-user",UserName="synthetic@example.invalid",Email="synthetic@example.invalid",DisplayName="合成管理者",EmailConfirmed=true,Enabled=true,SecurityStamp="stamp"});await db.SaveChangesAsync();await EventListFixture.Seed(db);
+ var options=new IdentityOptions();ClaimsPrincipal Person(string stamp="stamp",bool duplicate=false)=>new(new ClaimsIdentity(new[]{new Claim(options.ClaimsIdentity.UserIdClaimType,"synthetic-user"),new Claim(options.ClaimsIdentity.SecurityStampClaimType,stamp),new Claim(AuthenticationSession.SessionClaim,"session"),new Claim(ClaimTypes.Role,"ServiceAdmin")}.Concat(duplicate?[new Claim(options.ClaimsIdentity.UserIdClaimType,"synthetic-user")]:[]),"synthetic"));
+ async Task<EventListView?> Read(ClaimsPrincipal? p=null)=>await EventListReader.ReadAsync(db,p??Person(),options,now);
+ var before=File.ReadAllBytes(file);var walBefore=File.Exists(file+"-wal")?File.ReadAllBytes(file+"-wal"):[];var value=(await Read())!;
+ Check(value.Events.Length==4,"公開＋本人管理の非公開だけ");Check(!value.Events.Any(x=>x.Id=="hidden"),"偽の管理者claimは非公開を開示しない");Check(value.Events.First().Id=="managed","既定は開催絶対時刻の降順");Check(value.Events.Single(x=>x.Id=="automatic").PhaseKind=="View","古い非公開cacheで公開を隠さない");
+ var item=value.Events.Single(x=>x.Id=="public");Check(item.TotalSlots==2&&item.FreeSlots==1&&item.OwnSlots==1,"有効枠・本人枠・削除定義除外");Check(item.MaxPicks==-1,"無制限の受付状態を維持");Check(item.ScheduledDate=="2030-11-14T04:00:00.0000000+00:00","UTC正規化");Check(value.SiteName=="合成セッション","保存済サービス名");
+ var json=JsonSerializer.Serialize(value);Check(!json.Contains("PRIVATE_DESCRIPTION_SENTINEL")&&!json.Contains("synthetic@example.invalid")&&!json.Contains("synthetic-user")&&!json.Contains("SecurityStamp"),"本文・メール・人物ID・stamp非公開");
+ Check(before.SequenceEqual(File.ReadAllBytes(file)),"一覧参照で原DBバイトを変更しない");Check(walBefore.SequenceEqual(File.Exists(file+"-wal")?File.ReadAllBytes(file+"-wal"):[]),"一覧参照でWALも変更しない");Check(!value.Events.Any(x=>x.Id=="invalid"),"不正日時は推測せず除外");Check(!db.ChangeTracker.HasChanges(),"一覧参照でcache・履歴・監査を変更しない");
+ Check(await Read(new ClaimsPrincipal(new ClaimsIdentity()))==null,"匿名拒否");Check(await Read(Person("wrong"))==null,"stamp不一致拒否");Check(await Read(Person(duplicate:true))==null,"重複IDclaim拒否");
+ var user=await db.Users.SingleAsync();user.IsAdmin=true;await db.SaveChangesAsync();Check((await Read())!.Events.Length==5,"現DBの全体管理者は非公開を参照");user.IsAdmin=false;await db.SaveChangesAsync();Check((await Read())!.Events.Length==4,"権限剥奪を次の参照で反映");
+ db.EventAdmins.Remove(await db.EventAdmins.SingleAsync());await db.SaveChangesAsync();Check(!(await Read())!.Events.Any(x=>x.Id=="managed"),"担当解除で非公開を消去");
+ user.Enabled=false;await db.SaveChangesAsync();Check(await Read()==null,"無効化直後拒否");user.Enabled=true;user.EmailConfirmed=false;await db.SaveChangesAsync();Check(await Read()==null,"メール未確認拒否");user.EmailConfirmed=true;await db.SaveChangesAsync();db.RevokedAuthSessions.Add(new(){TokenHash=AuthenticationSession.Hash("session"),UserId=user.Id,RevokedAt=now.ToString("O")});await db.SaveChangesAsync();Check(await Read()==null,"失効session拒否");
+ Console.WriteLine($"イベント一覧の読取・権限・フェーズ {checks}検査: 成功（合成データのみ）");
+} finally {Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();foreach(var p in new[]{file,file+"-wal",file+"-shm"})File.Delete(p);}
