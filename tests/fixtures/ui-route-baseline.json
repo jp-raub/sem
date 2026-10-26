@@ -1,0 +1,730 @@
+{
+  "schemaVersion": 1,
+  "mockCommit": "9cf8b031258fa1c9afe9668f54e61f002c4bce17",
+  "legacyCommit": "812b2784212e9015ecbbce31280e48cb0bc65e84",
+  "meaning": "採用モックの最終スクリプト適用後の表示基準。製品の権限保証・機能完成・受入済みの証拠ではない。",
+  "cases": [
+    {
+      "actor": "guest",
+      "route": "#/",
+      "tabs": [],
+      "headings": [
+        "また、一緒に音楽を。"
+      ]
+    },
+    {
+      "actor": "guest",
+      "route": "#/login",
+      "tabs": [],
+      "headings": [
+        "また、一緒に音楽を。"
+      ]
+    },
+    {
+      "actor": "guest",
+      "route": "#/register?invite=SESSION-DEMO",
+      "tabs": [],
+      "headings": [
+        "招待からアカウント登録"
+      ]
+    },
+    {
+      "actor": "guest",
+      "route": "#/profile",
+      "tabs": [],
+      "headings": [
+        "また、一緒に音楽を。"
+      ]
+    },
+    {
+      "actor": "guest",
+      "route": "#/profiles/u1",
+      "tabs": [],
+      "headings": [
+        "また、一緒に音楽を。"
+      ]
+    },
+    {
+      "actor": "guest",
+      "route": "#/account/manage",
+      "tabs": [],
+      "headings": [
+        "また、一緒に音楽を。"
+      ]
+    },
+    {
+      "actor": "guest",
+      "route": "#/account/passkeys",
+      "tabs": [],
+      "headings": [
+        "また、一緒に音楽を。"
+      ]
+    },
+    {
+      "actor": "guest",
+      "route": "#/account/email",
+      "tabs": [],
+      "headings": [
+        "また、一緒に音楽を。"
+      ]
+    },
+    {
+      "actor": "guest",
+      "route": "#/account/enrollment",
+      "tabs": [],
+      "headings": [
+        "メール確認・初回パスキー登録"
+      ]
+    },
+    {
+      "actor": "guest",
+      "route": "#/account/recovery",
+      "tabs": [],
+      "headings": [
+        "認証復旧の画面デモ"
+      ]
+    },
+    {
+      "actor": "guest",
+      "route": "#/account/notifications",
+      "tabs": [],
+      "headings": [
+        "また、一緒に音楽を。"
+      ]
+    },
+    {
+      "actor": "guest",
+      "route": "#/notifications/manage",
+      "tabs": [],
+      "headings": [
+        "また、一緒に音楽を。"
+      ]
+    },
+    {
+      "actor": "guest",
+      "route": "#/invitations/manage",
+      "tabs": [],
+      "headings": [
+        "また、一緒に音楽を。"
+      ]
+    },
+    {
+      "actor": "guest",
+      "route": "#/messages",
+      "tabs": [],
+      "headings": [
+        "また、一緒に音楽を。"
+      ]
+    },
+    {
+      "actor": "guest",
+      "route": "#/admin/users",
+      "tabs": [],
+      "headings": [
+        "また、一緒に音楽を。"
+      ]
+    },
+    {
+      "actor": "guest",
+      "route": "#/events/e1",
+      "tabs": [],
+      "headings": [
+        "また、一緒に音楽を。"
+      ]
+    },
+    {
+      "actor": "guest",
+      "route": "#/events/e2",
+      "tabs": [],
+      "headings": [
+        "また、一緒に音楽を。"
+      ]
+    },
+    {
+      "actor": "guest",
+      "route": "#/events/e3",
+      "tabs": [],
+      "headings": [
+        "また、一緒に音楽を。"
+      ]
+    },
+    {
+      "actor": "u1",
+      "route": "#/",
+      "tabs": [],
+      "headings": [
+        "セッションイベント",
+        "イベント一覧"
+      ]
+    },
+    {
+      "actor": "u1",
+      "route": "#/login",
+      "tabs": [],
+      "headings": [
+        "また、一緒に音楽を。"
+      ]
+    },
+    {
+      "actor": "u1",
+      "route": "#/register?invite=SESSION-DEMO",
+      "tabs": [],
+      "headings": [
+        "招待からアカウント登録"
+      ]
+    },
+    {
+      "actor": "u1",
+      "route": "#/profile",
+      "tabs": [],
+      "headings": [
+        "プロフィール管理",
+        "デモ参加者",
+        "SNSアカウント",
+        "自己紹介",
+        "参加登録したイベント・曲・パート",
+        "プロフィールQR"
+      ]
+    },
+    {
+      "actor": "u1",
+      "route": "#/profiles/u1",
+      "tabs": [],
+      "headings": [
+        "デモ参加者",
+        "SNSアカウント",
+        "自己紹介",
+        "参加登録したイベント・曲・パート"
+      ]
+    },
+    {
+      "actor": "u1",
+      "route": "#/account/manage",
+      "tabs": [],
+      "headings": [
+        "アカウント管理",
+        "メールアドレス",
+        "パスキー"
+      ]
+    },
+    {
+      "actor": "u1",
+      "route": "#/account/passkeys",
+      "tabs": [],
+      "headings": [
+        "パスキー管理"
+      ]
+    },
+    {
+      "actor": "u1",
+      "route": "#/account/email",
+      "tabs": [],
+      "headings": [
+        "メールアドレス変更"
+      ]
+    },
+    {
+      "actor": "u1",
+      "route": "#/account/enrollment",
+      "tabs": [],
+      "headings": [
+        "メール確認・初回パスキー登録"
+      ]
+    },
+    {
+      "actor": "u1",
+      "route": "#/account/recovery",
+      "tabs": [],
+      "headings": [
+        "認証復旧の画面デモ"
+      ]
+    },
+    {
+      "actor": "u1",
+      "route": "#/account/notifications",
+      "tabs": [],
+      "headings": [
+        "この端末の通知設定"
+      ]
+    },
+    {
+      "actor": "u1",
+      "route": "#/notifications/manage",
+      "tabs": [],
+      "headings": [
+        "通知管理",
+        "通知許可設定",
+        "通知事項の定義"
+      ]
+    },
+    {
+      "actor": "u1",
+      "route": "#/invitations/manage",
+      "tabs": [],
+      "headings": [
+        "招待管理",
+        "管理者への招待リンク発行リクエスト",
+        "発行された招待リンク"
+      ]
+    },
+    {
+      "actor": "u1",
+      "route": "#/messages",
+      "tabs": [],
+      "headings": [
+        "メッセージボックス"
+      ]
+    },
+    {
+      "actor": "u1",
+      "route": "#/admin/users",
+      "tabs": [],
+      "deniedText": "サービス管理は全体管理者のみアクセス可能です。",
+      "headings": []
+    },
+    {
+      "actor": "u1",
+      "route": "#/events/e1",
+      "tabs": [
+        "イベント",
+        "参加者名簿"
+      ],
+      "headings": [
+        "Autumn Session 2026",
+        "タイムテーブル",
+        "コメント",
+        "参加パートを登録",
+        "参加者名簿"
+      ]
+    },
+    {
+      "actor": "u1",
+      "route": "#/events/e2",
+      "tabs": [],
+      "deniedText": "このイベントにはアクセスできません。",
+      "headings": []
+    },
+    {
+      "actor": "u1",
+      "route": "#/events/e3",
+      "tabs": [
+        "イベント",
+        "参加者名簿"
+      ],
+      "headings": [
+        "Summer Session 2026",
+        "タイムテーブル",
+        "コメント",
+        "参加パートを登録",
+        "参加者名簿"
+      ]
+    },
+    {
+      "actor": "u2",
+      "route": "#/",
+      "tabs": [],
+      "headings": [
+        "セッションイベント",
+        "イベント一覧"
+      ]
+    },
+    {
+      "actor": "u2",
+      "route": "#/login",
+      "tabs": [],
+      "headings": [
+        "また、一緒に音楽を。"
+      ]
+    },
+    {
+      "actor": "u2",
+      "route": "#/register?invite=SESSION-DEMO",
+      "tabs": [],
+      "headings": [
+        "招待からアカウント登録"
+      ]
+    },
+    {
+      "actor": "u2",
+      "route": "#/profile",
+      "tabs": [],
+      "headings": [
+        "プロフィール管理",
+        "デモ運営",
+        "SNSアカウント",
+        "自己紹介",
+        "参加登録したイベント・曲・パート",
+        "プロフィールQR"
+      ]
+    },
+    {
+      "actor": "u2",
+      "route": "#/profiles/u1",
+      "tabs": [],
+      "headings": [
+        "デモ参加者",
+        "SNSアカウント",
+        "自己紹介",
+        "参加登録したイベント・曲・パート"
+      ]
+    },
+    {
+      "actor": "u2",
+      "route": "#/account/manage",
+      "tabs": [],
+      "headings": [
+        "アカウント管理",
+        "メールアドレス",
+        "パスキー"
+      ]
+    },
+    {
+      "actor": "u2",
+      "route": "#/account/passkeys",
+      "tabs": [],
+      "headings": [
+        "パスキー管理"
+      ]
+    },
+    {
+      "actor": "u2",
+      "route": "#/account/email",
+      "tabs": [],
+      "headings": [
+        "メールアドレス変更"
+      ]
+    },
+    {
+      "actor": "u2",
+      "route": "#/account/enrollment",
+      "tabs": [],
+      "headings": [
+        "メール確認・初回パスキー登録"
+      ]
+    },
+    {
+      "actor": "u2",
+      "route": "#/account/recovery",
+      "tabs": [],
+      "headings": [
+        "認証復旧の画面デモ"
+      ]
+    },
+    {
+      "actor": "u2",
+      "route": "#/account/notifications",
+      "tabs": [],
+      "headings": [
+        "この端末の通知設定"
+      ]
+    },
+    {
+      "actor": "u2",
+      "route": "#/notifications/manage",
+      "tabs": [],
+      "headings": [
+        "通知管理",
+        "通知許可設定",
+        "通知事項の定義"
+      ]
+    },
+    {
+      "actor": "u2",
+      "route": "#/invitations/manage",
+      "tabs": [],
+      "headings": [
+        "招待管理",
+        "管理者への招待リンク発行リクエスト",
+        "発行された招待リンク"
+      ]
+    },
+    {
+      "actor": "u2",
+      "route": "#/messages",
+      "tabs": [],
+      "headings": [
+        "メッセージボックス"
+      ]
+    },
+    {
+      "actor": "u2",
+      "route": "#/admin/users",
+      "tabs": [],
+      "deniedText": "サービス管理は全体管理者のみアクセス可能です。",
+      "headings": []
+    },
+    {
+      "actor": "u2",
+      "route": "#/events/e1",
+      "tabs": [
+        "イベント",
+        "参加者名簿",
+        "チェックイン",
+        "参加者への通知"
+      ],
+      "headings": [
+        "Autumn Session 2026",
+        "タイムテーブル",
+        "コメント",
+        "タイムスケジュール通知（プレビュー）",
+        "参加パートを登録",
+        "参加者への通知",
+        "QRチェックイン",
+        "参加者名簿"
+      ]
+    },
+    {
+      "actor": "u2",
+      "route": "#/events/e2",
+      "tabs": [],
+      "deniedText": "このイベントにはアクセスできません。",
+      "headings": []
+    },
+    {
+      "actor": "u2",
+      "route": "#/events/e3",
+      "tabs": [
+        "イベント",
+        "参加者名簿"
+      ],
+      "headings": [
+        "Summer Session 2026",
+        "タイムテーブル",
+        "コメント",
+        "参加パートを登録",
+        "参加者名簿"
+      ]
+    },
+    {
+      "actor": "u3",
+      "route": "#/",
+      "tabs": [],
+      "headings": [
+        "セッションイベント",
+        "イベント一覧"
+      ]
+    },
+    {
+      "actor": "u3",
+      "route": "#/login",
+      "tabs": [],
+      "headings": [
+        "また、一緒に音楽を。"
+      ]
+    },
+    {
+      "actor": "u3",
+      "route": "#/register?invite=SESSION-DEMO",
+      "tabs": [],
+      "headings": [
+        "招待からアカウント登録"
+      ]
+    },
+    {
+      "actor": "u3",
+      "route": "#/profile",
+      "tabs": [],
+      "headings": [
+        "プロフィール管理",
+        "デモ管理者",
+        "SNSアカウント",
+        "自己紹介",
+        "参加登録したイベント・曲・パート",
+        "プロフィールQR"
+      ]
+    },
+    {
+      "actor": "u3",
+      "route": "#/profiles/u1",
+      "tabs": [],
+      "headings": [
+        "デモ参加者",
+        "SNSアカウント",
+        "自己紹介",
+        "参加登録したイベント・曲・パート"
+      ]
+    },
+    {
+      "actor": "u3",
+      "route": "#/account/manage",
+      "tabs": [],
+      "headings": [
+        "アカウント管理",
+        "メールアドレス",
+        "パスキー"
+      ]
+    },
+    {
+      "actor": "u3",
+      "route": "#/account/passkeys",
+      "tabs": [],
+      "headings": [
+        "パスキー管理"
+      ]
+    },
+    {
+      "actor": "u3",
+      "route": "#/account/email",
+      "tabs": [],
+      "headings": [
+        "メールアドレス変更"
+      ]
+    },
+    {
+      "actor": "u3",
+      "route": "#/account/enrollment",
+      "tabs": [],
+      "headings": [
+        "メール確認・初回パスキー登録"
+      ]
+    },
+    {
+      "actor": "u3",
+      "route": "#/account/recovery",
+      "tabs": [],
+      "headings": [
+        "認証復旧の画面デモ"
+      ]
+    },
+    {
+      "actor": "u3",
+      "route": "#/account/notifications",
+      "tabs": [],
+      "headings": [
+        "この端末の通知設定"
+      ]
+    },
+    {
+      "actor": "u3",
+      "route": "#/notifications/manage",
+      "tabs": [],
+      "headings": [
+        "通知管理",
+        "通知許可設定",
+        "通知事項の定義"
+      ]
+    },
+    {
+      "actor": "u3",
+      "route": "#/invitations/manage",
+      "tabs": [],
+      "headings": [
+        "招待管理",
+        "全体管理者による直接発行",
+        "招待リンク発行リクエストの確認・許可／拒否",
+        "発行された招待リンク"
+      ]
+    },
+    {
+      "actor": "u3",
+      "route": "#/messages",
+      "tabs": [],
+      "headings": [
+        "メッセージボックス"
+      ]
+    },
+    {
+      "actor": "u3",
+      "route": "#/admin/users",
+      "tabs": [],
+      "headings": [
+        "サービス管理",
+        "サイトの基本設定",
+        "ユーザーアカウント",
+        "演奏パートのプリセット",
+        "プロフィールの追加設問",
+        "サイトの既定テーマ",
+        "テーマ定義",
+        "発行済み招待コード",
+        "招待管理",
+        "招待リンク一覧"
+      ]
+    },
+    {
+      "actor": "u3",
+      "route": "#/events/e1",
+      "tabs": [
+        "イベント",
+        "参加者名簿",
+        "チェックイン",
+        "参加者への通知"
+      ],
+      "headings": [
+        "Autumn Session 2026",
+        "タイムテーブル",
+        "コメント",
+        "タイムスケジュール通知（プレビュー）",
+        "参加パートを登録",
+        "参加者への通知",
+        "QRチェックイン",
+        "参加者名簿"
+      ]
+    },
+    {
+      "actor": "u3",
+      "route": "#/events/e2",
+      "tabs": [
+        "イベント",
+        "参加者名簿",
+        "チェックイン",
+        "参加者への通知"
+      ],
+      "headings": [
+        "Winter Acoustic Session",
+        "タイムテーブル",
+        "コメント",
+        "タイムスケジュール通知（プレビュー）",
+        "参加パートを登録",
+        "参加者への通知",
+        "QRチェックイン",
+        "参加者名簿"
+      ]
+    },
+    {
+      "actor": "u3",
+      "route": "#/events/e3",
+      "tabs": [
+        "イベント",
+        "参加者名簿",
+        "チェックイン",
+        "参加者への通知"
+      ],
+      "headings": [
+        "Summer Session 2026",
+        "タイムテーブル",
+        "コメント",
+        "タイムスケジュール通知（プレビュー）",
+        "参加パートを登録",
+        "参加者への通知",
+        "QRチェックイン",
+        "参加者名簿"
+      ]
+    }
+  ],
+  "modals": [
+    {
+      "actor": "u1",
+      "route": "#/profile",
+      "selector": "#edit-profile",
+      "title": "自分のプロフィールを編集"
+    },
+    {
+      "actor": "u1",
+      "route": "#/invitations/manage",
+      "selector": "#request-invitation",
+      "title": "招待リンク発行リクエスト"
+    },
+    {
+      "actor": "u3",
+      "route": "#/invitations/manage",
+      "selector": "#direct-invitation",
+      "title": "招待リンクを直接発行"
+    },
+    {
+      "actor": "u3",
+      "route": "#/",
+      "selector": "#new-event",
+      "title": "新規セッションイベント"
+    }
+  ]
+}

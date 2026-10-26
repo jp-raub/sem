@@ -1,0 +1,82 @@
+# 採用モックの画面基準と機能接続順
+
+## 正本と現在地
+
+- 要件の正本はNotion「要件・整合性・テスト観点」。この資料は**実装用の画面・接続対応表**で、要件を追加・変更しない。
+- UI基準：`9cf8b031258fa1c9afe9668f54e61f002c4bce17` の `mock/`。`wwwroot` の171資産と読み込み順を保持する。
+- 機能の参照元：保全済み旧main `812b2784212e9015ecbbce31280e48cb0bc65e84`。**旧Razor画面・CSS・描画は戻さない**。旧コードの存在は新mainへの移植完了を意味しない。
+- 現在はUIデモ。認証、メール、DB、保存、参加登録、QR、通知は実接続前。`/about`、`/api/version` と公開版照合だけは実装済み。
+- `app.js` 単体で判断しない。`management-navigation.js` → `invitation-approval.js` → `invitation-administration.js` を含む、`index.html` の全ラッパー適用後を基準にする。
+
+## 固定画面一覧
+
+機械可読の基準は `tests/fixtures/ui-route-baseline.json`。18経路 × 未ログイン／参加者／イベント限定管理者／全体管理者の72表示を記録する。動的IDの代表値は `e1`（募集中）、`e2`（非公開）、`e3`（閲覧）、`u1`（プロフィール）。モック内の権限別**表示**であり、製品APIの認可試験ではない。
+
+|経路|画面・扱い|
+|---|---|
+|`#/`|未ログインの入口／イベント一覧、絞り込み・並べ替え、新規イベント入口|
+|`#/login`|パスキーログインの模擬画面|
+|`#/register?invite=SESSION-DEMO`|招待登録。人数・期限・失効の分岐は別状態|
+|`#/account/enrollment`|メール確認→初回パスキー登録の模擬フロー|
+|`#/account/recovery`|認証復旧の模擬フロー|
+|`#/profile`|プロフィール管理、SNS・追加設問・登録履歴・プロフィールQR|
+|`#/profiles/u1`|プロフィール閲覧（動的な本人／他者）|
+|`#/account/manage`|アカウント管理の統合入口|
+|`#/account/passkeys`|パスキー管理。旧入口も残る|
+|`#/account/email`|メールアドレス変更|
+|`#/account/notifications`|端末の通知設定。旧入口も残る|
+|`#/notifications/manage`|通知管理。許可設定と通知事項の定義|
+|`#/invitations/manage`|本人リクエスト／管理者許可・拒否・直接発行|
+|`#/messages`|メッセージボックス|
+|`#/admin/users`|サービス管理。全体管理者以外の拒否表示も固定|
+|`#/events/e1`|募集中イベント、名簿、担当管理者のチェックイン・通知タブ|
+|`#/events/e2`|非公開イベント。担当外の拒否／全体管理者の表示|
+|`#/events/e3`|閲覧イベント。担当外では管理タブを出さない|
+
+イベントはタブ切替でURLが変わらない。22個の表示タブについて選択、表示パネル、ARIA関連付けを実ブラウザーで検証する。モーダルも別URLではなく、次表で追跡する。
+
+## 主要状態の接続チェックリスト
+
+**列挙済み＝自動検証済み／実装済みではない。** 画面基準回帰が確認するのは上記72表示と22タブ、および代表4モーダル（プロフィール編集・招待リクエスト・直接発行・イベント作成）の表示／フォーカス／閉じるだけ。未記載の細部は固定モックの該当操作を確認して追加する。合成モックに存在しない通信待ち・通信失敗は、接続時に既存DOM内の状態として実装する（別UIへ作り替えない）。
+
+|領域|同一画面で保持する主要状態・操作|主な固定モックの実装|
+|---|---|---|
+|共通|メニュー開閉、役割別項目、ヘルプ、必須／任意、狭幅、ライト／ダーク、サイト→イベント→個人テーマ|`site-ui.js`, `management-navigation.js`, `settings-refinement.js`|
+|認証|利用可能／非対応／中断／失敗、招待不正・期限・人数・失効、メール確認待ち・再送・期限切れ、初回登録、復旧限定状態|`account-notifications.js`, `account-management.js`|
+|一覧|募集中／閲覧／非公開、空一覧、検索・ソート、新規作成、プリセット選択|`app.js`, `definitions.js`, `event-opening.js`|
+|イベント|タイムテーブル、占有枠の本人表示、空枠選択、兼務、上限、統合申込み、観覧、取消、部分成功・競合|`entry-refinement.js`, `attendance.js`, `event-rules.js`, `event-features.js`|
+|編集|概要、曲／進行、秒単位、準備継承、並べ替え、フェーズ、パート、設問、管理者、下書き反映、欄だけ取消、全体保存／取消、理由必須削除|`event-refinement.js`, `settings-refinement.js`, `phase-refinement.js`, `preset-refinement.js`, `modal-overview.js`|
+|進行|現在・次曲、開始／停止・補正、予実時刻、余裕時間、遅れ、操作取消、一般／管理者の表示差|`progress-refinement.js`, `progress-audience.js`, `time-comparison.js`, `live-buffer-proposal.js`|
+|名簿・プロフィール|検索・並べ替え、公開回答、本人／他者、SNS、追加設問、未登録、プロフィール編集・画像即時保存と文面保存の分離、登録履歴、QR発行／更新／拡大|`profiles.js`, `completion.js`, `profile-history.js`, `ux-complete.js`|
+|受付|QR発行・再発行・読取、読取と受付の区別、手動受付、本人確認チェック、受付メモ、完了／取消、履歴、無効・別イベントのQR|`event-operations.js`, `checkin-reception.js`|
+|通知・受信箱|端末許可、非対応・拒否、購読・解除、テスト、イベントルール追加／編集／削除・有効化、対象・即時／日時／相対、未読／既読|`account-notifications.js`, `event-operations.js`, `invitation-approval.js`|
+|招待|本人リクエスト、許可／拒否、期限・人数・方式、直接発行、リンク一覧、即時失効、理由・操作者の記録|`invitation-approval.js`, `invitation-administration.js`|
+|サービス|権限変更、特権保護、認証リセット、イベント管理者、パートプリセット、プロフィール設問、テーマ定義の編集・保存／取消|`management.js`, `account-management.js`, `definitions.js`, `preset-refinement.js`|
+
+## 機能接続の実施順と旧機能の再利用境界
+
+依存順に小さく実装する。各段階で、接続した操作だけを実機能として扱い、未接続操作の模擬成功を混ぜない。認証完了前に実DBの書込みAPIをUIから使わせない。
+
+|順|対象|旧mainの再利用候補（`src/Sem.Web/` 配下）|着手／完了の境界|
+|---|---|---|---|
+|1|認証・データ基盤と読み取りセッション|`Data/ApplicationDbContext.cs`, `Data/ApplicationUser.cs`, `Runtime/DeploymentSettings.cs`, `Runtime/LiveAuthenticationSession.cs`, `Runtime/ApplicationLoginEndpoints.cs`|既存DB・Identity・鍵とマイグレーションの互換を隔離コピーで検査してから接続。CSRF・Origin・本文上限・レート制限・失効確認を保持。デモのロール選択を実認証に使わない|
+|2|招待登録・アカウントの実接続|`Runtime/ApplicationJoinService.cs`, `ApplicationJoinEndpoints.cs`, `AccountPasskeyService.cs`, `AccountPasskeyEndpoints.cs`, `PasskeyAdditionService.cs`, `EmailChangeService.cs`, `PasskeyRecoveryService.cs`|上記基盤に加え短期・一回限り・用途限定の証明、メール、直近再認証が必要。ログインだけを移植して追加・復旧の保護を落とさない|
+|3|イベント・プロフィールの読取り→限定した保存|`Runtime/SemEndpoints.cs`, `Runtime/Models.cs`, `Data/ApplicationDbContext.cs`|旧の大きなエンドポイントから契約・ドメイン処理を分離し、固定モックの描画へDTOを接続。版競合・保存と取消・画像即時保存の区別を守る|
+|4|申込み・管理編集・当日進行・QR受付|`Runtime/SemEndpoints.cs`, `Runtime/Models.cs` と対応エンティティ|サーバー側の権限・フェーズ・上限・競合・部分成功・監査が必要。QR読取を受付完了と混同せず、旧実装と最新要件の差を先に照合する|
+|5|通知・招待管理・受信箱|`Runtime/DeviceNotificationService.cs`, `NotificationService.cs`, `InvitationManagementService.cs`, `InboxService.cs` と各Endpoints|業務確定分だけを通知。閲覧権限と本人分離、失効購読、再試行、招待の人数・期限を再検証。実Push端末到達は別証拠|
+|6|残機能とリリース境界|全接続結果と要件正本の照合|全UI接続後にまとめて必要な限定受入。既存端末のメール入力なしログインは後続要求として実装し、現在のデモで満たしたとしない|
+
+旧DB・鍵はこの台帳作成では読み書きしない。旧 `ApplicationLoginEndpoints` は `UserManager`／`SignInManager` に加え `PasskeyAdditionService` のセッションclaimと `SemEndpoints.Secret()` に依存する。単独コピーで認証基盤が復旧したことにはならない。
+
+## 高速な検証
+
+```sh
+# dotnet publish とローカル起動後。PlaywrightのあるNODE_PATHを指定する。
+python3 scripts/ui-inventory-checks.py
+node scripts/ui-inventory-browser.cjs
+```
+
+- 画面基準回帰は既存の同じブラウザーCI jobで実行する。別の長いfull suiteや追加承認待ちは作らない。
+- 毎変更：変更領域の集中的なドメイン／API検証＋固定モック資産一致＋必要な画面回帰。境界：認証・権限・整合性・復元をリスクに応じて確認する。
+- 未ログインと3ロールは毎回新規ブラウザーコンテキスト。基準値の自動再生成、実個人情報入力、外部送信、公開サイトへの検証書込みはしない。
+- 72表示の一致・22タブの到達性は見た目の全ピクセル一致、全モーダル・全組合せ、実認証、DB永続化、全端末の証明ではない。
