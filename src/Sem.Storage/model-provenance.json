@@ -1,0 +1,832 @@
+{
+  "commit": "812b2784212e9015ecbbce31280e48cb0bc65e84",
+  "entries": [
+    {
+      "source": "Core/BusinessNotifications.cs",
+      "sha256": "4079b52e4c2095e9bb725f567f20ab47119b823c48050b24993943a3194a1f6c",
+      "models": [
+        "BusinessNotification"
+      ],
+      "output": "Models/Core/BusinessNotifications.cs",
+      "outputSha256": "f4a7d3ddb3113b6001fbaa81341e9c8792f08b841495b3cb1043ffd96391f222"
+    },
+    {
+      "source": "Core/CoreEventImportApplyService.cs",
+      "sha256": "b303ae636620e840e82285b19c585bf365dbd1c47acad79715f7484ca64b59ae",
+      "models": [
+        "EventImportOperation"
+      ],
+      "output": "Models/Core/CoreEventImportApplyService.cs",
+      "outputSha256": "c6669137751d0880fd51022de833fa7f81cf94892a4b64bcb961f44e94763816"
+    },
+    {
+      "source": "Core/CoreModels.cs",
+      "sha256": "ebd311b7419430c0665ffb1b3616a7917b11265f38be46a1c4ff25d7893ed926",
+      "models": [
+        "ServiceSettings",
+        "UserProfile",
+        "ProfileQuestion",
+        "ProfileAnswer",
+        "ProfileQrCredential",
+        "SessionEvent",
+        "EventAdmin",
+        "RevokedAuthSession",
+        "ProfileImage"
+      ],
+      "output": "Models/Core/CoreModels.cs",
+      "outputSha256": "ea196ea50eb62ff91e68a296e70ca4784ff2acc23dfca31f7778adefe3c12ccc"
+    },
+    {
+      "source": "Core/DailyDigestService.cs",
+      "sha256": "335a5e4ff32ec9af27b1d9a23044af5e1311edaa841feece76f03b427f45d644",
+      "models": [
+        "DailyDigestRun",
+        "DailyDigestMail"
+      ],
+      "output": "Models/Core/DailyDigestService.cs",
+      "outputSha256": "96501a610f725020dcc02cdf39365c751e7934137b40781e7d195f0c6a11c9a9"
+    },
+    {
+      "source": "Core/EventComments.cs",
+      "sha256": "fd60a741ae79c2073c7379e58642dc2928167d835ce57c7e341b5401ef55a466",
+      "models": [
+        "EventComment",
+        "CommentOperation"
+      ],
+      "output": "Models/Core/EventComments.cs",
+      "outputSha256": "e7790c13d4f881f1625318c0113c7960033524025d71d7a93f38125f99cc49f5"
+    },
+    {
+      "source": "Core/EventHeaderImage.cs",
+      "sha256": "01c08c9cf80f02e4c2b009000b47fd4d74316a6886667f785524ccae7d90b506",
+      "models": [
+        "EventHeaderImage"
+      ],
+      "output": "Models/Core/EventHeaderImage.cs",
+      "outputSha256": "356239b790ce70eecd0e85db05a31352a1c33c1ac95751a71c84e58a498f9639"
+    },
+    {
+      "source": "Core/EventParticipantQr.cs",
+      "sha256": "4d54a8d7346d81036279e3357bbefea1398d1e9ba7601df7ac140e39feae45a0",
+      "models": [
+        "EventParticipantQr",
+        "EventQrRead",
+        "EventQrOperation"
+      ],
+      "output": "Models/Core/EventParticipantQr.cs",
+      "outputSha256": "aec5ee54c49f2ce0a5518c666040ce14397fbb00395a748f47f5f822effdbf7b"
+    },
+    {
+      "source": "Core/EventPhase.cs",
+      "sha256": "1db693bf3e635a68707e1dece4262c283aeb1db640e4a7cf1209d27d695b0d13",
+      "models": [
+        "EventPhase"
+      ],
+      "output": "Models/Core/EventPhase.cs",
+      "outputSha256": "20f91fccc01fa94e4866e172706e400d2423bf7bb3746b532ab03ec55394d53a"
+    },
+    {
+      "source": "Core/EventPushDelivery.cs",
+      "sha256": "c71fae9472e29179ecf7939611c42a61119e862e20cdac9bff64d5c58ab84a9e",
+      "models": [
+        "EventPushDelivery"
+      ],
+      "output": "Models/Core/EventPushDelivery.cs",
+      "outputSha256": "aeedcf504f008aa86aef6540ef618d54c255734f84ce8a890f3ace0173be395b"
+    },
+    {
+      "source": "Core/EventPushRules.cs",
+      "sha256": "0fe6122bf6de8ec2f03745c2d26ac71011800fed055d9f580e39fc60af4a1471",
+      "models": [
+        "EventPushRule"
+      ],
+      "output": "Models/Core/EventPushRules.cs",
+      "outputSha256": "b6068f7fd7671c142bc215c098698aa029bb654143a9dbbb02416085606ccaa1"
+    },
+    {
+      "source": "Core/EventQuestions.cs",
+      "sha256": "0604a4ab9f7dae9457546b2e197a22af53aecc7b876f0130e7d7f8d6124ae118",
+      "models": [
+        "EventQuestion",
+        "EventQuestionAnswer"
+      ],
+      "output": "Models/Core/EventQuestions.cs",
+      "outputSha256": "618eaef377053bb522b343137197797daf8a09b65c62ad223ba09e6045f6fb82"
+    },
+    {
+      "source": "Core/EventReceptions.cs",
+      "sha256": "72bcf39ee4ad93239e50511aae767d7c7ac4cdb7a87e1f186b1b78ff0b27c750",
+      "models": [
+        "EventReceptionState",
+        "EventReception",
+        "ReceptionOperation"
+      ],
+      "output": "Models/Core/EventReceptions.cs",
+      "outputSha256": "b1d378efadf8aef761701e941b9be3647f0f748537b78368aeecac7e6f22ef5f"
+    },
+    {
+      "source": "Core/ManualNotificationPushActivationControl.cs",
+      "sha256": "37979ef5ce342a8b3557d45e56b308de8c493dc964fd7eca4776425ff4199a1b",
+      "models": [
+        "ManualNotificationPushActivationOperation"
+      ],
+      "output": "Models/Core/ManualNotificationPushActivationControl.cs",
+      "outputSha256": "535a67c02576691429e6a79df54bfa7f89ac322259e33b5be0c703635af6fa14"
+    },
+    {
+      "source": "Core/ManualNotificationPushPolicy.cs",
+      "sha256": "b44e8ef05fdd00f872ade105604fed4f7ab531fd047b9999bc31c6f0488685b3",
+      "models": [
+        "ManualNotificationPushActivation",
+        "ManualNotificationPushAdmission"
+      ],
+      "output": "Models/Core/ManualNotificationPushPolicy.cs",
+      "outputSha256": "dc5de2174edcce54cdf3f5155517f8bf1843e23870f812674f25ccf644bf8382"
+    },
+    {
+      "source": "Core/ManualNotificationPushQueue.cs",
+      "sha256": "d0042ed195cf0b7b71fcfb1096577e23ad26f3f4332a532ef758b6738ad9f509",
+      "models": [
+        "ManualNotificationPushPreparation",
+        "ManualNotificationPushDelivery"
+      ],
+      "output": "Models/Core/ManualNotificationPushQueue.cs",
+      "outputSha256": "c8d5048d0c605071a65abf6644337aa47b68d51b41205533e4e5ba02bfde5f0f"
+    },
+    {
+      "source": "Core/ManualNotifications.cs",
+      "sha256": "fd25bdebd898dbeb422d2dbaf523b5e2082f14038c0dc1281d610d0a7f666b58",
+      "models": [
+        "ManualNotificationOperation",
+        "ManualNotificationRecipient"
+      ],
+      "output": "Models/Core/ManualNotifications.cs",
+      "outputSha256": "b39b98cdb3a48432cb0310a4d70f1d9eb1496844dde407df27cd07db4f962263"
+    },
+    {
+      "source": "Core/NotificationReservations.cs",
+      "sha256": "13e9dd5e7d83de7a8b94766784dc64a65b4061df636badcf73b9dc61c6beacdb",
+      "models": [
+        "NotificationScheduleState",
+        "NotificationReservation"
+      ],
+      "output": "Models/Core/NotificationReservations.cs",
+      "outputSha256": "755a3593f9f7c3fb6b47133605fb1efe69a6593ecd13b2570f803bedf24af8c5"
+    },
+    {
+      "source": "Core/PartDefinitions.cs",
+      "sha256": "c5d83c6d17a09b03992a5e0d6d89da82ba12d863359632c679721f9eec4286d1",
+      "models": [
+        "PartPresetState",
+        "PartPreset",
+        "EventPartDefinition"
+      ],
+      "output": "Models/Core/PartDefinitions.cs",
+      "outputSha256": "34aa03a13e86ea09245151ed4fc93d84a8311b8f6f413dde32c1c2a1cd94b265"
+    },
+    {
+      "source": "Core/PartStartPreferences.cs",
+      "sha256": "90e0e801401d718b838a5127091ef1d3d3deb088ee35bc1252b300fa95385b8a",
+      "models": [
+        "PartStartPreference"
+      ],
+      "output": "Models/Core/PartStartPreferences.cs",
+      "outputSha256": "bee5aa4df755d6e97ed4988438776d0fd4ec09687148dbaf0cead303261ba175"
+    },
+    {
+      "source": "Core/ParticipationModels.cs",
+      "sha256": "c18b2066792d8a84c25a92053cdf76919d7ed0ca8cbd71b25432e4279da16c3f",
+      "models": [
+        "EventSpectator",
+        "RegistrationOperation",
+        "EventParticipantState"
+      ],
+      "output": "Models/Core/ParticipationModels.cs",
+      "outputSha256": "b9b7e173b280cbc7d505750efcea3da46fef9e5a13f18b324e050be6c90d22d5"
+    },
+    {
+      "source": "Core/ProgressModels.cs",
+      "sha256": "568f2b34d0b9e3917086432c8dc12c7536dc506a8a300ec0378bc87b3c7d9da1",
+      "models": [
+        "EventProgressState",
+        "ProgressMark",
+        "ProgressEstimate",
+        "ProgressOperation"
+      ],
+      "output": "Models/Core/ProgressModels.cs",
+      "outputSha256": "429d04e978dcd4a03618e6bd87a09e8b311a736427a208afb85faa2e924b16f2"
+    },
+    {
+      "source": "Core/ShorteningModels.cs",
+      "sha256": "eb947be448be130021d11dd5567b2f9b7e3b6b8a0643e345b6b84d1e68fd4ba5",
+      "models": [
+        "EventShorteningPolicy",
+        "ShorteningOperation"
+      ],
+      "output": "Models/Core/ShorteningModels.cs",
+      "outputSha256": "810668ea4ff2d1e2bb380167d489253c5e6112ff7ab5e0a71231c83a1cf66220"
+    },
+    {
+      "source": "Core/Songs.cs",
+      "sha256": "81666c60e4813c5c40f284e9495efd104e278287be99ea0db0e3c64d7b62e7b5",
+      "models": [
+        "Song",
+        "SongPart"
+      ],
+      "output": "Models/Core/Songs.cs",
+      "outputSha256": "76956623ada8bb3b36894a5a12d1667528743df672e9be22f267898c99ec4c91"
+    },
+    {
+      "source": "Core/ThemeCatalogEntry.cs",
+      "sha256": "48698bd0dadec884b8798b5de3cf010950b104aea9313bac46d61575d3c83cd2",
+      "models": [
+        "ThemeCatalogEntry"
+      ],
+      "output": "Models/Core/ThemeCatalogEntry.cs",
+      "outputSha256": "5e7d0cf081749854d4f9f476be509e58c3649428d5f5011277d7641f2e5960d3"
+    },
+    {
+      "source": "Core/ThemeSelectionPreference.cs",
+      "sha256": "2aec0af5e48d35ca3f5448ff242b6a1d4d6c7bbb686691890c983eb6dfed869d",
+      "models": [
+        "UserThemePreference",
+        "EventThemePreference",
+        "SiteThemePreference"
+      ],
+      "output": "Models/Core/ThemeSelectionPreference.cs",
+      "outputSha256": "cf8da534092bbc6424b51aa93b0b07a9864b20dfe5c8060f219d55cd6409ac71"
+    },
+    {
+      "source": "Core/TimeParts.cs",
+      "sha256": "c40e7a498a4cd7d3b93af0d7da0f7ed967e63b7b0a3e3c05873ceec9cfac5470",
+      "models": [
+        "TimePart"
+      ],
+      "output": "Models/Core/TimeParts.cs",
+      "outputSha256": "75bddda89b0e6fbb0cfa7cd3a02b2de8a0356d5b158f9f55f2ab2506c11f8324"
+    },
+    {
+      "source": "Data/ApplicationUser.cs",
+      "sha256": "9057a5e163e3cd78cfee9b7c66b5c8581f2866902cd5f06077d828346c87047b",
+      "models": [
+        "ApplicationUser"
+      ],
+      "output": "Models/Data/ApplicationUser.cs",
+      "outputSha256": "5815e0934bdd44c7d408dd9415c8f91058031c29dc0a5687bb6f2b72eceb3d3d"
+    },
+    {
+      "source": "Runtime/EmailChangeModels.cs",
+      "sha256": "801d6cf962e0a6fc9e4fb489f81557f58e2464da9aabec6d6be5ed82c7693373",
+      "models": [
+        "EmailChangeOperation",
+        "EmailChangeRateState",
+        "EmailChangeMail"
+      ],
+      "output": "Models/Runtime/EmailChangeModels.cs",
+      "outputSha256": "7eface41c1e2fb1824416490877e9dd01a7c5f4e408dab97d3d9718e50fe0ed2"
+    },
+    {
+      "source": "Runtime/Models.cs",
+      "sha256": "df84c5c84cf5e66b89f14252d1d7429a9470aff16569eaefd2e57280d23e67d2",
+      "models": [
+        "SiteState",
+        "Invitation",
+        "InvitationRequest",
+        "EmailTicket",
+        "Message",
+        "Delivery",
+        "PushDevice",
+        "TestEvent",
+        "Participation",
+        "Audit",
+        "PasskeyAddition"
+      ],
+      "output": "Models/Runtime/Models.cs",
+      "outputSha256": "3d6a4f5f541770edbe821d7cf909edbc4cb51239be835fd138cf0937b95c9a8f"
+    },
+    {
+      "source": "Runtime/PasskeyDeletionProof.cs",
+      "sha256": "3912a0d08a8c62e332419a6afdd37256aed0d0fae5145c1b02778e6cefdd4b5c",
+      "models": [
+        "PasskeyDeletionProof"
+      ],
+      "output": "Models/Runtime/PasskeyDeletionProof.cs",
+      "outputSha256": "1ad527ce2e2a6f7d30867ee36fd32dd1461df6c42946203941d75a32bce1cdf4"
+    },
+    {
+      "source": "Runtime/PasskeyRecoveryModels.cs",
+      "sha256": "0921d3c5e0b5f4b4dc7744f014b8a12f3af3a802ed572615bdb4ac93092e2f5f",
+      "models": [
+        "PasskeyRecoveryOperation",
+        "PasskeyRecoveryAdminChallenge",
+        "PasskeyRecoveryRateState",
+        "PasskeyRecoveryMail",
+        "PasskeyRecoveryAudit"
+      ],
+      "output": "Models/Runtime/PasskeyRecoveryModels.cs",
+      "outputSha256": "2c127be69b1d54c248f4ac97c637ff20f05e61a32dd26ae860a0f0084ba4fc95"
+    }
+  ],
+  "unchangedFiles": [
+    {
+      "path": "Data/ApplicationDbContext.cs",
+      "source": "Data/ApplicationDbContext.cs",
+      "sha256": "7406773435c94e3c081504dbd1ece777715b4a8ca83610f1a77ae572aaa75878"
+    },
+    {
+      "path": "Data/Migrations/00000000000000_CreateIdentitySchema.Designer.cs",
+      "source": "Data/Migrations/00000000000000_CreateIdentitySchema.Designer.cs",
+      "sha256": "c92f7af042650df9238fefce8e9a38f42387fc8bee75d2cb3c656f6803241843"
+    },
+    {
+      "path": "Data/Migrations/00000000000000_CreateIdentitySchema.cs",
+      "source": "Data/Migrations/00000000000000_CreateIdentitySchema.cs",
+      "sha256": "acbc798c4dc96d75433715bbb33f3217ed6298f17207d907ccfe821d1fac933f"
+    },
+    {
+      "path": "Data/Migrations/20261012082319_ExternalTestBaseline.Designer.cs",
+      "source": "Data/Migrations/20261012082319_ExternalTestBaseline.Designer.cs",
+      "sha256": "90a8c8537f738ddf8b789ca4074eb1cc959dc9c54012e50b49f3913fbb4d9ad2"
+    },
+    {
+      "path": "Data/Migrations/20261012082319_ExternalTestBaseline.cs",
+      "source": "Data/Migrations/20261012082319_ExternalTestBaseline.cs",
+      "sha256": "1502e61e19ca0999624490c394209300efe4db2deab129c58de7847cb758a1d3"
+    },
+    {
+      "path": "Data/Migrations/20261012093941_AddPasskeyAdditionProof.Designer.cs",
+      "source": "Data/Migrations/20261012093941_AddPasskeyAdditionProof.Designer.cs",
+      "sha256": "a28ea4a82567856219199f17ee092ef355da647bd5bc9de55808f2be7170efd0"
+    },
+    {
+      "path": "Data/Migrations/20261012093941_AddPasskeyAdditionProof.cs",
+      "source": "Data/Migrations/20261012093941_AddPasskeyAdditionProof.cs",
+      "sha256": "0633625781596976b78fd1889f847b9861bebad578c9fc5130fd82d59fa74764"
+    },
+    {
+      "path": "Data/Migrations/20261012162159_AddCoreFoundation.Designer.cs",
+      "source": "Data/Migrations/20261012162159_AddCoreFoundation.Designer.cs",
+      "sha256": "bffb97e519fce97cc552853e839092be6893145e74cf40c0e4e5e3406bd77588"
+    },
+    {
+      "path": "Data/Migrations/20261012162159_AddCoreFoundation.cs",
+      "source": "Data/Migrations/20261012162159_AddCoreFoundation.cs",
+      "sha256": "b5f2bded1fc1a9c3b38365c2d4b445e818188a7cf6e73f5de6c6b53527bbf6a7"
+    },
+    {
+      "path": "Data/Migrations/20261012180718_AddEventPhases.Designer.cs",
+      "source": "Data/Migrations/20261012180718_AddEventPhases.Designer.cs",
+      "sha256": "af1426ef5c64aed3d71ea3c15f2a5536460c05107414ebd1a80e71a823ace848"
+    },
+    {
+      "path": "Data/Migrations/20261012180718_AddEventPhases.cs",
+      "source": "Data/Migrations/20261012180718_AddEventPhases.cs",
+      "sha256": "809d51fe177f9a228627a84bfbdf481a7399d269b524c63cbafc2cc9340ed08e"
+    },
+    {
+      "path": "Data/Migrations/20261012201328_AddPartDefinitions.Designer.cs",
+      "source": "Data/Migrations/20261012201328_AddPartDefinitions.Designer.cs",
+      "sha256": "226cea89cd531b36968dc6e95ffea157fb869dd35d937f276b3982f05fa131c3"
+    },
+    {
+      "path": "Data/Migrations/20261012201328_AddPartDefinitions.cs",
+      "source": "Data/Migrations/20261012201328_AddPartDefinitions.cs",
+      "sha256": "c8cf576a9c00a7d664ee722ed1251aff800932d100de64d0b13ba07b6f3755bc"
+    },
+    {
+      "path": "Data/Migrations/20261012221559_AddEventQuestions.Designer.cs",
+      "source": "Data/Migrations/20261012221559_AddEventQuestions.Designer.cs",
+      "sha256": "b3c29e88b7512743541ef7d4c091b9a2cd672e3b9fbffb2b7d492bb48cbdeea8"
+    },
+    {
+      "path": "Data/Migrations/20261012221559_AddEventQuestions.cs",
+      "source": "Data/Migrations/20261012221559_AddEventQuestions.cs",
+      "sha256": "edb77d3fd4e57d99daeb7d79e77ce595e77c5d776b5ecee046fc3e5f36430024"
+    },
+    {
+      "path": "Data/Migrations/20261012233513_AddSongsAndSlots.Designer.cs",
+      "source": "Data/Migrations/20261012233513_AddSongsAndSlots.Designer.cs",
+      "sha256": "12220c9905e31fa1ee24814b4410e1e5368ccd07ba8a6d2ca48503c3315de415"
+    },
+    {
+      "path": "Data/Migrations/20261012233513_AddSongsAndSlots.cs",
+      "source": "Data/Migrations/20261012233513_AddSongsAndSlots.cs",
+      "sha256": "9fade4b1799fcc69ed68f10415e5b2444471c76d2226c6e44462071e6964dc63"
+    },
+    {
+      "path": "Data/Migrations/20261013003202_AddParticipation.Designer.cs",
+      "source": "Data/Migrations/20261013003202_AddParticipation.Designer.cs",
+      "sha256": "9769297c1d9700c8a8bdfee9a83216bfec62cb5428957cd0f66bd9ff264477b7"
+    },
+    {
+      "path": "Data/Migrations/20261013003202_AddParticipation.cs",
+      "source": "Data/Migrations/20261013003202_AddParticipation.cs",
+      "sha256": "a603926ca1f3417b350377182e7ee454211cc58a1a883c841e0cbf00d08bd933"
+    },
+    {
+      "path": "Data/Migrations/20261013023419_AddTimetable.Designer.cs",
+      "source": "Data/Migrations/20261013023419_AddTimetable.Designer.cs",
+      "sha256": "d6659c2b9f400cd3097669d3814a7c3da56e68bb383a961831e2e47c39a27399"
+    },
+    {
+      "path": "Data/Migrations/20261013023419_AddTimetable.cs",
+      "source": "Data/Migrations/20261013023419_AddTimetable.cs",
+      "sha256": "4b2ea41e880a6ee2e5e36c591b973d2c3afd75e8d8d44c61966b72596090ed00"
+    },
+    {
+      "path": "Data/Migrations/20261013041622_AddEventProgress.Designer.cs",
+      "source": "Data/Migrations/20261013041622_AddEventProgress.Designer.cs",
+      "sha256": "d3f376912e53bbe18a3bc7386aec8ce2a92a7d682bc97e51a681caf4f93fef0e"
+    },
+    {
+      "path": "Data/Migrations/20261013041622_AddEventProgress.cs",
+      "source": "Data/Migrations/20261013041622_AddEventProgress.cs",
+      "sha256": "903347072a53b2da9b8f35fe9f12947f2a2fc11fa94665827b9a9d93df04c84d"
+    },
+    {
+      "path": "Data/Migrations/20261013063027_AddShortening.Designer.cs",
+      "source": "Data/Migrations/20261013063027_AddShortening.Designer.cs",
+      "sha256": "2d19224a636bde3fcf6a484c526d2549a7302168cbcff6e591ebdc1e7f291572"
+    },
+    {
+      "path": "Data/Migrations/20261013063027_AddShortening.cs",
+      "source": "Data/Migrations/20261013063027_AddShortening.cs",
+      "sha256": "a43096729180d7808c6a32b1b06ea5b7a82b2467e576e2b3b06e0342d6630812"
+    },
+    {
+      "path": "Data/Migrations/20261013080809_AddBusinessNotifications.Designer.cs",
+      "source": "Data/Migrations/20261013080809_AddBusinessNotifications.Designer.cs",
+      "sha256": "2ba9b44a15030750012cdd5a59e672b0bb8ebe3670e3aaccfa9e1eb8bfb48e8f"
+    },
+    {
+      "path": "Data/Migrations/20261013080809_AddBusinessNotifications.cs",
+      "source": "Data/Migrations/20261013080809_AddBusinessNotifications.cs",
+      "sha256": "fff89b2235de2dd71006eac1f500dccce4d12fb58e4ebbfb1f2e4944fe03647f"
+    },
+    {
+      "path": "Data/Migrations/20261013100847_AddDailyDigest.Designer.cs",
+      "source": "Data/Migrations/20261013100847_AddDailyDigest.Designer.cs",
+      "sha256": "1f76e3884416e24b483ca90f28e0476386904ed5c04cfe0035366ca90d83b25c"
+    },
+    {
+      "path": "Data/Migrations/20261013100847_AddDailyDigest.cs",
+      "source": "Data/Migrations/20261013100847_AddDailyDigest.cs",
+      "sha256": "70840dccfce2f8459a1e0e628ea8b27f3bcb31bbf9d3f4f5b93b74286f755c99"
+    },
+    {
+      "path": "Data/Migrations/20261013115902_AddNotificationReservations.Designer.cs",
+      "source": "Data/Migrations/20261013115902_AddNotificationReservations.Designer.cs",
+      "sha256": "d32cc2aad71b2905d078d4455621b4d375328f5faa271d33e3f3c403375a80cf"
+    },
+    {
+      "path": "Data/Migrations/20261013115902_AddNotificationReservations.cs",
+      "source": "Data/Migrations/20261013115902_AddNotificationReservations.cs",
+      "sha256": "bc3e41f3e7bac7b2bc592486001f099477897298a15235f9f636971083dc3ba8"
+    },
+    {
+      "path": "Data/Migrations/20261013130605_AddPartStartPreferences.Designer.cs",
+      "source": "Data/Migrations/20261013130605_AddPartStartPreferences.Designer.cs",
+      "sha256": "c74827a198f547cb598a0852441275ffd7af49b7162dfa02f8b778dd17298598"
+    },
+    {
+      "path": "Data/Migrations/20261013130605_AddPartStartPreferences.cs",
+      "source": "Data/Migrations/20261013130605_AddPartStartPreferences.cs",
+      "sha256": "ac8176651b6bab090e598189340a0604568ff3ec9e717210ad2f7e95760adcb1"
+    },
+    {
+      "path": "Data/Migrations/20261013134737_AddEventPushRules.Designer.cs",
+      "source": "Data/Migrations/20261013134737_AddEventPushRules.Designer.cs",
+      "sha256": "34c7cfdb4ec49f978c27bd320d36d8ab6fad1cc7ead62415113e1e74445c227e"
+    },
+    {
+      "path": "Data/Migrations/20261013134737_AddEventPushRules.cs",
+      "source": "Data/Migrations/20261013134737_AddEventPushRules.cs",
+      "sha256": "de3188492c68fde8508cfaa74f93a98019dd0cf303515f326220ef68877641c3"
+    },
+    {
+      "path": "Data/Migrations/20261013151643_AddEventPushDelivery.Designer.cs",
+      "source": "Data/Migrations/20261013151643_AddEventPushDelivery.Designer.cs",
+      "sha256": "7c760e82a8d0f1fb79bef11b03037c274944879abb697b1ae193f4350066b319"
+    },
+    {
+      "path": "Data/Migrations/20261013151643_AddEventPushDelivery.cs",
+      "source": "Data/Migrations/20261013151643_AddEventPushDelivery.cs",
+      "sha256": "909fcbcc2c797beb2dca463c30b88d969c02806fdcdc95692014e13b02bffc2c"
+    },
+    {
+      "path": "Data/Migrations/20261013160039_AddPartStartDelivery.Designer.cs",
+      "source": "Data/Migrations/20261013160039_AddPartStartDelivery.Designer.cs",
+      "sha256": "76a74f7807482868e3056a4e90fcfd2ee08157a6e19a7b10f4cb67fe1a6cf186"
+    },
+    {
+      "path": "Data/Migrations/20261013160039_AddPartStartDelivery.cs",
+      "source": "Data/Migrations/20261013160039_AddPartStartDelivery.cs",
+      "sha256": "9e63a47a08a3680cda9265bbb54dd806bf2d64f368acb6d3839bae10a40d2601"
+    },
+    {
+      "path": "Data/Migrations/20261013164240_AddEventComments.Designer.cs",
+      "source": "Data/Migrations/20261013164240_AddEventComments.Designer.cs",
+      "sha256": "6fa20f9d1a1abbe3baf26e5c32cbe51f2965b7e1c8b2923226903a0051ead97e"
+    },
+    {
+      "path": "Data/Migrations/20261013164240_AddEventComments.cs",
+      "source": "Data/Migrations/20261013164240_AddEventComments.cs",
+      "sha256": "e21851f7bcaa32432ea03be3415b244b1e72a5315ee503e15577b7f5753f9100"
+    },
+    {
+      "path": "Data/Migrations/20261013172337_AddManualReceptions.Designer.cs",
+      "source": "Data/Migrations/20261013172337_AddManualReceptions.Designer.cs",
+      "sha256": "793975cb985926fbcd943297ef60cc66c8182a3e7f58e5c6b0af6df25d40c0c1"
+    },
+    {
+      "path": "Data/Migrations/20261013172337_AddManualReceptions.cs",
+      "source": "Data/Migrations/20261013172337_AddManualReceptions.cs",
+      "sha256": "51c0ecbb141288dd8b2a6ffafb116df04b7c9a33aa446dd7933a99efc4c12f0b"
+    },
+    {
+      "path": "Data/Migrations/20261013173823_AddEventParticipantQr.Designer.cs",
+      "source": "Data/Migrations/20261013173823_AddEventParticipantQr.Designer.cs",
+      "sha256": "927491c7edf4284d7e1be5b7299b8978939e221abc04be8f031526d2937102d2"
+    },
+    {
+      "path": "Data/Migrations/20261013173823_AddEventParticipantQr.cs",
+      "source": "Data/Migrations/20261013173823_AddEventParticipantQr.cs",
+      "sha256": "b2aa984a02a10e214aa095181e7738d2192a1e985415984424eaebfbfe9266a8"
+    },
+    {
+      "path": "Data/Migrations/20261013181107_LinkQrReceptions.Designer.cs",
+      "source": "Data/Migrations/20261013181107_LinkQrReceptions.Designer.cs",
+      "sha256": "bb07479ebc337dc5c1f7e1064b15e0c78391799e77e5364f76f965c35cae8ad2"
+    },
+    {
+      "path": "Data/Migrations/20261013181107_LinkQrReceptions.cs",
+      "source": "Data/Migrations/20261013181107_LinkQrReceptions.cs",
+      "sha256": "5f73f60d3145684000420ce44222c33a0509cd554dd2a8cdae11f746b4c7049c"
+    },
+    {
+      "path": "Data/Migrations/20261014025716_AddManualNotificationAcceptance.Designer.cs",
+      "source": "Data/Migrations/20261014025716_AddManualNotificationAcceptance.Designer.cs",
+      "sha256": "76a851c5da4d36119f820a3c80888048eca37bd80a85d4d54156d95a3e67dc34"
+    },
+    {
+      "path": "Data/Migrations/20261014025716_AddManualNotificationAcceptance.cs",
+      "source": "Data/Migrations/20261014025716_AddManualNotificationAcceptance.cs",
+      "sha256": "435492497ba47dfb38f4cf9e2fbbdd972f8eac44c8d6d20af263418ae3743f4b"
+    },
+    {
+      "path": "Data/Migrations/20261014074520_AddManualNotificationPushAdmission.Designer.cs",
+      "source": "Data/Migrations/20261014074520_AddManualNotificationPushAdmission.Designer.cs",
+      "sha256": "ae27f3b96c8f4c76dd2cf75ef68a9324a73dae3ade1f111ab208c5f516ce7b67"
+    },
+    {
+      "path": "Data/Migrations/20261014074520_AddManualNotificationPushAdmission.cs",
+      "source": "Data/Migrations/20261014074520_AddManualNotificationPushAdmission.cs",
+      "sha256": "39cc306f8f6b5368187e04698d36109fa676aa62b2965c6b8f82826bd7e6fc48"
+    },
+    {
+      "path": "Data/Migrations/20261014080345_AddManualNotificationPushQueue.Designer.cs",
+      "source": "Data/Migrations/20261014080345_AddManualNotificationPushQueue.Designer.cs",
+      "sha256": "4c9609b117502828e05331fd2d008c4af95aab9158b8af42b052d5c2a22c1882"
+    },
+    {
+      "path": "Data/Migrations/20261014080345_AddManualNotificationPushQueue.cs",
+      "source": "Data/Migrations/20261014080345_AddManualNotificationPushQueue.cs",
+      "sha256": "9708334d2888b0920fcfe69bb0a64084143ec089d4c190aec838011414a01b24"
+    },
+    {
+      "path": "Data/Migrations/20261014081050_AddManualNotificationPushActivationControl.Designer.cs",
+      "source": "Data/Migrations/20261014081050_AddManualNotificationPushActivationControl.Designer.cs",
+      "sha256": "adc1c623f735fcb6a0fce351f3d26aa8b9136a4454c67b8e400dc23d61fdf615"
+    },
+    {
+      "path": "Data/Migrations/20261014081050_AddManualNotificationPushActivationControl.cs",
+      "source": "Data/Migrations/20261014081050_AddManualNotificationPushActivationControl.cs",
+      "sha256": "b3d10588da5416d8660c4e7cf0b95592fec02b66198335a0c504600513c8c7c1"
+    },
+    {
+      "path": "Data/Migrations/20261014120648_AddManualNotificationHistoryIndex.Designer.cs",
+      "source": "Data/Migrations/20261014120648_AddManualNotificationHistoryIndex.Designer.cs",
+      "sha256": "1d244d89bdfd3b28c81c4b792856b4c38b01fe7ae401fce3b44c33ac75ee1187"
+    },
+    {
+      "path": "Data/Migrations/20261014120648_AddManualNotificationHistoryIndex.cs",
+      "source": "Data/Migrations/20261014120648_AddManualNotificationHistoryIndex.cs",
+      "sha256": "3cda50a7952069cdb9bf504c89a7549393cf84f2a1ffc11a0f234f2647c90d6a"
+    },
+    {
+      "path": "Data/Migrations/20261014124343_AddEventImportHistory.Designer.cs",
+      "source": "Data/Migrations/20261014124343_AddEventImportHistory.Designer.cs",
+      "sha256": "2ffe72a43e9e6fdeafa452a2b7af15de24d164f3448cdabf37467b07a2398164"
+    },
+    {
+      "path": "Data/Migrations/20261014124343_AddEventImportHistory.cs",
+      "source": "Data/Migrations/20261014124343_AddEventImportHistory.cs",
+      "sha256": "0fde2ef044275f6f32279ff0d969ee7de71dc79a9d69a82dd5b3ff81b277cbe8"
+    },
+    {
+      "path": "Data/Migrations/20261014181715_AddEventImportOperations.Designer.cs",
+      "source": "Data/Migrations/20261014181715_AddEventImportOperations.Designer.cs",
+      "sha256": "2287cc16a0694c2568d2275d73060b6439331e676477a32004ec7557a9272208"
+    },
+    {
+      "path": "Data/Migrations/20261014181715_AddEventImportOperations.cs",
+      "source": "Data/Migrations/20261014181715_AddEventImportOperations.cs",
+      "sha256": "3f0b7b6ff9f945468073a3ff1d1bdaf49981a92d25dd8fe7f2a9637ec4b62f83"
+    },
+    {
+      "path": "Data/Migrations/20261015050000_AddThemeCatalog.Designer.cs",
+      "source": "Data/Migrations/20261015050000_AddThemeCatalog.Designer.cs",
+      "sha256": "8936b8bd109e43b4949c7cac08b9906464097b9740cd065316e6c59960dc0c2e"
+    },
+    {
+      "path": "Data/Migrations/20261015050000_AddThemeCatalog.cs",
+      "source": "Data/Migrations/20261015050000_AddThemeCatalog.cs",
+      "sha256": "995fb5e058bc509539055c9d9453ce3bdac7696467be3423c66eee26b219d87f"
+    },
+    {
+      "path": "Data/Migrations/20261015081000_AddThemeSelectionPreferences.Designer.cs",
+      "source": "Data/Migrations/20261015081000_AddThemeSelectionPreferences.Designer.cs",
+      "sha256": "a1a628b453a6ddbc0d9fc421a5bb6b7312cbee3d40a34e8d4ff8fd311a71eb7b"
+    },
+    {
+      "path": "Data/Migrations/20261015081000_AddThemeSelectionPreferences.cs",
+      "source": "Data/Migrations/20261015081000_AddThemeSelectionPreferences.cs",
+      "sha256": "9a9fafeda4d8f4c27dde066769eed51b537b131ea4881434586ab7d1db5fa216"
+    },
+    {
+      "path": "Data/Migrations/20261015094000_AddProfileExtensions.Designer.cs",
+      "source": "Data/Migrations/20261015094000_AddProfileExtensions.Designer.cs",
+      "sha256": "a78069476474ec88cad79a6e0e9f36ad4d4bcc13fd55f8b9b1504f9367b860d2"
+    },
+    {
+      "path": "Data/Migrations/20261015094000_AddProfileExtensions.cs",
+      "source": "Data/Migrations/20261015094000_AddProfileExtensions.cs",
+      "sha256": "47e80a82dbf90fdcb4904033cb0913f38c4904b42eb542ae33c5677320bbbee9"
+    },
+    {
+      "path": "Data/Migrations/20261015153000_AddProfileImages.Designer.cs",
+      "source": "Data/Migrations/20261015153000_AddProfileImages.Designer.cs",
+      "sha256": "36e52f7742626bc013e2424273f0e22dfc001204b33b7caa4c627c7dd7040fd4"
+    },
+    {
+      "path": "Data/Migrations/20261015153000_AddProfileImages.cs",
+      "source": "Data/Migrations/20261015153000_AddProfileImages.cs",
+      "sha256": "54762cd830770c575302753ba28d57783c36cfb27d75da40ebf08e79e87b5b55"
+    },
+    {
+      "path": "Data/Migrations/20261015165525_AddEmailChanges.Designer.cs",
+      "source": "Data/Migrations/20261015165525_AddEmailChanges.Designer.cs",
+      "sha256": "8ec53c7b083a855d2e7ee9c887e15241e6190543f5b49ddf33d1d587549dfbac"
+    },
+    {
+      "path": "Data/Migrations/20261015165525_AddEmailChanges.cs",
+      "source": "Data/Migrations/20261015165525_AddEmailChanges.cs",
+      "sha256": "91fc4e7dfde4d3573fe35cda104449ed9609f28c619ca8215f5aee93a091a53b"
+    },
+    {
+      "path": "Data/Migrations/20261015185400_AddPasskeyRecovery.Designer.cs",
+      "source": "Data/Migrations/20261015185400_AddPasskeyRecovery.Designer.cs",
+      "sha256": "f1b32e5f4b6b6f15bcd4ff9c4d23e90d2361fd73bf2fd39281deadefba4c7ae1"
+    },
+    {
+      "path": "Data/Migrations/20261015185400_AddPasskeyRecovery.cs",
+      "source": "Data/Migrations/20261015185400_AddPasskeyRecovery.cs",
+      "sha256": "c3d17f9a2fa0eba8154a099f10da3f62a0ff0a486ec61d3f2b3a72f7d8f7740e"
+    },
+    {
+      "path": "Data/Migrations/20261016024500_AddHostEmergencyPasskeyRecovery.Designer.cs",
+      "source": "Data/Migrations/20261016024500_AddHostEmergencyPasskeyRecovery.Designer.cs",
+      "sha256": "82b18cdfb5b6ef97ada80c5d012bd6865191ffc6e1a8d8d3616826542e5fd5fa"
+    },
+    {
+      "path": "Data/Migrations/20261016024500_AddHostEmergencyPasskeyRecovery.cs",
+      "source": "Data/Migrations/20261016024500_AddHostEmergencyPasskeyRecovery.cs",
+      "sha256": "ce735111bf4dba096f46e85b5c64b309c0945f025d80cdf3a8bbab6612c3cb52"
+    },
+    {
+      "path": "Data/Migrations/20261016073000_AddInvitationIssuanceMetadata.Designer.cs",
+      "source": "Data/Migrations/20261016073000_AddInvitationIssuanceMetadata.Designer.cs",
+      "sha256": "957a4865e8e6e49ec09deadb2d02205b8063bd9771fefbc6518208a743c94d24"
+    },
+    {
+      "path": "Data/Migrations/20261016073000_AddInvitationIssuanceMetadata.cs",
+      "source": "Data/Migrations/20261016073000_AddInvitationIssuanceMetadata.cs",
+      "sha256": "209c6f7bc87c1d0b71fe4a3f17e563e0d9d092e1dbb9c8f23ce4865ec03a7809"
+    },
+    {
+      "path": "Data/Migrations/20261017000000_AddPasskeyDeletionProof.Designer.cs",
+      "source": "Data/Migrations/20261017000000_AddPasskeyDeletionProof.Designer.cs",
+      "sha256": "d95c65ad19036a9a28d0b3115d246fcd53d48973c94a9bce5be803ceafcd8693"
+    },
+    {
+      "path": "Data/Migrations/20261017000000_AddPasskeyDeletionProof.cs",
+      "source": "Data/Migrations/20261017000000_AddPasskeyDeletionProof.cs",
+      "sha256": "72cffedcf1ff1e8dca024fe31e11381615fb3af366b34c0034578c9d393e39e8"
+    },
+    {
+      "path": "Data/Migrations/20261017032500_AddInvitationRequestDecisionAndUniqueRequestIndex.Designer.cs",
+      "source": "Data/Migrations/20261017032500_AddInvitationRequestDecisionAndUniqueRequestIndex.Designer.cs",
+      "sha256": "3d6ae54148487174a7abe1d955e932a0d776ee2501bf1874101b8bb5aad6fb19"
+    },
+    {
+      "path": "Data/Migrations/20261017032500_AddInvitationRequestDecisionAndUniqueRequestIndex.cs",
+      "source": "Data/Migrations/20261017032500_AddInvitationRequestDecisionAndUniqueRequestIndex.cs",
+      "sha256": "e93ecabb136865044fb6832322a2a81ac06dfe84593613faf2ae3fa5c07132b5"
+    },
+    {
+      "path": "Data/Migrations/20261017170050_AddEventLocationUrl.Designer.cs",
+      "source": "Data/Migrations/20261017170050_AddEventLocationUrl.Designer.cs",
+      "sha256": "320d04bededee3b3f24c1306b972848cb53105106dfa5c43f2fbb5ed66201029"
+    },
+    {
+      "path": "Data/Migrations/20261017170050_AddEventLocationUrl.cs",
+      "source": "Data/Migrations/20261017170050_AddEventLocationUrl.cs",
+      "sha256": "fa07e8f1aa76a6c37558c4d49970b262cfcabdc73193f3e8063d19d86559404c"
+    },
+    {
+      "path": "Data/Migrations/20261017172412_AddEventDescriptionFormat.Designer.cs",
+      "source": "Data/Migrations/20261017172412_AddEventDescriptionFormat.Designer.cs",
+      "sha256": "f21ffb44f7e3cc5fcc3cdfe91907ef120bcc9a3f18abd282ae55be598c1c2db3"
+    },
+    {
+      "path": "Data/Migrations/20261017172412_AddEventDescriptionFormat.cs",
+      "source": "Data/Migrations/20261017172412_AddEventDescriptionFormat.cs",
+      "sha256": "b8cae9738e3a6ea67a82b190087208dfcb531ca7c19ddba020e1feca3982857f"
+    },
+    {
+      "path": "Data/Migrations/20261017174741_AddEventHeaderImage.Designer.cs",
+      "source": "Data/Migrations/20261017174741_AddEventHeaderImage.Designer.cs",
+      "sha256": "3371eff42cab8e79720094b7431612a135f1cd257dbad4422b0b2cfc124fbc71"
+    },
+    {
+      "path": "Data/Migrations/20261017174741_AddEventHeaderImage.cs",
+      "source": "Data/Migrations/20261017174741_AddEventHeaderImage.cs",
+      "sha256": "566553b71c1ee3620b6dccd1b58a4062581ba889093094daa21c57d37cb1dd79"
+    },
+    {
+      "path": "Data/Migrations/20261018124439_AddEventIcon.Designer.cs",
+      "source": "Data/Migrations/20261018124439_AddEventIcon.Designer.cs",
+      "sha256": "215fb2880fdbff01ad9765d963779c70c0751dc037cd8c3b8249a7a9c01334af"
+    },
+    {
+      "path": "Data/Migrations/20261018124439_AddEventIcon.cs",
+      "source": "Data/Migrations/20261018124439_AddEventIcon.cs",
+      "sha256": "8a0f5e2edd14bde11e1195222e0ed285fb49bd28dd4011bc61f19232a57102ef"
+    },
+    {
+      "path": "Data/Migrations/ApplicationDbContextModelSnapshot.cs",
+      "source": "Data/Migrations/ApplicationDbContextModelSnapshot.cs",
+      "sha256": "3c2efe55c72086f26be63f03bf261ccb8459cb46b022336a13fcc67bc6ed873a"
+    },
+    {
+      "path": "Data/SqliteStorageInitializer.cs",
+      "source": "Data/SqliteStorageInitializer.cs",
+      "sha256": "aa990b166d7197f059d1d8a2e573d21dc22f949f884d228d66d13bae2d8e1790"
+    }
+  ],
+  "migrationIds": [
+    "20261012082319_ExternalTestBaseline",
+    "20261012093941_AddPasskeyAdditionProof",
+    "20261012162159_AddCoreFoundation",
+    "20261012180718_AddEventPhases",
+    "20261012201328_AddPartDefinitions",
+    "20261012221559_AddEventQuestions",
+    "20261012233513_AddSongsAndSlots",
+    "20261013003202_AddParticipation",
+    "20261013023419_AddTimetable",
+    "20261013041622_AddEventProgress",
+    "20261013063027_AddShortening",
+    "20261013080809_AddBusinessNotifications",
+    "20261013100847_AddDailyDigest",
+    "20261013115902_AddNotificationReservations",
+    "20261013130605_AddPartStartPreferences",
+    "20261013134737_AddEventPushRules",
+    "20261013151643_AddEventPushDelivery",
+    "20261013160039_AddPartStartDelivery",
+    "20261013164240_AddEventComments",
+    "20261013172337_AddManualReceptions",
+    "20261013173823_AddEventParticipantQr",
+    "20261013181107_LinkQrReceptions",
+    "20261014025716_AddManualNotificationAcceptance",
+    "20261014074520_AddManualNotificationPushAdmission",
+    "20261014080345_AddManualNotificationPushQueue",
+    "20261014081050_AddManualNotificationPushActivationControl",
+    "20261014120648_AddManualNotificationHistoryIndex",
+    "20261014124343_AddEventImportHistory",
+    "20261014181715_AddEventImportOperations",
+    "20261015050000_AddThemeCatalog",
+    "20261015081000_AddThemeSelectionPreferences",
+    "20261015094000_AddProfileExtensions",
+    "20261015153000_AddProfileImages",
+    "20261015165525_AddEmailChanges",
+    "20261015185400_AddPasskeyRecovery",
+    "20261016024500_AddHostEmergencyPasskeyRecovery",
+    "20261016073000_AddInvitationIssuanceMetadata",
+    "20261017000000_AddPasskeyDeletionProof",
+    "20261017032500_AddInvitationRequestDecisionAndUniqueRequestIndex",
+    "20261017170050_AddEventLocationUrl",
+    "20261017172412_AddEventDescriptionFormat",
+    "20261017174741_AddEventHeaderImage",
+    "20261018124439_AddEventIcon"
+  ]
+}

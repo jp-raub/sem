@@ -21,3 +21,6 @@
 [画面・主要状態と旧機能の接続順](docs/ui/IMPLEMENTATION-MAP.ja.md)に、固定モックの18経路×4ロール、イベント内タブ、主要なモーダル／状態、旧mainからの再利用境界を記録しています。基準は全スクリプト適用後のUIで、古い`app.js`だけを移植しません。
 
 `python3 scripts/ui-inventory-checks.py` と `node scripts/ui-inventory-browser.cjs` を既存CIに追加しています。実ブラウザーの画面基準はUIデモの回帰であり、認証・DB・業務保存が完成した証拠ではありません。次は認証・データ基盤を既存DB／鍵の互換を保って接続します。
+
+### 保存基盤の分離
+[旧Identity・モデル・migrationの保存基盤](docs/storage/FOUNDATION.ja.md)を`Sem.Storage`へ分離しました。合成DBで互換・保持・拒否を検証しますが、公開ホストからはまだ参照せず、実DB／鍵の利用や実認証は開始していません。
