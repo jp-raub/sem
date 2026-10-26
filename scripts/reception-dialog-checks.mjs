@@ -29,3 +29,7 @@ for(const action of ['RequestClose','CloseTarget'])assert(new RegExp(`void ${act
 assert(razor.includes('Pending??=new(')&&razor.includes('PendingCancel??=new('));
 assert(razor.includes('Authentication.AuthenticationStateChanged-=AuthenticationChanged'));
 console.log('受付の実ハンドラー：処理中／結果不明の取消禁止・同一操作ID・認証変更時の後始末を維持');
+
+assert(razor.includes("InvokeVoidAsync(\"sync\",Dialog,ConfirmationOpen,ReturnUserId)"));
+assert(!razor.includes("Busy&&ReturnUserId is not null"));
+console.log("一覧の再検索は処理中でも確認モーダルを開かず、明示した対象選択だけで開く");

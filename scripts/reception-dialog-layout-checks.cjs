@@ -23,6 +23,11 @@ module.exports=async({a,ok})=>{
  await a.mouse.click(2,2);ok(await a.locator('#reception-dialog').evaluate(d=>d.open),'背景タップでは本人確認や入力を破棄しない');
  await a.locator('#reception-close').click();await a.locator('#reception-close-discard').click();await a.waitForFunction(()=>!document.getElementById('reception-dialog').open);
  ok(await a.locator('[data-reception-select]').evaluate(el=>document.activeElement===el),'未送信入力を破棄して閉じると元の対象者ボタンへフォーカスを戻す');
+ await a.evaluate(()=>{window.__receptionUnexpectedOpen=0;window.__receptionOpenObserver=new MutationObserver(records=>{window.__receptionUnexpectedOpen+=records.filter(r=>r.attributeName==='open'&&r.oldValue===null).length;});window.__receptionOpenObserver.observe(document.getElementById('reception-dialog'),{attributes:true,attributeOldValue:true,attributeFilter:['open']});});
+ await a.locator('#reception-search-submit').click();await a.locator('[data-reception-select]').waitFor();
+ await a.waitForFunction(()=>!document.getElementById('reception-search-submit').disabled);
+ const unexpected=await a.evaluate(()=>{window.__receptionOpenObserver.disconnect();return window.__receptionUnexpectedOpen;});
+ ok(unexpected===0,'閉じた後の一覧再検索で本人確認モーダルを勝手に開かない');
  await a.locator('[data-reception-select]').click();await a.locator('#reception-target').waitFor();await a.waitForFunction(()=>document.getElementById('reception-dialog').open);
  ok(await a.locator('#reception-note').inputValue()===''&&!await a.locator('#reception-done').isChecked(),'再表示は破棄前の下書きや確認済み状態を復活させない');
 };
