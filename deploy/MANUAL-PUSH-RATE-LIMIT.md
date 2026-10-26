@@ -1,7 +1,0 @@
-# Manual Push explicit429 recovery
-
-An explicit WebPush429 response establishes rate-limit nonacceptance, unlike a lost response/timeout/network/408/5xx. It may return the same durable delivery to Pending with a fresh future claim only. No automatic retry of Unknown is introduced.
-
-The not-before time is the maximum of local exponential backoff and the provider Retry-After (one valid delta-seconds or HTTP-date). Fractional response time rounds up to avoid retrying early. Missing, malformed, multiple or past headers use local backoff. An oversized valid delta is bounded above the maximum lifetime only to terminate the row, never shorten a provider wait into an early send. Waits at/beyond the ORIGINAL acceptance+600s deadline expire; retries never extend admission/expiry. Five total attempts and exact current claim fencing still apply. Every later attempt rechecks current account/view/registration/device/session/activation before I/O. Provider headers/content are neither persisted nor logged.
-
-No schema migration, DI/worker/HTTP registration, activation, real Push endpoint, inbox mutation, DXP change, distribution or merge. Current keys and runtime policy remain unchanged. Existing dispatcher synthetic coverage is expanded to60 checks, including delta/date/fractional/past1900/malformed values, deadline equality, excessive wait, attempt exhaustion, registration revocation and concurrent due retries. All external transport remains fake/in-memory HTTP. Current-source full regressions and CI are separate evidence from real-device acceptance.

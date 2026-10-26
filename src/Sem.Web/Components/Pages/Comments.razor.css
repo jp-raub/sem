@@ -1,7 +1,0 @@
-.comment-composer{box-sizing:border-box;inset:0;margin:auto;width:min(560px,calc(100vw - 32px));max-height:calc(100dvh - 32px);overflow:auto;overflow-wrap:anywhere;border:1px solid var(--appearance-line,#cbd8ce);border-radius:12px;padding:clamp(16px,3vw,24px);background:var(--appearance-surface,#fffefa);color:var(--appearance-text,#18312e)}
-.comment-composer::backdrop{background:#0008}
-.comment-composer textarea{display:block;width:100%;min-height:140px;box-sizing:border-box}
-.comment-composer button{min-height:44px}
-.comment-compose-actions{display:flex;flex-wrap:wrap;gap:8px}
-.comment-compose-actions button{max-width:100%;white-space:normal}
-.comment-text{margin:8px 0}

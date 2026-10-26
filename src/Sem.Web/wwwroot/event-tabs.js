@@ -1,16 +1,4 @@
-import {readTabSelection,saveTabSelection,nextTabIndex} from './event-tabs-state.mjs';
-const bindings=new Map();
-export function unbindTabs(id,owner){const previous=bindings.get(id);if(previous&&(owner===undefined||previous.owner===owner)){previous.root.removeEventListener('keydown',previous.key);bindings.delete(id);}}
-export function bindTabs(id,sink,userId,eventId,available,selected,restore,owner="default"){
- unbindTabs(id);const root=document.getElementById(id);if(!root)throw new Error("Event tab root unavailable");
- // Defensive client filter never grants server permissions. No event data or drafts are persisted.
- const buttons=[...root.querySelectorAll('[role=tab][data-event-tab]')].filter(b=>available.includes(b.dataset.eventTab));
- const key=e=>{if(e.altKey||e.ctrlKey||e.metaKey||e.shiftKey)return;const index=buttons.indexOf(e.target),next=nextTabIndex(e.key,index,buttons.length);if(next===null)return;e.preventDefault();const b=buttons[next];b.focus();b.scrollIntoView({block:'nearest',inline:'nearest'});sink.invokeMethodAsync('SelectFromKeyboard',b.dataset.eventTab).catch(()=>{});};
- const active=buttons.find(b=>b.dataset.eventTab===selected);if(active){active.focus({preventScroll:true});active.scrollIntoView({block:'nearest',inline:'nearest'});}else if(buttons[0])buttons[0].tabIndex=0;
- root.addEventListener('keydown',key);bindings.set(id,{root,key,owner});
- let storage;try{storage=window.sessionStorage;}catch{return null;}
- const target=restore?readTabSelection(storage,userId,eventId,available):selected;
- if(target===selected)saveTabSelection(storage,userId,eventId,available,selected);
- // Do not store a requested tab here: a blocked or unsuccessful route leaves the current selection untouched.
- return target;
-}
+'use strict';
+(()=>{const prior=eventPage,key='session-room-event-tabs-v27';function read(){try{return JSON.parse(sessionStorage.getItem(key))||{};}catch{return {};}}function write(id,value){try{sessionStorage.setItem(key,JSON.stringify({...read(),[id]:value}));}catch{}}const value=b=>b.dataset.eventTab||b.dataset.opsTab;eventPage=function(e){prior(e);const nav=$('.event-tabs');if(!nav)return;const buttons=[...nav.querySelectorAll('[data-event-tab],[data-ops-tab]')],scope=(current||'guest')+':'+e.Id;nav.setAttribute('role','tablist');nav.setAttribute('aria-label','イベント内のページ');const panels=new Map;for(const b of buttons){const v=value(b),id='event-'+encodeURIComponent(e.Id)+'-'+v;const panel=v==='main'?$('.event-layout'):v==='roster'?$('.roster-panel'):[...document.querySelectorAll('[data-ops-pane]')].find(p=>p.dataset.opsPane===v);b.id=id+'-tab';b.setAttribute('role','tab');if(panel){panel.id=id+'-panel';panel.setAttribute('role','tabpanel');panel.setAttribute('aria-labelledby',b.id);b.setAttribute('aria-controls',panel.id);panels.set(v,panel);}b.addEventListener('click',()=>{write(scope,v);sync();});b.addEventListener('keydown',event=>{const index=buttons.indexOf(b);let next;if(event.key==='ArrowRight')next=(index+1)%buttons.length;else if(event.key==='ArrowLeft')next=(index-1+buttons.length)%buttons.length;else if(event.key==='Home')next=0;else if(event.key==='End')next=buttons.length-1;else return;event.preventDefault();buttons[next].click();buttons[next].focus();});}
+function sync(){for(const b of buttons){const active=b.getAttribute('aria-selected')==='true';b.tabIndex=active?0:-1;panels.get(value(b))?.setAttribute('aria-hidden',String(!active));}}
+const saved=read()[scope],selected=buttons.find(b=>value(b)===saved&&!b.disabled&&!b.hidden)||buttons.find(b=>value(b)==='main')||buttons[0];selected?.click();sync();};render();})();

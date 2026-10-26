@@ -1,0 +1,1 @@
+.board td.time,.board th:nth-child(2),.board th:nth-child(3),.board th:nth-child(5){text-align:right;font-variant-numeric:tabular-nums}.preset-name-edit{cursor:pointer;color:var(--green);text-decoration:underline;text-decoration-style:dotted;text-underline-offset:4px}.preset-name-edit:hover{text-decoration-style:solid}

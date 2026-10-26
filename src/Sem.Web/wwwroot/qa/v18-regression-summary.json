@@ -1,0 +1,1 @@
+{"release":"UI MOCK v18","totalPassed":102,"suites":[{"script":"test-event-opening.cjs","passed":27},{"script":"test-account-priority.cjs","passed":24},{"script":"test-event-features.cjs","passed":30},{"script":"test-attendance-v15.cjs","passed":21}],"excluded":"QR check-in, live operations, messaging inbox and real Push delivery are not implemented in this release"}

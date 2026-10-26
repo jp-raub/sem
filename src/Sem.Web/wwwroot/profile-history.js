@@ -1,71 +1,8 @@
-const BASIC_PROFILE_LIMIT = 4 * 1024 * 1024;
-const HISTORY_LIMIT = 4 * 1024 * 1024;
-const REQUEST_TIMEOUT_MS = 25_000;
-
-function validateId(id) {
-    if (typeof id !== 'string' || id.length === 0 || id.length > 128 || /[\u0000-\u001f\u007f-\u009f]/u.test(id))
-        throw new Error('Invalid profile id');
-}
-
-async function readBoundedJson(response, byteLimit) {
-    if (!response.body) throw new Error('Profile response is unavailable');
-    const reader = response.body.getReader();
-    const chunks = [];
-    let size = 0;
-    try {
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            size += value.byteLength;
-            if (size > byteLimit) {
-                await reader.cancel();
-                throw new Error('Profile response exceeds its limit');
-            }
-            chunks.push(value);
-        }
-    } catch (error) {
-        try { await reader.cancel(); } catch { /* already closed */ }
-        throw error;
-    } finally {
-        reader.releaseLock();
-    }
-
-    const bytes = new Uint8Array(size);
-    let offset = 0;
-    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
-    const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
-    return JSON.parse(text);
-}
-
-async function getJson(path, limit) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-    try {
-        const response = await fetch(path, {
-            method: 'GET',
-            credentials: 'same-origin',
-            cache: 'no-store',
-            redirect: 'error',
-            signal: controller.signal
-        });
-        if (response.status === 403) return { status: 403, value: null };
-        if (response.status !== 200) throw new Error('Profile response is unavailable');
-        return { status: 200, value: await readBoundedJson(response, limit) };
-    } finally {
-        clearTimeout(timer);
-    }
-}
-
-export async function profile(id) {
-    validateId(id);
-    return getJson('/api/core/profile?id=' + encodeURIComponent(id), BASIC_PROFILE_LIMIT);
-}
-
-export async function history(id) {
-    validateId(id);
-    return getJson('/api/core/profile-registration-history?id=' + encodeURIComponent(id), HISTORY_LIMIT);
-}
-
-// Blazor wraps typed byte arrays as IJSStreamReference, avoiding the default SignalR message cap.
-export async function profileStream(id) { const bytes=new TextEncoder().encode(JSON.stringify(await profile(id)));if(bytes.byteLength>BASIC_PROFILE_LIMIT)throw new Error('Profile transfer exceeds its limit');return bytes; }
-export async function historyStream(id) { const bytes=new TextEncoder().encode(JSON.stringify(await history(id)));if(bytes.byteLength>4*1024*1024)throw new Error('History transfer exceeds its limit');return bytes; }
+'use strict';
+// Unified profile registration history. Spectators are entries, not a separate panel.
+(()=>{
+const priorRender=render;
+function registrations(u){return db.events.filter(visible).map(event=>{const songs=event.rows.filter(r=>r.Kind==='Song').map(song=>({song,parts:(song.parts||[]).filter(p=>p.AssignedUserId===u.Id)})).filter(r=>r.parts.length);return {event,songs,spectator:!songs.length&&!!event.Spectators?.some(s=>s.UserId===u.Id)};}).filter(row=>row.songs.length||row.spectator).sort((a,b)=>b.event.ScheduledDate.localeCompare(a.event.ScheduledDate));}
+render=function(){priorRender();if(!user()||!$('.profile-card'))return;const path=location.hash.split('?')[0],u=path==='#/profile'?user():path.startsWith('#/profiles/')?db.users.find(u=>u.Id===decodeURIComponent(path.slice('#/profiles/'.length))):null;if(!u)return;const root=$('.profile-card').parentElement,sections=[...root.querySelectorAll('section')],history=sections.find(s=>s.querySelector('h2')?.textContent==='参加登録したイベント・曲・パート');if(!history)return;sections.filter(s=>s.querySelector('h2')?.textContent==='観覧のみの参加登録').forEach(s=>s.remove());history.innerHTML='<h2>参加登録したイベント・曲・パート</h2><p class="tiny muted">演奏参加と観覧のみの申込みをまとめて表示しています。実際の出席・演奏を証明する履歴ではありません。閲覧できないイベントは表示しません。</p>'+ (registrations(u).map(({event:e,songs,spectator})=>`<article class="profile-event"><h3><a href="#/events/${esc(e.Id)}">${esc(e.Title)}</a></h3><p class="tiny muted">${fmt(e.ScheduledDate)} · ${esc(phase(e).Name)}</p>${spectator?'<p><span class="badge">観覧のみ</span></p>':songs.map(({song:r,parts})=>`<div class="profile-song"><strong>${esc(r.Title)}</strong><span class="muted">${esc(r.Artist)}</span><span>${parts.map(p=>`<span class="badge">${esc(p.Name)}</span>`).join(' ')}</span></div>`).join('')}</article>`).join('')||'<p class="muted">表示できる参加登録履歴はありません。</p>');};
+window.MockProfileHistory={registrations};render();
+})();

@@ -1,0 +1,8 @@
+'use strict';
+// Restore every management panel, including populated response charts, in one pass.
+(()=>{const prior={eventPage};function reorder(){if(!$('#commit-edit'))return;const left=$('.event-layout > div');if(!left)return;const order=['フェーズ設定','タイムテーブル','追加設問の回答状況','観覧のみ申し込み','コメント','イベント設問','イベント限定管理者設定','監査ログ'];for(const name of order){const section=[...left.children].find(s=>s.querySelector('h2')?.textContent===name);if(section)left.append(section);}}
+eventPage=function(...args){prior.eventPage(...args);reorder();MockFieldHelp.refresh();};
+function labelImage(){const field=$('#header-upload');if(!field)return;for(const node of field.closest('label').childNodes)if(node.nodeType===Node.TEXT_NODE&&node.nodeValue.includes('1MB以下'))node.nodeValue=node.nodeValue.replace('1MB以下','10MB以下・大きな画像は表示用に縮小/圧縮');}
+document.addEventListener('change',async ev=>{const field=ev.target;if(field.id!=='header-upload')return;const file=field.files?.[0],original=field.onchange;if(!file||!original)return;ev.stopImmediatePropagation();ev.stopPropagation();const submit=$('#modal-submit');submit.disabled=true;try{const url=await MockImageAssets.prepare(file),mime=url.match(/^data:([^;]+)/)[1],binary=atob(url.split(',')[1]),bytes=Uint8Array.from(binary,c=>c.charCodeAt(0)),displayFile=new File([bytes],file.name,{type:mime});$('#modal-error').textContent='';await original({target:{files:[displayFile]}});}catch(err){$('#modal-error').textContent=err.message;}finally{submit.disabled=false;}},true);
+let pending=false;new MutationObserver(()=>{if(pending)return;pending=true;setTimeout(()=>{pending=false;labelImage();},0);}).observe($('#dialog-body'),{childList:true,subtree:true});
+window.MockLayoutRefinement={reorder};render();})();
