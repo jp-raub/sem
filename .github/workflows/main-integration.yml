@@ -40,7 +40,11 @@ jobs:
             p=Path(path);p.parent.mkdir(parents=True,exist_ok=True);p.write_text(content)
            subprocess.run(['git','add','-A'],check=True)
            subprocess.run(['git','commit','-m','稼働版ページと厳密な公開後照合を最優先で再接続'],check=True)
-           subprocess.run(['git','push','origin','HEAD:refs/heads/implementation/mock-first-runtime'],check=True)
+           result=subprocess.run(['git','push','origin','HEAD:refs/heads/implementation/mock-first-runtime'],capture_output=True,text=True)
+           if result.returncode:
+            print('::error::'+result.stderr.replace('
+           ',' | '))
+            raise RuntimeError('Branch push rejected')
           except Exception:
            print('::error::'+traceback.format_exc().replace('\n',' | '))
            raise
