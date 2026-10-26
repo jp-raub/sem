@@ -61,6 +61,8 @@ node scripts/operation-result-presenter-checks.mjs
 node scripts/profile-result-boundary-checks.mjs
 node scripts/profile-image-transport-checks.mjs
 node scripts/profile-editor-dialog-checks.mjs
+node scripts/reception-dialog-checks.mjs
+node --check scripts/reception-dialog-layout-checks.cjs
 node scripts/profile-history-transport-checks.mjs
 node --check src/Sem.Web/wwwroot/admin-candidate-picker.js
 node --check src/Sem.Web/wwwroot/field-help.js

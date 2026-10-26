@@ -3,7 +3,8 @@ using System.Text;
 using Microsoft.EntityFrameworkCore;
 namespace Sem.Web.Core;
 public sealed record ReceptionStatus(string At,string ActorName,string Method);
-public sealed record ReceptionPerson(string UserId,string DisplayName,string Reading,bool Spectator,string[] Songs,ReceptionStatus? Current=null);
+public sealed record ReceptionQrReadStatus(string At,string ActorName);
+public sealed record ReceptionPerson(string UserId,string DisplayName,string Reading,bool Spectator,string[] Songs,ReceptionStatus? Current=null,ReceptionQrReadStatus? LastQrRead=null);
 public sealed record ReceptionRoster(string EventId,string Title,int ParticipantCount,int MatchCount,ReceptionPerson[] People,bool MoreMatches,int CompletedCount=0){public int UnreceivedCount=>ParticipantCount-CompletedCount;}
 public sealed partial class CoreFoundationService {
  internal static string ReceptionSearchKey(string value)=>string.Concat(value.Normalize(NormalizationForm.FormKC).ToLowerInvariant().Where(c=>!char.IsWhiteSpace(c)).Select(c=>c is >= 'ァ' and <= 'ヶ'?(char)(c-0x60):c));
@@ -17,6 +18,13 @@ public sealed partial class CoreFoundationService {
   var songs=await(from part in db.SongParts.AsNoTracking() join s in db.Songs.AsNoTracking() on part.SongId equals s.Id where part.EventId==id&&part.AssignedUserId!=null select new{UserId=part.AssignedUserId!,s.Id,s.Title,s.SortOrder}).Distinct().OrderBy(x=>x.SortOrder).ThenBy(x=>x.Id).ToArrayAsync(ct);
   var spectators=await db.EventSpectators.AsNoTracking().Where(x=>x.EventId==id).Select(x=>x.UserId).ToArrayAsync(ct);
   var matches=names.Where(u=>search.Length==0||ReceptionSearchKey(u.DisplayName).Contains(search,StringComparison.Ordinal)||ReceptionSearchKey(u.Reading).Contains(search,StringComparison.Ordinal)).OrderBy(u=>ReceptionSearchKey(u.DisplayName),StringComparer.Ordinal).ThenBy(u=>u.Id,StringComparer.Ordinal).ToArray();
-  var people=matches.Take(100).Select(u=>new ReceptionPerson(u.Id,u.DisplayName,u.Reading,spectators.Contains(u.Id),songs.Where(s=>s.UserId==u.Id).Select(s=>s.Title).ToArray(),received.GetValueOrDefault(u.Id))).ToArray();await tx.CommitAsync(ct);return new(e.Id,e.Title,ids.Length,matches.Length,people,matches.Length>100,received.Count);
+  var displayed=matches.Take(100).Select(u=>u.Id).ToArray();
+  // 表示対象ごとの真の最終読取をDB内で選ぶ。履歴の先頭100件との近似結合はしない。
+  // 同一時刻は履歴APIと同じId順で一意にする。別イベント・登録外の履歴は投影しない。
+  var lastReads=await(from read in db.EventQrReads.AsNoTracking()
+   join actor in db.Users.AsNoTracking() on read.ActorId equals actor.Id
+   where read.EventId==id&&displayed.Contains(read.UserId)&&!db.EventQrReads.Any(newer=>newer.EventId==id&&newer.UserId==read.UserId&&(string.Compare(newer.At,read.At)>0||newer.At==read.At&&string.Compare(newer.Id,read.Id)>0))
+   select new{read.UserId,Status=new ReceptionQrReadStatus(read.At,actor.DisplayName)}).ToDictionaryAsync(x=>x.UserId,x=>x.Status,ct);
+  var people=matches.Take(100).Select(u=>new ReceptionPerson(u.Id,u.DisplayName,u.Reading,spectators.Contains(u.Id),songs.Where(s=>s.UserId==u.Id).Select(s=>s.Title).ToArray(),received.GetValueOrDefault(u.Id),lastReads.GetValueOrDefault(u.Id))).ToArray();await tx.CommitAsync(ct);return new(e.Id,e.Title,ids.Length,matches.Length,people,matches.Length>100,received.Count);
  }
 }

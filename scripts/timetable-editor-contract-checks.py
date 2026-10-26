@@ -24,6 +24,12 @@ def verify(w,f,d):
   command='node scripts/'+name
   assert w.count(command)==1 and command not in browser
   assert re.search(r'(?m)^          '+re.escape(command)+r'$',shared[0])
+ reception=[s for s in steps if 'name: 独立した新規fixtureで受付UIを検証' in s]
+ assert len(reception)==1 and 'SEM_ACCEPTANCE_FOCUS: reception-ui' in reception[0]
+ assert 'run: bash scripts/acceptance-browser-fixture.sh' in reception[0]
+ assert not re.search(r'(?m)^        (?:if:|continue-on-error:)',reception[0])
+ assert 'reception-ui) export SEM_MEMBER_PROFILE_CHECKS=1 SEM_RECEPTION_ROSTER_CHECKS=1 SEM_MANUAL_RECEPTION_CHECKS=1 ;;' in f
+ assert "if(process.env.SEM_MANUAL_RECEPTION_CHECKS)await phase('manual-reception-checks',()=>require('./manual-reception-checks.cjs')({p,g,ok}));" in d
  assert 'run: bash scripts/integration-checks.sh' in integration
  assert 'run: bash scripts/acceptance-browser-fixture.sh' in browser
  assert 'SEM_ACCEPTANCE_FOCUS:' not in browser
@@ -84,4 +90,8 @@ else:raise AssertionError('プロフィールUIのfull検証を削除できた')
 try:verify(workflow,fixture,driver.replace("if(process.env.SEM_SETTINGS_NAVIGATION_CHECKS)await phase('settings-pages-checks'","if(false)await phase('settings-pages-checks'"))
 except AssertionError:pass
 else:raise AssertionError('プロフィールUIドライバーを無効化できた')
+for unsafe in [workflow.replace('SEM_ACCEPTANCE_FOCUS: reception-ui','SEM_ACCEPTANCE_FOCUS: profile-ui'),workflow.replace('      - name: 独立した新規fixtureで受付UIを検証','      - name: 独立した新規fixtureで受付UIを検証\n        if: false')]:
+ try:verify(unsafe,fixture,driver)
+ except AssertionError:continue
+ raise AssertionError('受付UIの必須検査を無効化できた')
 print('Unified timetable coverage contract passed: actual workflow + 17 unsafe mutations rejected')

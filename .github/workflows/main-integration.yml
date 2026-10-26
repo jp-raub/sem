@@ -71,6 +71,20 @@ jobs:
           node scripts/operation-feedback-browser-checks.cjs
           node scripts/service-navigation-lifecycle-checks.cjs
           node scripts/theme-lifecycle-browser-checks.cjs
+      - name: 独立した新規fixtureで受付UIを検証
+        env:
+          NODE_PATH: ${{ runner.temp }}/sem-browser/node_modules
+          SEM_ACCEPTANCE_FOCUS: reception-ui
+        run: bash scripts/acceptance-browser-fixture.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: reception-ui-browser-results
+          path: |
+            verification/acceptance-native/e2e-result.json
+            verification/acceptance-native/acceptance-phases.json
+            verification/acceptance-native/fixture-phases.tsv
+          retention-days: 7
       - name: Verify unified timetable UI in an independent fresh fixture
         env:
           NODE_PATH: ${{ runner.temp }}/sem-browser/node_modules

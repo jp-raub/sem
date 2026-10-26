@@ -3,7 +3,7 @@
 @inject AuthenticationStateProvider Authentication
 @inject CoreFoundationService Core
 <section id="receipt-history-panel" aria-label="受付完了と取消しの履歴">
-<h2>受付完了／取消し履歴（受付日時の新しい順）</h2>
+<details open class="reception-history"><summary>受付完了／取消し履歴（受付日時の新しい順）</summary>
 <p>読取履歴とは別です。過去の履歴があることと、現在の参加登録・受付完了は同じではありません。取消し等の変更操作は最新の個別確認画面で行ってください。</p>
 <p id="receipt-history-error" role="alert">@Error</p>
 <button id="receipt-history-refresh" disabled="@(Busy||ExternalBusy)" @onclick="()=>Load(null,0,Filter)">最新から読み直す</button>
@@ -11,6 +11,7 @@
 @if(Page is not null){
 @if(Filter is not null){<p>選択した対象者の履歴だけを表示しています。</p>}
 <p>1ページ最大100件。続きがある場合は「次の100件」でたどれます。</p>
+<div class="receipt-history-records" tabindex="0" role="region" aria-label="受付完了と取消しの記録">
 @foreach(var row in Page.Receipts){<article data-receipt-history-id="@row.Receipt.Id">
 <h3>@row.DisplayName ／ @(row.Receipt.Method=="QR"?"QR":"手動")</h3>
 <p>@Time(row.Receipt.At) ／ @row.Receipt.ActorName</p>
@@ -19,13 +20,13 @@
 @if(row.Receipt.CancelledAt is not null){<p>取消し：@Time(row.Receipt.CancelledAt) ／ @row.Receipt.CancelledByName</p>}else{<p>この履歴に取消し記録はありません。現在の受付状態は一覧で確認してください。</p>}
 @if(row.Receipt.ReadId is not null){<p>元のQR読取記録との関連あり</p>}
 <button data-receipt-history-user="@row.UserId" disabled="@(Busy||ExternalBusy||Filter==row.UserId)" @onclick="()=>Load(null,0,row.UserId)">この対象者の全履歴をたどる</button>
-</article>}
+</article>}</div>
 @if(Page.Receipts.Length==0){<p>このページに受付履歴はありません。</p>}
 <button id="receipt-history-back" disabled="@(Busy||ExternalBusy||Previous.Count==0)" @onclick="Back">前のページ</button>
 <button id="receipt-history-next" disabled="@(Busy||ExternalBusy||Page.Next is null)" @onclick="Next">次の100件</button>
 @if(Page.Next is not null){<p>続きの記録があります。全件表示ではありません。</p>}
 }
-</section>
+</details></section>
 @code{
  [Parameter]public string EventId{get;set;}="";
  [Parameter]public bool ExternalBusy{get;set;}

@@ -3,20 +3,20 @@
 @inject AuthenticationStateProvider Authentication
 @inject CoreFoundationService Core
 <section id="qr-read-history-panel" aria-label="QR読取履歴">
-<h2>QR読取履歴（新しい順）</h2>
+<details open class="reception-history"><summary>QR読取履歴（新しい順）</summary>
 <p>読取は受付確定ではありません。現在の受付状態は参加登録者一覧で確認してください。秘密コード・メール・私的回答は表示しません。</p>
 <p id="qr-history-error" role="alert">@Error</p>
 <button id="qr-history-refresh" disabled="@(Busy||ExternalBusy)" @onclick="()=>Load(null)">最新から読み直す</button>
 @if(Page is not null){
-<table><caption>読取記録（1ページ最大100件）</caption><thead><tr><th scope="col">日時</th><th scope="col">対象者</th><th scope="col">読取担当者</th><th scope="col">コード版</th></tr></thead><tbody>
+<div class="history-table-wrap" tabindex="0" role="region" aria-label="QR読取記録（縦横にスクロールできます）"><table><caption>読取記録（1ページ最大100件）</caption><thead><tr><th scope="col">日時</th><th scope="col">対象者</th><th scope="col">読取担当者</th><th scope="col">コード版</th></tr></thead><tbody>
 @foreach(var row in Page.Reads){<tr data-qr-history-id="@row.Id"><td>@Time(row.At)</td><td>@row.DisplayName</td><td>@row.ActorName</td><td>@row.TokenVersion</td></tr>}
-</tbody></table>
+</tbody></table></div>
 @if(Page.Reads.Length==0){<p>このページに読取記録はありません。</p>}
 <button id="qr-history-back" disabled="@(Busy||ExternalBusy||Previous.Count==0)" @onclick="Back">前のページ</button>
 <button id="qr-history-next" disabled="@(Busy||ExternalBusy||Page.Next is null)" @onclick="Next">次の100件</button>
 @if(Page.Next is not null){<p>続きの記録があります。全件表示ではありません。</p>}
 }
-</section>
+</details></section>
 @code{
  [Parameter]public string EventId{get;set;}="";
  [Parameter]public bool ExternalBusy{get;set;}
