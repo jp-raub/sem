@@ -41,6 +41,7 @@ jobs:
             python3 scripts/storage-source-checks.py
             dotnet run --project tests/Sem.Storage.Checks -c Release
             dotnet run --project tests/Sem.Authentication.Checks -c Release
+            dotnet run --project tests/Sem.Hosting.Checks -c Release
           fi
           python3 scripts/cd/release_gate_checks.py
           python3 scripts/cd/updater_checks.py
@@ -116,6 +117,13 @@ jobs:
         env:
           SEM_AUTH_FIXTURE_DLL: /tmp/sem-auth-fixture/Sem.Authentication.Fixture.dll
         run: node scripts/authentication-native-browser.cjs
+      - name: 実製品の固定ログインUI・保全・再起動を合成HTTPSで検証
+        if: steps.auth-scope.outputs.storage != 'false'
+        timeout-minutes: 2
+        env:
+          SEM_PRODUCT_DLL: /tmp/sem/Sem.Web.dll
+          SEM_AUTH_FIXTURE_DLL: /tmp/sem-auth-fixture/Sem.Authentication.Fixture.dll
+        run: node scripts/product-authentication-browser.cjs
       - name: ローカル検証ホストを終了
         if: always()
         run: |

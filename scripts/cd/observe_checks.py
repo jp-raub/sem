@@ -156,7 +156,15 @@ class Checks(unittest.TestCase):
         self.assertIn('sem-runtime-footer',source)
         self.assertIn('UIデモ版',source)
         self.assertIn('mock-ui-ready',source)
-        self.assertNotIn('ApplicationDbContext',source)
+        # PR128の「全モードでDB参照なし」は分離段階の制約。現在は既定demoと明示実認証を分ける。
+        self.assertIn('product is null ? null : await ProductStorage.OpenAsync(product)',source)
+        self.assertIn('if (product is not null)',source)
+        self.assertIn('app.MapSemNativeAuthentication();',source)
+        self.assertNotIn('SqliteStorageInitializer.InitializeAsync',source)
+        settings=(root/'src/Sem.Hosting/ProductSettings.cs').read_text()
+        self.assertIn('mode is null or "demo"',settings)
+        self.assertIn('SEM_PRODUCT_MIXED_CONFIGURATION',settings)
+        self.assertNotIn('SEM_APPLICATION_MODE=authenticated',(root/'deploy/Dockerfile').read_text())
     def test_workflows_keep_publication_independent_and_embed_build(self):
         root=Path(__file__).resolve().parents[2]
         publish=(root/'.github/workflows/cd-image.yml').read_text()

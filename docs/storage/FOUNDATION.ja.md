@@ -4,7 +4,7 @@
 
 固定mockのUIへ実機能を接続する前段として、保全済み旧main `812b2784212e9015ecbbce31280e48cb0bc65e84` の保存モデルを `src/Sem.Storage` へ分離した。技術基盤は従来の.NET 10・Identity・EF Coreを維持し、独自の認証ストアにはしない。
 
-**公開ホスト `Sem.Web` はこのライブラリをまだ参照しない。実DB・鍵・volumeの読書き、migration自動適用、ログイン、業務保存、メール／Push workerの起動は追加していない。** `/about` と `mock-ui-ready` のデモ版説明も変更しない。これは全機能版への切替ではない。
+**分離段階（PR130）では公開ホスト `Sem.Web` は未参照だった。後続の[製品接続](../auth/PRODUCT-CONNECTION.ja.md)で明示モードの参照を追加した。既定demoでは実DB・鍵・volumeへ接続せず、migration自動適用・業務保存・メール／Push workerも起動しない。** `/about` と `mock-ui-ready` のデモ版説明も変更しない。これは全機能版への切替ではない。
 
 要件IDはF02、D01〜D05、T01・T04・T06、N01〜N03。要件正本はNotion、画面と接続順は[UI対応表](../ui/IMPLEMENTATION-MAP.ja.md)、この資料は内部実装・検証境界を記録する。旧物理モデルを最新要件へ完全対応済みと主張しない。
 

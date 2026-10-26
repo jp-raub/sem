@@ -3,6 +3,9 @@ WORKDIR /source
 # Restore must see the Razor sources: the SDK derives implicit Blazor web assets
 # during restore. Restoring the csproj alone omits framework JavaScript.
 COPY src/Sem.Web/ src/Sem.Web/
+COPY src/Sem.Hosting/ src/Sem.Hosting/
+COPY src/Sem.Authentication/ src/Sem.Authentication/
+COPY src/Sem.Storage/ src/Sem.Storage/
 RUN dotnet restore src/Sem.Web/Sem.Web.csproj
 ARG SEM_COMMIT=""
 ARG SEM_PUBLICATION_RUN=""

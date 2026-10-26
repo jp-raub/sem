@@ -20,6 +20,8 @@ class Checks(unittest.TestCase):
                      'src/Sem.Web/Runtime/Authentication.cs','.github/workflows/main-integration.yml',
                      'src/Sem.Authentication/AuthenticationPipeline.cs','tests/Sem.Authentication.Fixture/Program.cs',
                      'scripts/authentication-native-browser.cjs','scripts/authentication-source-checks.py',
+                     'src/Sem.Hosting/ProductStorage.cs','src/Sem.Web/ProductUI/authentication.js',
+                     'scripts/product-authentication-browser.cjs','tests/Sem.Hosting.Checks/Program.cs',
                      'scripts/test-scope.py','global.json','unknown']:
             self.assertTrue(scope.storage_required(['docs/ui/example.md',path]))
     def test_empty_or_unknown_is_full(self):
