@@ -24,6 +24,3 @@
 
 ### 保存基盤の分離
 [旧Identity・モデル・migrationの保存基盤](docs/storage/FOUNDATION.ja.md)を`Sem.Storage`へ分離しました。合成DBで互換・保持・拒否を検証しますが、公開ホストからはまだ参照せず、実DB／鍵の利用や実認証は開始していません。
-
-### 公開後照合の接続先
-[接続先の環境設定](docs/runtime/PUBLIC-OBSERVATION.ja.md)：公開先は`SEM_PUBLIC_ORIGIN`で注入し、Actionsでは同名Repository secretを使用します。実値をソース・ログ・成果物へ記載せず、未設定は成功扱いにしません。設定確認前は変更をmainへ統合しません。
