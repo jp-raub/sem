@@ -28,6 +28,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 scripts/mock-checks.py
+          python3 scripts/ui-inventory-checks.py
           python3 scripts/cd/release_gate_checks.py
           python3 scripts/cd/updater_checks.py
           python3 scripts/cd/observe_checks.py
@@ -58,3 +59,4 @@ jobs:
           (cd /tmp/sem; dotnet Sem.Web.dll --urls http://127.0.0.1:8765 > /tmp/sem.log 2>&1) &
           for n in $(seq 1 40); do curl -fsS http://127.0.0.1:8765/health/live && break; sleep 1; done
           node scripts/runtime-browser.cjs
+          node scripts/ui-inventory-browser.cjs
