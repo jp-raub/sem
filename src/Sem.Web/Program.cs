@@ -1,166 +1,45 @@
-using Microsoft.AspNetCore.Components.Authorization;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.AspNetCore.RateLimiting;
-using System.Threading.RateLimiting;
-using Sem.Web.Components;
-using Sem.Web.Components.Account;
-using Sem.Web.Data;
+using System.Security.Cryptography;
+using System.Text.Json;
+using System.Text.RegularExpressions;
+using System.Net;
 using Sem.Web.Runtime;
-using WebPush;
-using System.Security.Claims;
-using Microsoft.AspNetCore.Authentication;
-using Sem.Web.Core;
 
-// Maintenance exits before deployment configuration, migrations, HTTP or notification workers.
-if (args.Length > 0 && args[0] == "--passkey-emergency-recovery")
-{
-    Environment.ExitCode = await PasskeyEmergencyRecoveryMaintenance.RunAsync(args[1..]);
-    return;
-}
-if (args.Length > 0 && args[0] == "--legacy-event-reset")
-{
-    Environment.ExitCode = await LegacyEventResetMaintenance.RunAsync(args[1..]);
-    return;
-}
-if (args.Contains("--generate-vapid"))
-{
-    var keys = VapidHelper.GenerateVapidKeys();
-    Console.WriteLine("PUSH_PUBLIC_KEY=" + keys.PublicKey);
-    Console.WriteLine("PUSH_PRIVATE_KEY=" + keys.PrivateKey);
-    return;
-}
-// Native decoder smoke check: no deployment configuration, database, HTTP, or workers.
-if (args.Length == 1 && args[0] == "--profile-image-self-test")
-{
-    try
-    {
-        var sample = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAIAAAB7QOjdAAAAD0lEQVR4nGNkjNJgYGAAAAJ2AIXm5L7XAAAAAElFTkSuQmCC");
-        var normalized = await ProfileImageNormalizer.NormalizeAsync(sample, "image/png");
-        if (normalized.Width != 2 || normalized.Height != 1 || normalized.Png.Length > ProfileImageNormalizer.MaxOutputBytes)
-            throw new InvalidOperationException("Unexpected image normalization result.");
-        Console.WriteLine("Profile image native PNG normalization passed; no database or HTTP was opened.");
-    }
-    catch (Exception error)
-    {
-        Console.Error.WriteLine("Profile image native normalization failed: " + error.GetType().Name);
-        Environment.ExitCode = 1;
-    }
-    return;
-}
-// Offline inspection of the exact product assembly, including in a network-isolated image.
-if (args.Length == 1 && args[0] == "--build-info")
-{
-    Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(RuntimeBuildInfo.Current.Payload(null)));
-    return;
+if (args.Length == 1 && args[0] == "--build-info") {
+    Console.WriteLine(JsonSerializer.Serialize(RuntimeBuildInfo.Current.Payload(null))); return;
 }
 var builder = WebApplication.CreateBuilder(args);
-var deployment = builder.AddSemDeployment();
-// Exclude offline emergency maintenance before migrations, HTTP, or workers start.
-using var storageLease = SemStorageRuntimeLease.Acquire(deployment.DataDirectory);
-builder.Services.AddRazorComponents().AddInteractiveServerComponents();
-builder.Services.AddCascadingAuthenticationState();
-builder.Services.AddScoped<IdentityRedirectManager>();
-builder.Services.AddScoped<AuthenticationStateProvider, IdentityRevalidatingAuthenticationStateProvider>();
-builder.Services.AddAuthentication(o => { o.DefaultScheme = IdentityConstants.ApplicationScheme; o.DefaultSignInScheme = IdentityConstants.ExternalScheme; }).AddIdentityCookies();
-builder.Services.AddAuthentication().AddCookie("SEM.Enrollment", o =>
-{
-    o.Cookie.Name = "__Host-SEM-Enrollment"; o.Cookie.SecurePolicy = CookieSecurePolicy.Always; o.Cookie.HttpOnly = true; o.Cookie.Path = "/"; o.Cookie.SameSite = SameSiteMode.Lax; o.ExpireTimeSpan = TimeSpan.FromMinutes(20); o.SlidingExpiration = false;
-});
-builder.Services.AddAntiforgery(o => { o.HeaderName = "X-CSRF-TOKEN"; o.Cookie.Name = "__Host-SEM-CSRF"; o.Cookie.SecurePolicy = CookieSecurePolicy.Always; o.Cookie.Path = "/"; o.Cookie.HttpOnly = true; });
-builder.Services.AddDbContextFactory<ApplicationDbContext>(o => o.UseSqlite($"Data Source={Path.Combine(deployment.DataDirectory, "sem.db")}"), ServiceLifetime.Scoped);
-builder.Services.AddScoped<CoreFoundationService>();
-builder.Services.AddIdentityCore<ApplicationUser>(o => { o.SignIn.RequireConfirmedAccount = true; o.User.RequireUniqueEmail = true; o.Stores.SchemaVersion = IdentitySchemaVersions.Version3; }).AddEntityFrameworkStores<ApplicationDbContext>().AddSignInManager().AddDefaultTokenProviders().AddUserConfirmation<SemUserConfirmation>();
-builder.Services.AddSingleton<NotificationService>();
-builder.Services.AddScoped<DeviceNotificationService>();
-builder.Services.AddScoped<InvitationManagementService>();
-builder.Services.AddScoped<ApplicationJoinService>();
-builder.Services.AddScoped<InboxService>();
-builder.Services.AddSingleton<BusinessNotificationStore>();
-builder.Services.AddSingleton<IBusinessEmailTransport,BusinessEmailTransport>();
-builder.Services.AddScoped<BusinessEmailDispatcher>();
-builder.Services.AddHostedService<BusinessEmailWorker>();
-builder.Services.AddScoped<DailyDigestScheduler>();
-builder.Services.AddScoped<DailyDigestDispatcher>();
-builder.Services.AddHostedService<DailyDigestWorker>();
-builder.Services.AddHttpClient<IEventPushTransport,EventWebPushTransport>(c=>c.Timeout=TimeSpan.FromSeconds(15)).ConfigurePrimaryHttpMessageHandler(()=>new HttpClientHandler{AllowAutoRedirect=false});
-builder.Services.AddManualNotificationPushPipeline(); // registration only; persisted activation remains default OFF
-builder.Services.AddScoped<EventPushScheduler>();
-builder.Services.AddScoped<EventPushDispatcher>();
-builder.Services.AddHostedService<EventPushWorker>();
-builder.Services.AddScoped<NotificationReservationReconciler>();
-builder.Services.AddHostedService<NotificationReservationWorker>();
-builder.Services.AddSingleton(TimeProvider.System);
-builder.Services.AddScoped<PasskeyAdditionService>();
-builder.Services.AddScoped<AccountPasskeyService>();
-builder.Services.AddScoped<IEmailChangePasskeyProof, NativeEmailChangePasskeyProof>();
-builder.Services.AddScoped<EmailChangeService>();
-builder.Services.AddSingleton<IEmailChangeMailTransport, EmailChangeMailTransport>();
-builder.Services.AddScoped<EmailChangeMailDispatcher>();
-builder.Services.AddHostedService<EmailChangeMailWorker>();
-builder.Services.AddScoped<IPasskeyRecoveryIdentity, NativePasskeyRecoveryIdentity>();
-builder.Services.AddScoped<PasskeyRecoveryService>();
-builder.Services.AddSingleton<IPasskeyRecoveryMailTransport, PasskeyRecoveryMailTransport>();
-builder.Services.AddScoped<PasskeyRecoveryMailDispatcher>();
-builder.Services.AddHostedService<PasskeyRecoveryMailWorker>();
-builder.Services.AddHostedService<NotificationWorker>();
-builder.Services.AddHostedService<PhaseWorker>();
-builder.Services.AddRateLimiter(o =>
-{
-    o.RejectionStatusCode = 429;
-    o.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(c =>
-    {
-        // Category must be part of the partition key: otherwise the first request
-        // chooses a shared API/assets limit and an API burst can block Blazor scripts.
-        var api = c.Request.Path.StartsWithSegments("/api");
-        var key = (api ? "api:" : "web:") + (c.Connection.RemoteIpAddress?.ToString() ?? "unknown");
-        return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
-            { PermitLimit = api ? 60 : 180, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 });
-    });
-});
 var app = builder.Build();
-app.UseForwardedHeaders();
-await app.InitializeSemStorageAsync();
-app.Use(async (context, next) =>
-{
-    context.Response.Headers["Referrer-Policy"] = "no-referrer";
-    if (context.Request.Path == "/about") context.Response.Headers.CacheControl = "no-store";
-    if (context.Request.Path.Equals("/workspace", StringComparison.OrdinalIgnoreCase) || context.Request.Path.Equals("/service/manual-push", StringComparison.OrdinalIgnoreCase) || context.Request.Path.Value?.EndsWith("/manual-notification", StringComparison.OrdinalIgnoreCase) == true) context.Response.Headers.CacheControl = "no-store";
+var root = Path.Combine(app.Environment.ContentRootPath, "wwwroot");
+var manifest = JsonSerializer.Deserialize<Dictionary<string,string>>(File.ReadAllText(Path.Combine(app.Environment.ContentRootPath,"mock-manifest.json")))!;
+bool ready = manifest.Count > 0 && manifest.All(e => {
+    var path = Path.Combine(root,e.Key);
+    return File.Exists(path) && Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(path))) == e.Value;
+});
+var info = RuntimeBuildInfo.Current;
+app.Use(async (context,next) => {
+    context.Response.Headers.CacheControl = "no-store";
+    context.Response.Headers.Pragma = "no-cache";
     context.Response.Headers["X-Content-Type-Options"] = "nosniff";
-    context.Response.Headers["X-Frame-Options"] = "DENY";
-    if (!context.Request.Path.StartsWithSegments("/health"))
-    {
-        if (!string.Equals(context.Request.Host.Host, new Uri(deployment.PublicUrl).Host, StringComparison.OrdinalIgnoreCase)) { context.Response.StatusCode = 400; return; }
-        if (!context.Request.IsHttps) { context.Response.StatusCode = 400; await context.Response.WriteAsync("HTTPS forwarding is not configured correctly."); return; }
-        // Never expose generated password or open registration routes.
-        if (context.Request.Path.StartsWithSegments("/Account", StringComparison.OrdinalIgnoreCase) || context.Request.Path == "/counter" || context.Request.Path == "/weather") { context.Response.StatusCode = 404; return; }
-    }
     await next();
 });
-app.UseRateLimiter();
-app.UseAuthentication();
-app.Use(async (context, next) =>
-{
-    if (context.Request.Path.StartsWithSegments("/_blazor") &&
-        context.Request.Headers.Origin.Count > 0 && context.Request.Headers.Origin.ToString() != deployment.PublicUrl.TrimEnd('/'))
-    { context.Response.StatusCode = 403; return; }
-    await next();
-});
-app.UseSemLiveAuthenticationSession();
-app.UseAuthorization();
-app.UseAntiforgery();
-// Standard wwwroot fallback for SDK/runtime variants whose resource collection
-// emits an unhashed framework URL. Keep it after all origin/HTTPS/rate guards.
+bool Probe(HttpContext c, out string? probe) {
+    probe=null;
+    if(c.Request.Query.Keys.Any(k=>k!="probe")) return false;
+    if(!c.Request.Query.TryGetValue("probe",out var values)) return true;
+    if(values.Count!=1 || values[0] is not string value || !Regex.IsMatch(value,"\\A[0-9a-f]{32}\\z")) return false;
+    probe=value;return true;
+}
+app.MapGet("/api/version",(HttpContext c)=>Probe(c,out var p)?Results.Json(info.Payload(p)):Results.BadRequest());
+app.MapGet("/health/live",()=>Results.Json(new {status="live"}));
+app.MapGet("/health/ready",(HttpContext c)=>!Probe(c,out var p)?Results.BadRequest():ready?Results.Json(new {status="mock-ui-ready",probe=p}):Results.StatusCode(503));
+string Footer() => "<footer class=\"sem-runtime-footer\" style=\"text-align:center;padding:24px;overflow-wrap:anywhere\"><a href=\"/about\">SEM 稼働版："+WebUtility.HtmlEncode(info.Display)+"</a></footer>";
+app.MapGet("/",()=> !ready?Results.StatusCode(503):Results.Content(File.ReadAllText(Path.Combine(root,"index.html")).Replace("</body>",Footer()+"</body>"),"text/html; charset=utf-8"));
+app.MapGet("/index.html",()=> !ready?Results.StatusCode(503):Results.Content(File.ReadAllText(Path.Combine(root,"index.html")).Replace("</body>",Footer()+"</body>"),"text/html; charset=utf-8"));
+app.MapGet("/about",()=>Results.Content("""
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>このアプリについて — SEM</title>
+<style>body{font:16px/1.7 system-ui,sans-serif;margin:0;background:#f4f7f3;color:#193a34}main{max-width:48rem;margin:2rem auto;padding:1rem}section{padding:1.25rem;background:#fff;border:1px solid #cad9d2;border-radius:12px}h1{font-size:1.8rem}h2{font-size:1.3rem}a{color:#176859}dd{margin:0 0 1rem;overflow-wrap:anywhere}dt{font-weight:bold}@media(prefers-color-scheme:dark){body{background:#13221e;color:#e4ede8}section{background:#20322a}a{color:#a3d8c9}}</style></head><body><main><h1>このアプリについて</h1><section><h2>応答しているアプリの稼働版</h2>
+<p>このページを表示したアプリ自身のビルド情報です。「最新版」や全機能の動作確認済みを意味しません。</p>
+<p><strong>現在は採用モックを移行したUIデモ版です。</strong>認証・登録・保存・QR・通知等は模擬動作です。実データの閲覧・保存や実通知は行いません。デモに個人情報や秘密情報を入力しないでください。</p><dl><dt>コミット</dt><dd>
+""" + (info.Published ? "<a href=\""+info.SourceUrl+"\">"+info.Commit+"</a>" : "開発版（識別情報なし）") + "</dd><dt>ビルドID</dt><dd>"+WebUtility.HtmlEncode(info.BuildId??"未設定")+"</dd></dl><p>同じコミットでもビルドIDが異なれば別のビルドです。これはビルドの識別情報であり、デプロイ完了日時ではありません。</p><p>準備状態はモック資産の整合性を確認したものです。DB・認証・全業務機能の準備完了を意味しません。</p><p><a href=\"/api/version\">自動照合用のバージョン情報（JSON）</a></p><p><a href=\"/\">トップページへ戻る</a></p></section></main></body></html>","text/html; charset=utf-8"));
 app.UseStaticFiles();
-app.MapGet("/health/live", () => Results.Ok(new { status = "alive" }));
-app.MapRuntimeVersion();
-app.MapSem();
-app.MapAccountPasskeys();
-app.MapApplicationJoin();
-app.MapApplicationInbox();
-app.MapDeviceNotifications();
-app.MapInvitationManagement();
-app.MapCoreFoundation();
-app.MapStaticAssets();
-app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
 app.Run();

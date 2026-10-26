@@ -1,10 +1,9 @@
 name: Main integration verification
 on:
   pull_request:
-    types: [opened, synchronize, reopened, edited]
     branches: [main]
   push:
-    branches: [main, ci/main-integration]
+    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read
@@ -14,89 +13,31 @@ concurrency:
 jobs:
   integration-checks:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 8
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
           persist-credentials: false
-      - name: Record source and validate scripts
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: 固定モック・版・保護契約の集中検証
         run: |
           set -euo pipefail
-          bash -n scripts/integration-checks.sh scripts/build-integration-projects.sh
-          mkdir -p verification
-          printf 'event=%s\nref=%s\nsha=%s\n' "$GITHUB_EVENT_NAME" "$GITHUB_REF" "$GITHUB_SHA" > verification/event.txt
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '10.0.x'
-      - name: Cache NuGet packages (never build outputs)
-        continue-on-error: true # Cache availability is optional; verification is not.
-        uses: actions/cache@v4
-        with:
-          path: ~/.nuget/packages
-          key: ${{ runner.os }}-dotnet10-nuget-v1-integration-${{ hashFiles('**/*.csproj', '**/*.props', '**/*.targets', '**/packages.lock.json', '**/NuGet.Config', 'global.json') }}
-          restore-keys: |
-            ${{ runner.os }}-dotnet10-nuget-v1-integration-
-      - name: Verify exact merged tree without deployment
-        run: bash scripts/integration-checks.sh
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - name: Set isolated browser dependency path
-        run: echo "PLAYWRIGHT_BROWSERS_PATH=$RUNNER_TEMP/sem-browser-cache" >> "$GITHUB_ENV"
-      - name: Cache pinned browser dependencies only (never application state)
-        continue-on-error: true # A cache miss or outage still installs and tests.
-        uses: actions/cache@v4
-        with:
-          path: ${{ runner.temp }}/sem-browser-cache
-          key: ${{ runner.os }}-${{ runner.arch }}-playwright-1.56.1-headless-v1
-      - name: Install isolated browser dependencies
-        run: |
-          npm install --prefix "$RUNNER_TEMP/sem-browser" --no-save playwright@1.56.1
-          "$RUNNER_TEMP/sem-browser/node_modules/.bin/playwright" install chromium --only-shell
-          # OS依存の導入は、同じ固定ブラウザーで共有ライブラリ不足を実測した場合だけ。
-          if NODE_PATH="$RUNNER_TEMP/sem-browser/node_modules" node scripts/browser-runtime-probe.cjs; then
-            :
-          else
-            status=$?
-            if [[ "$status" != 78 ]]; then exit "$status"; fi
-            "$RUNNER_TEMP/sem-browser/node_modules/.bin/playwright" install-deps chromium
-            NODE_PATH="$RUNNER_TEMP/sem-browser/node_modules" node scripts/browser-runtime-probe.cjs
-          fi
-      - name: Verify keyboard and touch field help above dialogs
-        env:
-          NODE_PATH: ${{ runner.temp }}/sem-browser/node_modules
-        run: |
-          node scripts/field-help-browser-checks.cjs
-          node scripts/operation-feedback-browser-checks.cjs
-          node scripts/service-navigation-lifecycle-checks.cjs
-          node scripts/theme-lifecycle-browser-checks.cjs
-      - name: Verify unified timetable UI in an independent fresh fixture
-        env:
-          NODE_PATH: ${{ runner.temp }}/sem-browser/node_modules
-          SEM_ACCEPTANCE_FOCUS: timetable-editor-ui
-        run: bash scripts/acceptance-browser-fixture.sh
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: main-integration-verification
-          path: |
-            verification/
-            !verification/acceptance-native/**
-          retention-days: 7
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: timetable-editor-browser-results
-          path: |
-            verification/acceptance-native/e2e-result.json
-            verification/acceptance-native/acceptance-phases.json
-            verification/acceptance-native/fixture-phases.tsv
-          retention-days: 7
-
+          python3 scripts/mock-checks.py
+          python3 scripts/cd/release_gate_checks.py
+          python3 scripts/cd/updater_checks.py
+          python3 scripts/cd/observe_checks.py
+          dotnet publish src/Sem.Web -c Release -o /tmp/sem -p:SemCommit="$GITHUB_SHA" -p:SemPublicationRun="$GITHUB_RUN_ID" -p:SemPublicationAttempt="$GITHUB_RUN_ATTEMPT"
+          (cd /tmp/sem; dotnet Sem.Web.dll --urls http://127.0.0.1:8765 > /tmp/sem.log 2>&1) &
+          for n in $(seq 1 40); do curl -fsS http://127.0.0.1:8765/health/live && break; sleep 1; done
+          python3 scripts/runtime-checks.py http://127.0.0.1:8765 "$GITHUB_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"
   acceptance-browser:
     runs-on: ubuntu-latest
-    timeout-minutes: 30 # Includes newly enabled public-answer browser coverage; no checks are skipped.
+    timeout-minutes: 8
     steps:
       - uses: actions/checkout@v4
         with:
@@ -104,66 +45,16 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
-      - name: Cache NuGet packages (never build outputs)
-        continue-on-error: true # Cache availability is optional; verification is not.
-        uses: actions/cache@v4
-        with:
-          path: ~/.nuget/packages
-          key: ${{ runner.os }}-dotnet10-nuget-v1-browser-${{ hashFiles('**/*.csproj', '**/*.props', '**/*.targets', '**/packages.lock.json', '**/NuGet.Config', 'global.json') }}
-          restore-keys: |
-            ${{ runner.os }}-dotnet10-nuget-v1-browser-
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
-      - name: Set isolated browser dependency path
-        run: echo "PLAYWRIGHT_BROWSERS_PATH=$RUNNER_TEMP/sem-browser-cache" >> "$GITHUB_ENV"
-      - name: Cache pinned browser dependencies only (never application state)
-        continue-on-error: true # A cache miss or outage still installs and tests.
-        uses: actions/cache@v4
-        with:
-          path: ${{ runner.temp }}/sem-browser-cache
-          key: ${{ runner.os }}-${{ runner.arch }}-playwright-1.56.1-headless-v1
-      - name: Install isolated browser dependencies
+          node-version: '24'
+      - name: モックと版表示の実ブラウザー検証
         run: |
-          npm install --prefix "$RUNNER_TEMP/sem-browser" --no-save playwright@1.56.1
-          "$RUNNER_TEMP/sem-browser/node_modules/.bin/playwright" install chromium --only-shell
-          # OS依存の導入は、同じ固定ブラウザーで共有ライブラリ不足を実測した場合だけ。
-          if NODE_PATH="$RUNNER_TEMP/sem-browser/node_modules" node scripts/browser-runtime-probe.cjs; then
-            :
-          else
-            status=$?
-            if [[ "$status" != 78 ]]; then exit "$status"; fi
-            "$RUNNER_TEMP/sem-browser/node_modules/.bin/playwright" install-deps chromium
-            NODE_PATH="$RUNNER_TEMP/sem-browser/node_modules" node scripts/browser-runtime-probe.cjs
-          fi
-      - name: Verify populated local acceptance and whole-directory restore
-        env:
-          NODE_PATH: ${{ runner.temp }}/sem-browser/node_modules
-        run: bash scripts/acceptance-browser-fixture.sh
-      - name: Summarize failed acceptance location without private logs
-        if: ${{ failure() || cancelled() }}
-        run: |
-          python3 - <<'PYCODE'
-          import json,pathlib,re
-          root=pathlib.Path('verification/acceptance-native')
-          result=json.loads((root/'e2e-result.json').read_text()) if (root/'e2e-result.json').exists() else {'passed':0,'checks':[]}
-          error=(root/'e2e-error.txt').read_text() if (root/'e2e-error.txt').exists() else ''
-          frames=re.findall(r'scripts/[A-Za-z0-9_-]+\.cjs:[0-9]+:[0-9]+',error)
-          last=result['checks'][-1] if result['checks'] else 'No browser check completed'
-          print('::error title=Acceptance failure location::passed='+str(result['passed'])+'; last='+last+'; frames='+','.join(frames))
-          match=re.search(r'Matrix keyboard selection state (\{[^\n]+?\});',error)
-          if match:
-              state=json.loads(match.group(1))
-              allowed={'disabled','pressed','focused','interactive','selections'}
-              if set(state)==allowed and all(type(v) in (bool,int) or v in (None,'true','false') for v in state.values()):
-                  print('::error title=Matrix selection state::'+json.dumps(state,sort_keys=True))
-          PYCODE
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: acceptance-browser-results
-          path: |
-            verification/acceptance-native/e2e-result.json
-            verification/acceptance-native/acceptance-phases.json
-            verification/acceptance-native/fixture-phases.tsv
-          retention-days: 7
+          set -euo pipefail
+          npm install --prefix /tmp/sem-browser playwright@1.56.1
+          export NODE_PATH=/tmp/sem-browser/node_modules
+          /tmp/sem-browser/node_modules/.bin/playwright install --with-deps chromium
+          dotnet publish src/Sem.Web -c Release -o /tmp/sem
+          (cd /tmp/sem; dotnet Sem.Web.dll --urls http://127.0.0.1:8765 > /tmp/sem.log 2>&1) &
+          for n in $(seq 1 40); do curl -fsS http://127.0.0.1:8765/health/live && break; sleep 1; done
+          node scripts/runtime-browser.cjs

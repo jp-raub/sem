@@ -1,122 +1,13 @@
-name: DXP application build
+name: 旧方式・参考 — dxp-build
 on:
-  push:
-    branches: [test/dxp-external]
   workflow_dispatch:
 permissions:
-  contents: write
-concurrency:
-  group: dxp-application-build
-  cancel-in-progress: true
+  contents: read
 jobs:
-  build:
+  retired:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: test/dxp-external
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '10.0.x'
-      - name: Prepare source
+      - name: 旧実装用の検査は再開しない
         run: |
-          rm -f verification/e2e-error.txt verification/e2e-result.json
-          python3 scripts/prepare-source.py
-          python3 scripts/icons.py
-          python3 scripts/delivery-notes.py
-      - name: Restore and build
-        id: compile
-        run: |
-          set -o pipefail
-          dotnet restore src/Sem.Web/Sem.Web.csproj 2>&1 | tee restore.log
-          dotnet build src/Sem.Web/Sem.Web.csproj --no-restore -c Release 2>&1 | tee build.log
-      - name: Docker build (linux amd64)
-        id: image
-        if: steps.compile.outcome == 'success'
-        run: |
-          set -o pipefail
-          docker build --platform linux/amd64 -t sem-dxp:ci -f deploy/Dockerfile . 2>&1 | tee docker.log
-      - name: Empty database and restart smoke test
-        id: smoke
-        if: steps.image.outcome == 'success'
-        run: |
-          set -euo pipefail
-          docker volume create sem-ci-data
-          docker run -d --name sem-ci -p 127.0.0.1:18080:8080 -v sem-ci-data:/data -e Sem__TrustedProxies__0=127.0.0.1 sem-dxp:ci
-          trap 'docker logs sem-ci > smoke.log 2>&1 || true; docker rm -f sem-ci || true; docker volume rm sem-ci-data || true' EXIT
-          for n in $(seq 1 40); do
-            if curl -fsS http://127.0.0.1:18080/health/ready > health.json; then break; fi
-            sleep 1
-          done
-          grep -q storage-ready health.json
-          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18080/Account/Register)" = 400
-          docker restart sem-ci
-          sleep 4
-          curl -fsS http://127.0.0.1:18080/health/ready
-          echo 'Empty DB creation, untrusted host rejection, restart storage readiness: passed' > smoke-summary.log
-      - name: Virtual passkey and SMTP integration
-        id: e2e
-        if: steps.smoke.outcome == 'success'
-        run: |
-          set -euo pipefail
-          npm install --prefix scripts --no-save playwright@1.56.0
-          scripts/node_modules/.bin/playwright install --with-deps chromium
-          openssl req -x509 -newkey rsa:2048 -nodes -keyout /tmp/sem-key.pem -out /tmp/sem-cert.pem -days 1 -subj '/CN=localhost' >/dev/null 2>&1
-          python3 scripts/smtp-fixture.py >/tmp/sem-smtp.log 2>&1 &
-          SMTP_PID=$!
-          docker volume create sem-e2e-data
-          GATEWAY=$(docker network inspect bridge --format '{{(index .IPAM.Config 0).Gateway}}')
-          docker run -d --name sem-e2e --add-host host.docker.internal:host-gateway -p 127.0.0.1:18080:8080 -v sem-e2e-data:/data -e Sem__PublicUrl=https://localhost:18443/ -e Sem__TrustedProxies__0="$GATEWAY" -e Sem__BootstrapSecret=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA -e Smtp__Host=host.docker.internal -e Smtp__Port=2525 -e Smtp__Tls=None -e Smtp__AllowInsecureLocalTest=true sem-dxp:ci
-          trap 'docker logs sem-e2e > integration.log 2>&1 || true; docker rm -f sem-e2e || true; docker volume rm sem-e2e-data || true; kill "$SMTP_PID" || true' EXIT
-          for n in $(seq 1 40); do
-            if curl -fsS http://127.0.0.1:18080/health/ready >/dev/null; then break; fi
-            sleep 1
-          done
-          node scripts/e2e.cjs
-      - name: Record report and adjusted source
-        if: always()
-        env:
-          COMPILE: ${{ steps.compile.outcome }}
-          IMAGE: ${{ steps.image.outcome }}
-          SMOKE: ${{ steps.smoke.outcome }}
-          E2E: ${{ steps.e2e.outcome }}
-        run: |
-          mkdir -p verification
-          printf '# DXP build report\n\nCommit: %s\nRun: https://github.com/%s/actions/runs/%s\n.NET build: %s\nDocker build: %s\nSmoke test: %s\nVirtual passkey / SMTP integration: %s\n\nReal Apple-device and actual SMTP / Push-provider testing remains manual.\n' "$GITHUB_SHA" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" "$COMPILE" "$IMAGE" "$SMOKE" "$E2E" > verification/build-report.md
-          for f in restore.log build.log docker.log smoke-summary.log smoke.log integration.log verification/e2e-result.json verification/e2e-error.txt; do
-            if [ -f "$f" ]; then tail -n 45 "$f" >> verification/build-report.md; fi
-          done
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src deploy verification
-          git add -u scripts
-          if ! git diff --cached --quiet; then
-            git commit -m 'ci: record verified source and integration result'
-            git push origin HEAD:test/dxp-external
-          fi
-      - name: Package verified delivery
-        id: package
-        if: steps.e2e.outcome == 'success'
-        run: |
-          set -euo pipefail
-          mkdir -p delivery
-          git archive --format=zip -o delivery/sem-dxp-source.zip HEAD
-          docker tag sem-dxp:ci sem-dxp:external-test
-          docker save sem-dxp:external-test | gzip -1 > delivery/sem-dxp-image.tar.gz
-          cp deploy/README.ja.md delivery/README.ja.md
-          printf 'Verified source: %s\nImage: %s\n' "$(git rev-parse HEAD)" "$(docker image inspect sem-dxp:external-test --format '{{.Id}}')" > delivery/VERSION.txt
-          cd delivery
-          sha256sum sem-dxp-source.zip sem-dxp-image.tar.gz > SHA256SUMS
-      - uses: actions/upload-artifact@v4
-        if: steps.package.outcome == 'success'
-        with:
-          name: sem-dxp-delivery
-          path: delivery/
-          compression-level: 0
-          retention-days: 7
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: dxp-build-report
-          path: verification/
+          echo '::error::旧実装用workflowです。mock起点の検証はMain integration verificationを参照してください。'
+          exit 1

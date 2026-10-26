@@ -1,8 +1,0 @@
-.manual-history-scroll { overflow-x: auto; max-width: 100%; }
-table { width: 100%; border-collapse: collapse; }
-th, td { padding: .65rem; vertical-align: top; text-align: left; border-bottom: 1px solid #b8c8c0; overflow-wrap: anywhere; }
-button { min-height: 44px; min-width: 44px; margin: .4rem .3rem .4rem 0; }
-code { overflow-wrap: anywhere; white-space: normal; }
-dl { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: .7rem; }
-dd { margin: 0; font-weight: bold; }
-@media (max-width: 600px) { table { min-width: 560px; } button { max-width: 100%; } }

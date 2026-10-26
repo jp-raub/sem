@@ -73,7 +73,7 @@ def one_sample(c, fetch=fresh_json, nonce=secrets.token_hex):
         raise ObservationError('RUNTIME_BUILD_MISMATCH')
     probe = nonce(16) # Independent freshness evidence for readiness, too.
     ready = fetch('/health/ready', probe)
-    if type(ready) is not dict or set(ready) != {'status', 'probe'} or ready != dict(status='storage-ready', probe=probe):
+    if type(ready) is not dict or set(ready) != {'status', 'probe'} or ready != dict(status='mock-ui-ready', probe=probe):
         raise ObservationError('NOT_FRESH_READY')
 
 

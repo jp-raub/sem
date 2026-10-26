@@ -1,0 +1,4 @@
+Kind,Title,Artist,Duration,Prep,Parts
+Song,CSVテスト曲,サンプルアーティスト,4:30,0:30,Vo|Gt|Ba|Dr
+Transition,休憩,,10:00,,
+Song,CSVテスト曲2,サンプルアーティスト,1:02:03,0:00,Vo|Key

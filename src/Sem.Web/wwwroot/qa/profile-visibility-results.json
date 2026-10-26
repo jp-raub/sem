@@ -1,0 +1,1 @@
+{"passed":7,"checks":["Profiles default to private","Owner explicitly enables member-profile preview","Logged-in member can view opted-in profile","Private event stays hidden on another member profile","Profile does not expose account email","Unauthenticated users cannot view member profile","No profile visibility runtime errors"],"errors":[]}

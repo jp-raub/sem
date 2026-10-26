@@ -1,0 +1,1 @@
+{"release":"UI MOCK v17","totalPassed":75,"suites":[{"script":"test-account-priority.cjs","passed":24},{"script":"test-event-features.cjs","passed":30},{"script":"test-attendance-v15.cjs","passed":21}],"excluded":"Real authentication, email/Push delivery, session invalidation, multi-browser security and backend authorization"}

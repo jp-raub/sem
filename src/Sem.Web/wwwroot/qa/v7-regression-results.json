@@ -1,0 +1,1 @@
+{"passed":56,"suites":[{"name":"UX, charts, profiles and QR","passed":35,"errors":[]},{"name":"Spectators and event capacity","passed":21,"errors":[]}],"notes":"Both full suites rerun after v7 management changes; radio control substituted for old hidden phase selector in attendance test."}

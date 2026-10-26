@@ -16,7 +16,7 @@ C = dict(deployment_mode='auto', schema=1, repository='jp-raub/sem', commit='a'*
 class Checks(unittest.TestCase):
     def good(self, path, nonce):
         return (dict(observe.expected_identity(C), probe=nonce) if path == '/api/version'
-                else dict(status='storage-ready', probe=nonce))
+                else dict(status='mock-ui-ready', probe=nonce))
     def run_observation(self, fetch, budget=100):
         tick=[0]
         def wait(seconds): tick[0]+=seconds
@@ -49,7 +49,7 @@ class Checks(unittest.TestCase):
     def test_development_build(self):self.reject_mutation(lambda d:d.update(channel='development',commit=None,buildId=None))
     def test_non_string_run(self):self.reject_mutation(lambda d:d.update(publicationRun=2))
     def test_unready_or_cached_readiness(self):
-        for ready in ({'status':'storage-ready','probe':'old'}, {'status':'failed','probe':None}, {}):
+        for ready in ({'status':'mock-ui-ready','probe':'old'}, {'status':'failed','probe':None}, {}):
             self.assertEqual(self.run_observation(lambda p,n:self.good(p,n) if p=='/api/version' else ready)['state'],'unconfirmed')
     def test_timeout_never_means_success(self):
         def fail(p,n):raise observe.ObservationError('HTTPS_OR_INVALID_RESPONSE')
@@ -100,12 +100,13 @@ class Checks(unittest.TestCase):
     def test_no_arbitrary_url_or_probe(self):
         for path,probe in [('https://evil.invalid','a'*32),('/api/version','bad')]:
             with self.assertRaises(observe.ObservationError):observe.fresh_json(path,probe)
-    def test_existing_error_ui_styles_are_preserved(self):
+    def test_mock_boundary_and_footer_are_explicit(self):
         root=Path(__file__).resolve().parents[2]
-        styles=(root/'src/Sem.Web/Components/Layout/MainLayout.razor.css').read_text()
-        self.assertIn('#blazor-error-ui',styles)
-        self.assertIn('display: none;',styles)
-        self.assertIn('.runtime-version-footer',styles)
+        source=(root/'src/Sem.Web/Program.cs').read_text()
+        self.assertIn('sem-runtime-footer',source)
+        self.assertIn('UIデモ版',source)
+        self.assertIn('mock-ui-ready',source)
+        self.assertNotIn('ApplicationDbContext',source)
     def test_workflows_keep_publication_independent_and_embed_build(self):
         root=Path(__file__).resolve().parents[2]
         publish=(root/'.github/workflows/cd-image.yml').read_text()
@@ -117,6 +118,6 @@ class Checks(unittest.TestCase):
         self.assertIn('check_image_build.py sem-cd:tested',publish)
         self.assertIn('docker_updater_checks.py',publish)
         self.assertIn('observe_checks.py',publish)
-        self.assertIn('observe_checks.py',(root/'scripts/integration-checks.sh').read_text())
+        self.assertIn('observe_checks.py',(root/'.github/workflows/main-integration.yml').read_text())
 
 if __name__=='__main__':unittest.main()
