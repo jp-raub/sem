@@ -9,7 +9,7 @@ using Sem.Web.Core;
 using Sem.Web.Data;
 namespace Sem.Web.Runtime;
 public sealed record PublicDefinition(string Id,string Name,string Category);
-public sealed record PublicSlot(string Id,string SongId,string DefinitionId,string? DisplayName,bool IsOwn);
+public sealed record PublicSlot(string Id,string SongId,string DefinitionId,string? DisplayName,bool IsOwn,string? UserId);
 public sealed record PublicSongEntry(string Title,string[] Parts);
 public sealed record PublicParticipant(string Id,string DisplayName,bool Spectator,PublicSongEntry[] Songs);
 public sealed record PublicComment(string Id,string DisplayName,string Body,string? CreatedAt);
@@ -60,7 +60,7 @@ public static class EventDetailReader
    var site=await db.ServiceSettings.AsNoTracking().Where(x=>x.Id==1).Select(x=>x.Name).SingleOrDefaultAsync(ct)??await db.SiteStates.AsNoTracking().Where(x=>x.Id==1).Select(x=>x.Name).SingleOrDefaultAsync(ct)??"SESSION ROOM";
    var result=new EventDetailView(e.Id,site,e.Title,e.Icon,e.Location,EventLocationLink.IsSafe(e.LocationUrl)?e.LocationUrl:null,Utc(e.ScheduledDate)!,Utc(e.OpensAt),EventDescription.Render(e.Description,e.DescriptionFormat),e.AnnouncementMessage,
     phase.Kind,phase.Kind=="Hidden"?"非公開":phase.Kind=="View"?"閲覧":phase.Name,phase.MaxPicks,manage,e.Capacity,e.RoundStarts,e.ClockFormat,e.DurationFormat,e.DefaultPrepSeconds,Utc(e.PlannedEndAt),timetable,definitions.Where(d=>slots.Any(s=>s.PartDefinitionId==d.Id)).ToArray(),
-    slots.Select(x=>new PublicSlot(x.Id,x.SongId,x.PartDefinitionId,x.AssignedUserId is{} person?Name(person):null,x.AssignedUserId==userId)).ToArray(),roster,
+    slots.Select(x=>new PublicSlot(x.Id,x.SongId,x.PartDefinitionId,x.AssignedUserId is{} person?Name(person):null,x.AssignedUserId==userId,x.AssignedUserId)).ToArray(),roster,
     comments.OrderByDescending(x=>EventListReader.Instant(x.CreatedAt)).ThenBy(x=>x.Id,StringComparer.Ordinal).Select(x=>new PublicComment(x.Id,Name(x.UserId),x.Body,Utc(x.CreatedAt))).ToArray(),
     slots.Where(x=>x.AssignedUserId==userId&&x.PhaseId==phase.Id).Select(x=>x.SongId).Distinct().Count(),await db.EventHeaderImages.AsNoTracking().AnyAsync(x=>x.EventId==id,ct));
    await snapshot.CommitAsync(ct);return new("ok",result);
