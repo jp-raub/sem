@@ -79,7 +79,7 @@ Check(consumed.Count(x=>x)==1,"8並行要求で消費1件だけ");
 Check(Enumerable.Range(0,4096).All(_=>attempts.Issue("capacity") is not null),"有界store投入");
 Check(attempts.Issue("overflow") is null,"上限時は拒否・無制限メモリ増加なし");
 clock.Now+=LoginAttemptStore.Lifetime;Check(attempts.Issue("after-expiration") is not null,"期限切れ回収");
-Console.WriteLine($"認証基盤: {checks}検査成功。合成メモリDBのみ・公開ホストは未接続。");
+Console.WriteLine($"認証基盤: {checks}検査成功。合成メモリDBのみ・実配置の有効化を示す検査ではありません。");
 sealed class TestClock : TimeProvider {
  public DateTimeOffset Now {get;set;}=DateTimeOffset.Parse("2026-01-01T00:00:00Z");
  public override DateTimeOffset GetUtcNow()=>Now;

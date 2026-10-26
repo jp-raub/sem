@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""保全モデルの由来と、公開ホストへ未接続という段階境界を検証する。"""
+"""保全モデルの由来と、明示モードでのみ接続する段階境界を検証する。"""
 import hashlib
 import json
 import pathlib
@@ -28,7 +28,9 @@ assert expected == actual, (expected - actual, actual - expected)
 ids = sorted(re.findall(r'\[Migration\("([^"]+)"\)\]', '\n'.join(p.read_text() for p in (storage / 'Data/Migrations').glob('*.cs'))))
 assert ids == v['migrationIds'] and len(ids) == 43
 assert ids[0] == '20261012082319_ExternalTestBaseline'
-# このPRは未接続の保存基盤。実ホストへの接続は認証保護を整えた別変更で明示的に行う。
-assert 'Sem.Storage' not in (root / 'src/Sem.Web/Sem.Web.csproj').read_text()
-assert 'ApplicationDbContext' not in (root / 'src/Sem.Web/Program.cs').read_text()
-print('保存基盤: 77モデル・43有効migration・元の91ファイルを保持。公開ホストはDB未接続。')
+# 独立した保存モデルは不変。製品参照は明示モードと起動保全の先でのみ使用する。
+program=(root/'src/Sem.Web/Program.cs').read_text()
+assert 'ProductSettings.Load(Environment.GetEnvironmentVariable)' in program
+assert 'product is null ? null : await ProductStorage.OpenAsync(product)' in program
+assert 'SqliteStorageInitializer.InitializeAsync' not in program
+print('保存基盤: 77モデル・43有効migration・元の91ファイルを保持。実接続は明示配置・起動保全の先だけ。')
