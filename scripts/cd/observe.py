@@ -5,6 +5,7 @@ No deploy credential/SSH/Docker. A match proves responding builds, not every rep
 image digest, business acceptance, or whether a local updater has been paused.
 """
 import json
+import ipaddress
 import os
 from pathlib import Path
 import re
@@ -12,14 +13,43 @@ import secrets
 import time
 import urllib.error
 import urllib.request
+import urllib.parse
 
 from updater import CDException, GitHub, NoRedirect, candidate
 
-ORIGIN = 'https://sem-test.raub.jp'
 KEYS = {'schema', 'application', 'channel', 'commit', 'buildId', 'publicationRun', 'publicationAttempt', 'probe'}
 
 class ObservationError(Exception):
     """Fixed diagnostics only, never remote response bodies or headers."""
+
+
+def configured_origin(value=None):
+    """運用者の設定だけを使う。入力値を例外・ログ・成果物へ含めない。"""
+    if value is None:
+        value = os.environ.get('SEM_PUBLIC_ORIGIN')
+    if not value:
+        raise ObservationError('PUBLIC_ORIGIN_REQUIRED')
+    if not isinstance(value, str) or any(ch.isspace() or ord(ch) < 32 or ord(ch) == 127 for ch in value):
+        raise ObservationError('INVALID_PUBLIC_ORIGIN')
+    try:
+        parts = urllib.parse.urlsplit(value)
+        host = parts.hostname
+        port = parts.port
+        if (parts.scheme != 'https' or not host or parts.username is not None or
+            parts.password is not None or parts.path not in ('', '/') or parts.query or parts.fragment or
+            '?' in value or '#' in value or parts.netloc.endswith(':') or port == 0):
+            raise ValueError()
+        try:
+            address = ipaddress.ip_address(host)
+            host = '[' + str(address) + ']' if address.version == 6 else str(address)
+        except ValueError:
+            if len(host) > 253 or not all(re.fullmatch(r'[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?', label)
+                                          for label in host.lower().split('.')):
+                raise ValueError()
+            host = host.lower()
+        return 'https://' + host + (':' + str(port) if port is not None else '')
+    except (ValueError, TypeError):
+        raise ObservationError('INVALID_PUBLIC_ORIGIN') from None
 
 
 def expected_identity(c):
@@ -29,11 +59,11 @@ def expected_identity(c):
         publicationRun=str(c['publication_run']), publicationAttempt=str(c['publication_attempt']))
 
 
-def fresh_json(path, probe):
-    # Fixed trusted origin; caller cannot pass a host, URL, credential or redirect target.
+def fresh_json(path, probe, *, origin=None):
+    # 固定パスだけ許可。接続先は運用者の環境設定で、応答・入力パスから変更しない。
     if path not in ('/api/version', '/health/ready') or not re.fullmatch('[0-9a-f]{32}', probe):
         raise ObservationError('INVALID_PROBE_REQUEST')
-    url = ORIGIN + path + '?probe=' + probe
+    url = configured_origin(origin) + path + '?probe=' + probe
     request = urllib.request.Request(url, headers={'Accept': 'application/json',
         'Cache-Control': 'no-cache, no-store', 'User-Agent': 'sem-runtime-observer'})
     try:
@@ -124,11 +154,12 @@ def main():
         if event_name not in {'workflow_run', 'workflow_dispatch'}:
             raise ObservationError('WRONG_EVENT')
         event = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text()) if event_name == 'workflow_run' else None
+        origin = configured_origin() # 設定なしで別の既定ホストへ送信しない。
         gh = GitHub(os.environ.get('GH_TOKEN'))
         c = eligible(gh, event)
         report.update(expected=expected_identity(c), image=c['image'])
         print('Image publication verified; waiting for public runtime (up to 12 minutes).')
-        report.update(observe(c))
+        report.update(observe(c, fetch=lambda path, probe: fresh_json(path, probe, origin=origin)))
         if report['state'] == 'runtime-match' and eligible(gh, event) != c:
             raise ObservationError('CANDIDATE_CHANGED_DURING_OBSERVATION')
     except ObservationError as error:
@@ -143,7 +174,7 @@ def main():
     summary = '## SEM 公開URLの稼働確認\n\n' + text + '\n\n状態: `' + report['state'] + '` / 分類: `' + report['reason'] + '`\n\n'
     if 'expected' in report:
         summary += '対象コミット: `' + report['expected']['commit'] + '`\n\nビルドID: `' + report['expected']['buildId'] + '`\n\n'
-    summary += '対象: https://sem-test.raub.jp/about 。全レプリカ・業務受入・image digestの外部証明ではありません。\n'
+    summary += '対象は設定済み環境の稼働版ページ（/about）です。接続先URLはログ・成果物へ記録しません。全レプリカ・業務受入・image digestの外部証明ではありません。\n'
     if os.environ.get('GITHUB_STEP_SUMMARY'):
         with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as handle:
             handle.write(summary)
