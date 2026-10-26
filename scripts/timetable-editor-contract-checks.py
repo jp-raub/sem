@@ -29,7 +29,7 @@ def verify(w,f,d):
  assert 'SEM_ACCEPTANCE_FOCUS:' not in browser
  assert 'timetable-editor-ui) export SEM_TIMETABLE_EDITOR_UI_CHECKS=1 SEM_EDIT_GUARD_CHECKS=1 SEM_EVENT_MANAGEMENT_UI_CHECKS=1 SEM_DEFINITION_ORDER_UI_CHECKS=1 SEM_PROGRESS_UI_CHECKS=1 SEM_INVITATION_UI_CHECKS=1 SEM_SERVICE_MANAGEMENT_UI_CHECKS=1 ;;' in f
  full=re.search(r'(?m)^ full\)(.*);;',f).group(1)
- for flag in ['NOTIFICATION_UI','THEME_NAVIGATION','PUBLIC_ANSWER','EVENT_HEADER','EVENT_DESCRIPTION','EVENT_LOCATION','EVENT_MATRIX','COMMENT','ACCEPTANCE_WORKFLOW']:
+ for flag in ['NOTIFICATION_UI','THEME_NAVIGATION','PUBLIC_ANSWER','EVENT_HEADER','EVENT_DESCRIPTION','EVENT_LOCATION','EVENT_MATRIX','COMMENT','ACCEPTANCE_WORKFLOW','SETTINGS_NAVIGATION']:
   assert 'SEM_'+flag+'_CHECKS=1' in full
  assert 'SEM_EDIT_GUARD_CHECKS=1' not in full
  assert "if(process.env.SEM_EDIT_GUARD_CHECKS)await phase('edit-guard-checks',()=>require('./edit-guard-checks.cjs')({p,g,ok}));" in d
@@ -42,6 +42,7 @@ def verify(w,f,d):
  assert "if(process.env.SEM_SERVICE_MANAGEMENT_UI_CHECKS){await phase('service-management-ui-checks',()=>require('./service-management-ui-checks.cjs')({p,g,ok}));await phase('admin-accounts-checks',()=>require('./admin-accounts-checks.cjs')({p,g,ok}));}" in d
  assert "if(process.env.SEM_INVITATION_UI_CHECKS)await phase('invitation-ui-checks',()=>require('./invitation-layout-checks.cjs')({p,g,ok}));" in d
  assert "if(process.env.SEM_COMMENT_CHECKS)await phase('comment-checks',()=>require('./comment-checks.cjs')({p,g,ok}));" in d
+ assert "if(process.env.SEM_SETTINGS_NAVIGATION_CHECKS)await phase('settings-pages-checks',()=>require('./settings-pages-checks.cjs')({g,ok}));" in d
  assert 'exit "$status"' in f
  assert '!verification/acceptance-native/**' in integration
  for private in ['e2e-error.txt','host.log','data.db','key.pem']:
@@ -77,4 +78,10 @@ else:raise AssertionError('サービス管理UIドライバーの無効化が受
 try:verify(workflow,fixture,driver.replace("if(process.env.SEM_COMMENT_CHECKS)await phase('comment-checks'","if(false)await phase('comment-checks'"))
 except AssertionError:pass
 else:raise AssertionError('コメントUIのfull回帰ドライバーの無効化が受理された')
-print('Unified timetable coverage contract passed: actual workflow + 15 unsafe mutations rejected')
+try:verify(workflow,fixture.replace('SEM_SETTINGS_NAVIGATION_CHECKS=1 ',''),driver)
+except AssertionError:pass
+else:raise AssertionError('プロフィールUIのfull検証を削除できた')
+try:verify(workflow,fixture,driver.replace("if(process.env.SEM_SETTINGS_NAVIGATION_CHECKS)await phase('settings-pages-checks'","if(false)await phase('settings-pages-checks'"))
+except AssertionError:pass
+else:raise AssertionError('プロフィールUIドライバーを無効化できた')
+print('Unified timetable coverage contract passed: actual workflow + 17 unsafe mutations rejected')
