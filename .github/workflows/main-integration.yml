@@ -36,9 +36,11 @@ jobs:
           set -euo pipefail
           python3 scripts/mock-checks.py
           python3 scripts/ui-inventory-checks.py
+          python3 scripts/authentication-source-checks.py
           if [[ "${{ steps.scope.outputs.storage }}" == "true" ]]; then
             python3 scripts/storage-source-checks.py
             dotnet run --project tests/Sem.Storage.Checks -c Release
+            dotnet run --project tests/Sem.Authentication.Checks -c Release
           fi
           python3 scripts/cd/release_gate_checks.py
           python3 scripts/cd/updater_checks.py
@@ -65,12 +67,15 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+          fetch-depth: 2
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
+      - id: auth-scope
+        run: python3 scripts/test-scope.py
       - name: Playwrightパッケージを準備（ブラウザー・OS依存はイメージ同梱）
         timeout-minutes: 2
         run: |
@@ -101,6 +106,16 @@ jobs:
       - name: 固定モックの画面基準を実ブラウザー検証
         timeout-minutes: 2
         run: node scripts/ui-inventory-browser.cjs
+      - name: 合成認証ホストをビルド（製品へfixtureを混入しない）
+        if: steps.auth-scope.outputs.storage != 'false'
+        timeout-minutes: 2
+        run: dotnet publish tests/Sem.Authentication.Fixture -c Release -o /tmp/sem-auth-fixture
+      - name: 標準パスキー・失効・再起動の隔離HTTPS検証
+        if: steps.auth-scope.outputs.storage != 'false'
+        timeout-minutes: 2
+        env:
+          SEM_AUTH_FIXTURE_DLL: /tmp/sem-auth-fixture/Sem.Authentication.Fixture.dll
+        run: node scripts/authentication-native-browser.cjs
       - name: ローカル検証ホストを終了
         if: always()
         run: |
