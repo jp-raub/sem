@@ -36,7 +36,7 @@ using(var scope=app.Services.CreateScope()){
  if(!resume){
  var created=await users.CreateAsync(new ApplicationUser{Id="synthetic-user",UserName="synthetic@example.invalid",Email="synthetic@example.invalid",EmailConfirmed=true,Enabled=true,IsAdmin=true,DisplayName="合成管理者"});
  if(!created.Succeeded)throw new InvalidOperationException("合成ユーザー作成失敗");
- if(Environment.GetEnvironmentVariable("SEM_EVENT_LIST_FIXTURE")=="1"){var user=(await users.FindByIdAsync("synthetic-user"))!;user.IsAdmin=false;await users.UpdateAsync(user);await EventListFixture.Seed(db);if(Environment.GetEnvironmentVariable("SEM_EVENT_DETAIL_FIXTURE")=="1")await EventDetailFixture.Seed(db);if(Environment.GetEnvironmentVariable("SEM_PROFILE_FIXTURE")=="1")await ProfileFixture.Seed(db);if(Environment.GetEnvironmentVariable("SEM_PUBLIC_ANSWER_FIXTURE")=="1")await PublicAnswerFixture.Seed(db);}
+ if(Environment.GetEnvironmentVariable("SEM_EVENT_LIST_FIXTURE")=="1"){var user=(await users.FindByIdAsync("synthetic-user"))!;user.IsAdmin=false;await users.UpdateAsync(user);await EventListFixture.Seed(db);if(Environment.GetEnvironmentVariable("SEM_EVENT_DETAIL_FIXTURE")=="1")await EventDetailFixture.Seed(db);if(Environment.GetEnvironmentVariable("SEM_PROFILE_FIXTURE")=="1")await ProfileFixture.Seed(db);if(Environment.GetEnvironmentVariable("SEM_MESSAGE_FIXTURE")=="1")await MessageFixture.Seed(db);if(Environment.GetEnvironmentVariable("SEM_PUBLIC_ANSWER_FIXTURE")=="1")await PublicAnswerFixture.Seed(db);}
  }else if((await users.FindByIdAsync("synthetic-user"))?.Email!="synthetic@example.invalid")throw new InvalidOperationException("合成人物が一致しません");
 }
 app.UseSemNativeAuthentication();
