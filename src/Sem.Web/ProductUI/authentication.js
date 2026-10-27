@@ -6,7 +6,7 @@
  let generation=0, pending=null, person=null, profileGeneration=0, profilePending=null;
  const fail='ログインできませんでした。ページを再読み込みしてお試しください。';
  const supported=()=>isSecureContext && !!window.PublicKeyCredential && typeof PublicKeyCredential.parseRequestOptionsFromJSON==='function';
- function cancel(){generation++;pending?.abort();pending=null;profileGeneration++;profilePending?.abort();profilePending=null;}
+ function cancel(){window.SemEventView?.clearTransient();generation++;pending?.abort();pending=null;profileGeneration++;profilePending?.abort();profilePending=null;}
  function status(text){const p=$('#auth-status');if(p){p.textContent=text;p.hidden=!text;}}
  async function json(response){if(!response.ok)throw Error(response.status===429?'操作が多すぎます。しばらく待ってからお試しください。':fail);const text=await response.text();if(text.length>65536)throw Error(fail);return JSON.parse(text);}
  async function session(signal){const response=await fetch('/api/auth/session',{cache:'no-store',credentials:'same-origin',signal});if(response.status===401)return null;const p=await json(response);if(!p||typeof p.id!=='string'||typeof p.displayName!=='string'||typeof p.isAdmin!=='boolean'||Object.keys(p).sort().join(',')!=='displayName,id,isAdmin')throw Error(fail);return p;}

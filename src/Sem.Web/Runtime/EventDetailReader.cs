@@ -16,7 +16,7 @@ public sealed record PublicComment(string Id,string DisplayName,string Body,stri
 public sealed record EventDetailView(string Id,string SiteName,string Title,string Icon,string Location,string? LocationUrl,string ScheduledDate,string? OpensAt,
  string DescriptionHtml,string AnnouncementMessage,string PhaseKind,string PhaseName,int MaxPicks,bool CanManage,int? Capacity,
  bool RoundStarts,string ClockFormat,string DurationFormat,int DefaultPrepSeconds,string? PlannedEndAt,CalculatedTimetable Timetable,
- PublicDefinition[] Definitions,PublicSlot[] Slots,PublicParticipant[] Participants,PublicComment[] Comments,int OwnPhaseSongs,bool HasHeader);
+ PublicDefinition[] Definitions,PublicSlot[] Slots,PublicParticipant[] Participants,PublicComment[] Comments,int OwnPhaseSongs,bool HasHeader,AnswerSummary[] PublicAnswers);
 public sealed record EventDetailResult(string State,EventDetailView? View=null,byte[]? Image=null);
 public static class EventDetailReader
 {
@@ -62,7 +62,7 @@ public static class EventDetailReader
     phase.Kind,phase.Kind=="Hidden"?"非公開":phase.Kind=="View"?"閲覧":phase.Name,phase.MaxPicks,manage,e.Capacity,e.RoundStarts,e.ClockFormat,e.DurationFormat,e.DefaultPrepSeconds,Utc(e.PlannedEndAt),timetable,definitions.Where(d=>slots.Any(s=>s.PartDefinitionId==d.Id)).ToArray(),
     slots.Select(x=>new PublicSlot(x.Id,x.SongId,x.PartDefinitionId,x.AssignedUserId is{} person?Name(person):null,x.AssignedUserId==userId,x.AssignedUserId)).ToArray(),roster,
     comments.OrderByDescending(x=>EventListReader.Instant(x.CreatedAt)).ThenBy(x=>x.Id,StringComparer.Ordinal).Select(x=>new PublicComment(x.Id,Name(x.UserId),x.Body,Utc(x.CreatedAt))).ToArray(),
-    slots.Where(x=>x.AssignedUserId==userId&&x.PhaseId==phase.Id).Select(x=>x.SongId).Distinct().Count(),await db.EventHeaderImages.AsNoTracking().AnyAsync(x=>x.EventId==id,ct));
+    slots.Where(x=>x.AssignedUserId==userId&&x.PhaseId==phase.Id).Select(x=>x.SongId).Distinct().Count(),await db.EventHeaderImages.AsNoTracking().AnyAsync(x=>x.EventId==id,ct),await PublicAnswerProjection.ReadAsync(db,id,ct));
    await snapshot.CommitAsync(ct);return new("ok",result);
   }finally{await db.Database.CloseConnectionAsync();}
  }

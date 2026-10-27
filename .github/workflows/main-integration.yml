@@ -46,6 +46,7 @@ jobs:
             dotnet run --project tests/Sem.EventDetail.Checks -c Release
             dotnet run --project tests/Sem.Profile.Checks -c Release
             dotnet run --project tests/Sem.Account.Checks -c Release
+            dotnet run --project tests/Sem.PublicAnswer.Checks -c Release
           fi
           python3 scripts/cd/release_gate_checks.py
           python3 scripts/cd/updater_checks.py
