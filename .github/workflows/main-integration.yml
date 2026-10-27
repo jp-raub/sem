@@ -48,6 +48,7 @@ jobs:
             dotnet run --project tests/Sem.Account.Checks -c Release
             dotnet run --project tests/Sem.PublicAnswer.Checks -c Release
             dotnet run --project tests/Sem.Appearance.Checks -c Release
+            dotnet run --project tests/Sem.Message.Checks -c Release
           fi
           python3 scripts/cd/release_gate_checks.py
           python3 scripts/cd/updater_checks.py
@@ -123,9 +124,9 @@ jobs:
         env:
           SEM_AUTH_FIXTURE_DLL: /tmp/sem-auth-fixture/Sem.Authentication.Fixture.dll
         run: node scripts/authentication-native-browser.cjs
-      - name: 実製品の固定ログインUI・保全・再起動を合成HTTPSで検証
+      - name: 実製品の接続UI・認証・保全・再起動を合成HTTPSで検証
         if: steps.auth-scope.outputs.storage != 'false'
-        timeout-minutes: 2
+        timeout-minutes: 3
         env:
           SEM_PRODUCT_DLL: /tmp/sem/Sem.Web.dll
           SEM_AUTH_FIXTURE_DLL: /tmp/sem-auth-fixture/Sem.Authentication.Fixture.dll
