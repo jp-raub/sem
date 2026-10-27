@@ -97,4 +97,4 @@ async function ready(url,child){for(let n=0;n<100;n++){assert(child.exitCode===n
  check(errors.length===0,'クライアント例外0');check(external.length===0,'外部通信0');
  await context.close();console.log(`実製品認証UI ${checks}検査: 成功、クライアント例外0、外部通信0（合成データのみ）`);
  }finally{await browser?.close();for(const child of[...children])await stop(child);if(proxy)await new Promise(resolve=>proxy.close(resolve));fs.rmSync(root,{recursive:true,force:true});}
-})().catch(e=>{console.error(e.message);process.exitCode=1;});
+})().catch(e=>{const message=String(e.message).replaceAll('%','%25').replaceAll('\r','%0D').replaceAll('\n','%0A');console.error(`::error title=実製品認証UIの検証失敗::${message}`);process.exitCode=1;});
