@@ -9,6 +9,7 @@ module.exports=async function({page,context,reference,base,check}){
  await go('public');check(detail.canComment&&await page.locator('#comment-only').isEnabled(),'保存済み開催日時に対するサーバー受付ヒントで入力入口');await open();
  check(await page.locator('#modal-submit').isDisabled()&&(await page.locator('#dialog-body [role=status]').textContent()).includes('投稿保存は未接続'),'投稿は無効化し未接続を明記');
  check(await page.locator('[name=Comment]').inputValue()===''&&await page.locator('#dialog-title').textContent()==='コメントのみ投稿','独立した空の入力モーダル');
+ await page.locator('[name=Comment]').fill('   \n  ');check(!(await page.locator('[name=Comment]').evaluate(e=>e.checkValidity())),'空白と改行だけは3文字以上でも拒否');
  await page.locator('[name=Comment]').fill(' a ');check(!(await page.locator('[name=Comment]').evaluate(e=>e.checkValidity())),'trim後3文字未満を入力検証');await page.locator('[name=Comment]').fill('🎹🎸');check(!(await page.locator('[name=Comment]').evaluate(e=>e.checkValidity())),'サロゲートペアを2文字に水増しせず文字数判定');await page.locator('[name=Comment]').fill('<img src=x>\n未送信のコメント');check(await page.locator('[name=Comment]').evaluate(e=>e.checkValidity()),'本文をHTMLではなく入力値として扱う');
  await page.mouse.click(2,2);check(await page.locator('#dialog').evaluate(d=>d.open)&&await page.locator('[name=Comment]').inputValue()==='<img src=x>\n未送信のコメント','背景タップで閉じず入力保持');
  await page.locator('[name=Comment]').press('Enter');check((await page.locator('[name=Comment]').inputValue()).includes('\n')&&await page.locator('#dialog').evaluate(d=>d.open),'Enterは改行で投稿・暗黙確定なし');
