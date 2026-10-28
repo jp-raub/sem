@@ -36,6 +36,7 @@ if (product is not null) {
     app.MapSemEventDetail();
     app.MapSemProfiles();
     app.MapSemAccount();
+    app.MapSemEventOverview();
     app.MapSemAppearance();
     app.MapSemMessages();
     app.MapSemInvitations();
