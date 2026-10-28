@@ -23,7 +23,7 @@ module.exports=async function({page,context,reference,base,check,appearanceReady
   }
   await page.locator('#menu').click();await page.locator('#header-drawer a[href="#/"]').click();check(await page.locator('#header-drawer').isHidden(),'同じURLの項目でもメニューを閉じる');
   await page.locator('#menu').click();await page.mouse.click(2,100);check(await page.locator('#header-drawer').isHidden(),'外側操作でメニューを閉じる');
-  if(admin){await page.evaluate(()=>location.hash='#/admin/users');await page.waitForSelector('#unconnected-scope');check((await page.locator('#unconnected-scope').textContent()).includes('まだ接続していません')&&await page.locator('#new-event,table').count()===0,'全体管理者の入口も未接続を業務成功にしない');await page.unroute('**/api/auth/session');}
+  if(admin){await page.evaluate(()=>location.hash='#/admin/users');await page.waitForSelector('#retry-invitation-administration');check((await page.locator('#app').textContent()).includes('現在権限')&&await page.locator('#new-event,table').count()===0,'合成表示ロールだけでは実DBの全体権限を取得しない');await page.unroute('**/api/auth/session');}
  }
  await page.goto(base+'/#/');await page.reload();await page.waitForSelector('#signed-in-person');check(await page.locator('#header-drawer a[href="#/admin/users"]').count()===0,'実本人へ復帰後に合成管理者表示を残さない');
  console.log('共通メニュー: 未接続経路・旧入口・不明URLを一覧へ偽装しない');
