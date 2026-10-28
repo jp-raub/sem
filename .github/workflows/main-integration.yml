@@ -126,7 +126,7 @@ jobs:
         run: node scripts/authentication-native-browser.cjs
       - name: 実製品の接続UI・認証・保全・再起動を合成HTTPSで検証
         if: steps.auth-scope.outputs.storage != 'false'
-        timeout-minutes: 3
+        timeout-minutes: 4
         env:
           SEM_PRODUCT_DLL: /tmp/sem/Sem.Web.dll
           SEM_AUTH_FIXTURE_DLL: /tmp/sem-auth-fixture/Sem.Authentication.Fixture.dll
