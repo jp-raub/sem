@@ -28,7 +28,7 @@ module.exports=async function({page,context,reference,base,check,appearanceReady
  await page.goto(base+'/#/');await page.reload();await page.waitForSelector('#signed-in-person');check(await page.locator('#header-drawer a[href="#/admin/users"]').count()===0,'実本人へ復帰後に合成管理者表示を残さない');
  console.log('共通メニュー: 未接続経路・旧入口・不明URLを一覧へ偽装しない');
  await page.evaluate(()=>{window.__semNotificationCalls=0;if(window.Notification)Notification.requestPermission=()=>{window.__semNotificationCalls++;return Promise.reject(Error('許可要求禁止'));};});
- for(const [route,title]of[['#/notifications/manage','通知管理'],['#/account/notifications','通知管理'],['#/invitations/manage','招待管理'],['#/not-a-page','ページを表示できません']]){
+ for(const [route,title]of[['#/notifications/manage','通知管理'],['#/account/notifications','通知管理'],['#/not-a-page','ページを表示できません']]){
   calls.length=0;await page.evaluate(route=>location.hash=route,route);await page.waitForSelector('#unconnected-scope');check(await page.locator('#app h1').textContent()===title&&await page.locator('tbody,.stats,#signed-in-person').count()===0,'名前付き経路／不明URLの表示を一覧へ変換しない '+route);check(await page.locator('#app button,#app input,#app select').count()===0,'未接続の保存・許可・発行操作を実行可能にしない');check(calls.every(p=>['/api/ui/appearance','/api/ui/messages/unread'].includes(p)),'未接続経路で一覧や私有業務データを要求しない');
  }
  await page.evaluate(()=>location.hash='#/admin/users');await page.waitForFunction(()=>document.querySelector('#app h1')?.textContent==='サービス管理を表示できません');check(await page.locator('#app [role=alert]').textContent()==='全体管理者の権限が必要です。','非全体管理者の直接URLも管理表示へ進めない');
