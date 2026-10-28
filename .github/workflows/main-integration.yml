@@ -50,6 +50,7 @@ jobs:
             dotnet run --project tests/Sem.Appearance.Checks -c Release
             dotnet run --project tests/Sem.Message.Checks -c Release
             dotnet run --project tests/Sem.InvitationAdministration.Checks -c Release
+            dotnet run --project tests/Sem.EventOverview.Checks -c Release
           fi
           python3 scripts/cd/release_gate_checks.py
           python3 scripts/cd/updater_checks.py
