@@ -6,7 +6,7 @@
     <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
   </PropertyGroup>
   <ItemGroup><ProjectReference Include="../Sem.Hosting/Sem.Hosting.csproj" /></ItemGroup>
-  <ItemGroup><Content Include="ProductUI/**" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" /></ItemGroup>
+  <ItemGroup><Content Remove="ProductUI/**" /><Content Include="ProductUI/**" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" /></ItemGroup>
   <ItemGroup><PackageReference Include="HtmlSanitizer" Version="9.2.1039" /><PackageReference Include="Markdig" Version="1.4.1" /></ItemGroup>
   <!-- Explicit build-time provenance only. Runtime environment is never a version source. -->
   <ItemGroup>
