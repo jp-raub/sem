@@ -39,6 +39,8 @@ if (product is not null) {
     app.MapSemAppearance();
     app.MapSemMessages();
     app.MapSemInvitations();
+    app.MapSemNotifications();
+    app.MapGet("/assets/notification-view.js", () => Results.File(Path.Combine(app.Environment.ContentRootPath, "ProductUI", "notification-view.js"), "text/javascript; charset=utf-8"));
     app.MapGet("/assets/invitation-help.ja.json", () => Results.File(Path.Combine(app.Environment.ContentRootPath, "ProductUI", "invitation-help.ja.json"), "application/json; charset=utf-8"));
     app.MapGet("/assets/invitation-view.js", () => Results.File(Path.Combine(app.Environment.ContentRootPath, "ProductUI", "invitation-view.js"), "text/javascript; charset=utf-8"));
     app.MapGet("/assets/message-view.js", () => Results.File(Path.Combine(app.Environment.ContentRootPath, "ProductUI", "message-view.js"), "text/javascript; charset=utf-8"));
@@ -52,7 +54,7 @@ if (product is not null) {
         // 実認証モードでは別HTMLやdemo scriptを開いて模擬成功する迂回入口を出さない。
         var p = c.Request.Path.Value ?? "";
         if ((p.EndsWith(".html", StringComparison.OrdinalIgnoreCase) && p != "/index.html") ||
-            (p.EndsWith(".js", StringComparison.OrdinalIgnoreCase) && p != "/assets/authentication.js" && p != "/assets/event-view.js" && p != "/assets/profile-view.js" && p != "/assets/account-view.js" && p != "/assets/appearance-view.js" && p != "/assets/message-view.js" && p != "/assets/invitation-view.js")) { c.Response.StatusCode = 404; return; }
+            (p.EndsWith(".js", StringComparison.OrdinalIgnoreCase) && p != "/assets/authentication.js" && p != "/assets/event-view.js" && p != "/assets/profile-view.js" && p != "/assets/account-view.js" && p != "/assets/appearance-view.js" && p != "/assets/message-view.js" && p != "/assets/invitation-view.js" && p != "/assets/notification-view.js")) { c.Response.StatusCode = 404; return; }
         await next();
     });
 }
@@ -62,7 +64,7 @@ bool ready = manifest.Count > 0 && manifest.All(e => {
     var path = Path.Combine(root,e.Key);
     return File.Exists(path) && Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(path))) == e.Value;
 });
-if (product is not null && new[]{"authentication.js","event-view.js","profile-view.js","account-view.js","appearance-view.js","message-view.js","invitation-view.js","invitation-help.ja.json"}.Any(f=>!File.Exists(Path.Combine(app.Environment.ContentRootPath,"ProductUI",f)))) ready = false;
+if (product is not null && new[]{"authentication.js","event-view.js","profile-view.js","account-view.js","appearance-view.js","message-view.js","invitation-view.js","invitation-help.ja.json","notification-view.js"}.Any(f=>!File.Exists(Path.Combine(app.Environment.ContentRootPath,"ProductUI",f)))) ready = false;
 var info = RuntimeBuildInfo.Current;
 app.Use(async (context,next) => {
     context.Response.Headers.CacheControl = "no-store";
@@ -86,7 +88,7 @@ string Index() {
     if (product is not null) {
         html = Regex.Replace(html, "<script\\b[^>]*>.*?</script>", "", RegexOptions.Singleline | RegexOptions.IgnoreCase);
         html = Regex.Replace(html, "<div class=\"demo-bar\">.*?</div>", "", RegexOptions.Singleline);
-        html = html.Replace("</body>", "<script src=\"/assets/invitation-view.js\"></script><script src=\"/assets/message-view.js\"></script><script src=\"/assets/appearance-view.js\"></script><script src=\"/assets/account-view.js\"></script><script src=\"/assets/profile-view.js\"></script><script src=\"/assets/event-view.js\"></script><script src=\"/assets/authentication.js\"></script></body>");
+        html = html.Replace("</body>", "<script src=\"/assets/notification-view.js\"></script><script src=\"/assets/invitation-view.js\"></script><script src=\"/assets/message-view.js\"></script><script src=\"/assets/appearance-view.js\"></script><script src=\"/assets/account-view.js\"></script><script src=\"/assets/profile-view.js\"></script><script src=\"/assets/event-view.js\"></script><script src=\"/assets/authentication.js\"></script></body>");
         html = html.Replace("Session Room — UI Mock", "Session Room");
     }
     return html.Replace("</body>", Footer() + "</body>");
