@@ -10,7 +10,7 @@ spec.loader.exec_module(scope)
 
 class Checks(unittest.TestCase):
     def test_mock_and_docs_only(self):
-        for paths in [['docs/ui/example.md'],['README.md'],['src/Sem.Web/wwwroot/app.js'],
+        for paths in [['docs/ui/example.md'],['README.md'],['CLAUDE.md'],['.claude/settings.json','.claude/skills/sem-verify/SKILL.md'],['src/Sem.Web/wwwroot/app.js'],
                       ['scripts/ui-inventory-browser.cjs','tests/fixtures/ui-route-baseline.json']]:
             self.assertFalse(scope.storage_required(paths))
     def test_related_or_unknown_requires_storage(self):
@@ -22,7 +22,7 @@ class Checks(unittest.TestCase):
                      'scripts/authentication-native-browser.cjs','scripts/authentication-source-checks.py',
                      'src/Sem.Hosting/ProductStorage.cs','src/Sem.Web/ProductUI/authentication.js',
                      'scripts/product-authentication-browser.cjs','tests/Sem.Hosting.Checks/Program.cs',
-                     'scripts/test-scope.py','global.json','unknown']:
+                     'scripts/test-scope.py','global.json','.github/workflows/claude.yml','unknown']:
             self.assertTrue(scope.storage_required(['docs/ui/example.md',path]))
     def test_empty_or_unknown_is_full(self):
         self.assertTrue(scope.storage_required([]));self.assertTrue(scope.storage_required(None))
