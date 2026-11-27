@@ -10,10 +10,10 @@ import subprocess
 def storage_required(paths):
     if not paths:
         return True
-    safe_files = {'README.md', 'scripts/mock-checks.py', 'scripts/runtime-checks.py',
+    safe_files = {'README.md', 'CLAUDE.md', 'scripts/mock-checks.py', 'scripts/runtime-checks.py',
                   'scripts/runtime-browser.cjs', 'scripts/ui-inventory-checks.py',
                   'scripts/ui-inventory-browser.cjs', 'tests/fixtures/ui-route-baseline.json'}
-    safe_prefixes = ('docs/', 'src/Sem.Web/wwwroot/')
+    safe_prefixes = ('docs/', 'src/Sem.Web/wwwroot/', '.claude/')
     return any(path not in safe_files and not path.startswith(safe_prefixes) for path in paths)
 
 

@@ -1,0 +1,15 @@
+{
+  "model": "sonnet",
+  "env": {
+    "CLAUDE_CODE_SUBAGENT_MODEL": "haiku"
+  },
+  "permissions": {
+    "deny": [
+      "Read(./src/Sem.Storage/Data/Migrations/*.Designer.cs)",
+      "Read(./src/Sem.Storage/Data/Migrations/ApplicationDbContextModelSnapshot.cs)",
+      "Read(./src/Sem.Web/wwwroot/qa/**)",
+      "Edit(./src/Sem.Web/wwwroot/**)",
+      "Write(./src/Sem.Web/wwwroot/**)"
+    ]
+  }
+}
